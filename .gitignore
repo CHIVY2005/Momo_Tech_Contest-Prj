@@ -236,6 +236,14 @@ npm-debug.log*
 Thumbs.db
 *.sqlite
 *.sqlite3
+*.db
+*.db-wal
+*.db-shm
+
+# Agent scratch & submission build outputs
+.superpowers/
+submission/dist/
+verishield-ai-source.zip
 
 # Contest rules PDF (local reference only)
 docs/the-le-cuoc-thi.pdf
