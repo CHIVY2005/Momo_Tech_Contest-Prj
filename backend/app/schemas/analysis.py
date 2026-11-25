@@ -1,6 +1,6 @@
 """Analysis report, classifier output, action copilot, and demo scenario contracts."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.common import (
     AnalyzeMode,
@@ -9,6 +9,7 @@ from app.schemas.common import (
     ReceiptVerificationStatus,
     TraceStep,
     VerdictLevel,
+    score_to_verdict,
 )
 from app.schemas.forensics import (
     ImageForensicsResult,
@@ -101,3 +102,32 @@ class AnalysisReport(BaseModel):
     actions: ActionBundle
     trace: list[TraceStep] = Field(default_factory=list)
     community_hits: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def _enforce_report_invariants(self) -> "AnalysisReport":
+        expected_verdict = score_to_verdict(self.risk_score)
+        if self.verdict != expected_verdict:
+            raise ValueError(
+                f"verdict {self.verdict!r} contradicts risk_score {self.risk_score} "
+                f"(expected {expected_verdict!r})"
+            )
+
+        is_merchant_receipt = self.mode == "merchant" and (
+            self.image_forensics is not None
+            or (self.receipt_logic is not None and self.receipt_logic.is_receipt_candidate)
+        )
+        if is_merchant_receipt:
+            if self.verdict == "SAFE" and self.receipt_verification_status != "UNVERIFIED_SCREENSHOT":
+                raise ValueError(
+                    "SAFE merchant receipt must set receipt_verification_status='UNVERIFIED_SCREENSHOT'"
+                )
+            if self.receipt_verification_status == "NOT_APPLICABLE":
+                raise ValueError(
+                    "Merchant receipt report cannot use receipt_verification_status='NOT_APPLICABLE'"
+                )
+            warning = self.actions.merchant_balance_warning
+            if not (warning and warning.strip()):
+                raise ValueError(
+                    "Merchant receipt report must populate actions.merchant_balance_warning"
+                )
+        return self

@@ -1,9 +1,12 @@
 """Application configuration loaded from environment variables."""
 
 from functools import lru_cache
+from typing import Final
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+MAX_UPLOAD_CEILING_BYTES: Final[int] = 10 * 1024 * 1024
 
 
 class Settings(BaseSettings):
@@ -30,7 +33,11 @@ class Settings(BaseSettings):
 
     model_dir: str = "app/data/models"
     sqlite_path: str = "verishield.db"
-    max_upload_bytes: int = Field(default=10 * 1024 * 1024, ge=1024)
+    max_upload_bytes: int = Field(
+        default=MAX_UPLOAD_CEILING_BYTES,
+        ge=1024,
+        le=MAX_UPLOAD_CEILING_BYTES,
+    )
 
     enable_live_network_checks: bool = True
     enable_playwright_sandbox: bool = True
