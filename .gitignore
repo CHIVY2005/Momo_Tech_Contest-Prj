@@ -221,3 +221,22 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Next.js / Node.js Frontend
+node_modules/
+.next/
+out/
+.env.local
+.env.*.local
+*.tsbuildinfo
+npm-debug.log*
+
+# OS & Local DB artifacts
+.DS_Store
+Thumbs.db
+*.sqlite
+*.sqlite3
+
+# Contest rules PDF (local reference only)
+docs/the-le-cuoc-thi.pdf
+
