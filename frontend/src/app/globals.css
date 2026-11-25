@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+:root {
+  --font-sans: "IBM Plex Sans", "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", "JetBrains Mono", "Cascadia Mono", ui-monospace, Consolas, monospace;
+  --bg-canvas: #090e1a;
+  --bg-surface: #111827;
+  --bg-elevated: #1b2436;
+  --border-subtle: #293548;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --accent-amber: #f59e0b;
+  --accent-cyan: #0ea5e9;
+  --status-safe: #10b981;
+  --status-suspicious: #f59e0b;
+  --status-high: #f97316;
+  --status-critical: #ef4444;
+}
+
+html {
+  color-scheme: dark;
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(14, 165, 233, 0.09), transparent 36%),
+    radial-gradient(circle at 88% 4%, rgba(245, 158, 11, 0.08), transparent 34%),
+    var(--bg-canvas);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Accessible keyboard focus ring */
+*:focus-visible {
+  outline: 2px solid var(--accent-amber);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
