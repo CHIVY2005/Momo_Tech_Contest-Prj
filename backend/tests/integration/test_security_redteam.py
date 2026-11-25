@@ -1,5 +1,9 @@
 from pathlib import Path
+from typing import Any
 
+import httpx
+import pytest
+import respx
 from fastapi.testclient import TestClient
 
 from app.config import Settings
@@ -84,3 +88,91 @@ def test_upload_limits_corrupt_media_ssrf_injection_telegram_auth_and_rate_limit
             hit_429 = True
             break
     assert hit_429 is True
+
+
+@pytest.mark.asyncio
+async def test_streaming_envelope_limit_and_telegram_delivery_semantics(tmp_path: Path) -> None:
+    cfg = Settings(
+        _env_file=None,
+        sqlite_path=str(tmp_path / "sec_stream.db"),
+        max_upload_bytes=2048,
+        enable_live_network_checks=False,
+        enable_playwright_sandbox=False,
+        telegram_bot_token="123456:TEST_BOT_TOKEN",
+        telegram_webhook_secret="tg_sec_stream",
+        rate_limit_per_minute=50,
+    )
+    app = create_app(cfg)
+
+    # 1. True ASGI chunked multipart stream exceeding envelope ceiling (2 * 2048 + 65536 = 69632)
+    #    is aborted mid-stream with HTTP 413 before remaining chunks can spool!
+    chunks_received_by_app = 0
+    total_chunks = 30
+    header_part = (
+        b"-----verishield\r\n"
+        b'Content-Disposition: form-data; name="image"; filename="big.png"\r\n'
+        b"Content-Type: image/png\r\n\r\n\x89PNG\r\n\x1a\n"
+    )
+
+    async def _asgi_receive() -> dict[str, Any]:
+        nonlocal chunks_received_by_app
+        chunks_received_by_app += 1
+        body = header_part + (b"0" * 8192) if chunks_received_by_app == 1 else (b"0" * 8192)
+        return {
+            "type": "http.request",
+            "body": body,
+            "more_body": chunks_received_by_app < total_chunks,
+        }
+
+    sent_messages: list[dict[str, Any]] = []
+
+    async def _asgi_send(message: dict[str, Any]) -> None:
+        sent_messages.append(message)
+
+    scope: dict[str, Any] = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/api/v1/analyze",
+        "raw_path": b"/api/v1/analyze",
+        "query_string": b"",
+        "headers": [(b"content-type", b"multipart/form-data; boundary=---verishield")],
+        "client": ("127.0.0.1", 50000),
+        "server": ("testserver", 80),
+    }
+    await app(scope, _asgi_receive, _asgi_send)
+    start_msg = next(m for m in sent_messages if m["type"] == "http.response.start")
+    assert start_msg["status"] == 413
+    assert chunks_received_by_app <= 10
+
+    # 2. Telegram guidance message without text uses sendMessage when bot token is configured
+    client = TestClient(app)
+    with respx.mock(assert_all_called=False) as router:
+        send_route = router.post(
+            "https://api.telegram.org/bot123456:TEST_BOT_TOKEN/sendMessage"
+        ).mock(return_value=httpx.Response(200, json={"ok": True, "result": {"message_id": 1}}))
+
+        no_text_resp = client.post(
+            "/api/v1/bot/telegram",
+            json={"update_id": 10, "message": {"chat": {"id": 777}, "sticker": {"file_id": "abc"}}},
+            headers={"X-Telegram-Bot-Api-Secret-Token": "tg_sec_stream"},
+        )
+        assert no_text_resp.status_code == 200
+        assert send_route.called is True
+        assert no_text_resp.json()["delivered"] is True
+
+        # 3. Telegram sendMessage HTTP 429/500 surfaces delivery failure (502) instead of silent ok:true
+        router.post("https://api.telegram.org/bot123456:TEST_BOT_TOKEN/sendMessage").mock(
+            return_value=httpx.Response(429, json={"ok": False, "description": "Too Many Requests"})
+        )
+        fail_resp = client.post(
+            "/api/v1/bot/telegram",
+            json={
+                "update_id": 11,
+                "message": {"chat": {"id": 777}, "text": "Kiểm tra link https://napas-vip.top"},
+            },
+            headers={"X-Telegram-Bot-Api-Secret-Token": "tg_sec_stream"},
+        )
+        assert fail_resp.status_code == 502

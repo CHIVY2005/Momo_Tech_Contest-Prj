@@ -38,10 +38,14 @@ async def _prepare_inputs(
     pipeline: AnalysisPipeline,
     max_bytes: int,
     demo_id: str | None,
+    text: str,
+    url: str | None,
     image: UploadFile | None,
     audio: UploadFile | None,
 ) -> tuple[bytes | None, str, str, bytes | None, str, str]:
-    if demo_id and demo_id.strip() and demo_id.strip() not in {d.demo_id for d in pipeline.list_demos()}:
+    has_demo = bool(demo_id and demo_id.strip())
+    valid_demos = {d.demo_id for d in pipeline.list_demos()}
+    if has_demo and demo_id is not None and demo_id.strip() not in valid_demos:
         raise HTTPException(status_code=404, detail=f"Unknown demo_id: {demo_id}")
 
     try:
@@ -56,6 +60,21 @@ async def _prepare_inputs(
         raise HTTPException(status_code=413, detail=str(exc)) from exc
     except InvalidMediaError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if (
+        not has_demo
+        and not text.strip()
+        and not (url and url.strip())
+        and img_bytes is None
+        and aud_bytes is None
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Vui lòng cung cấp ít nhất một nội dung cần kiểm tra "
+                "(tin nhắn, URL, ảnh hoặc âm thanh)."
+            ),
+        )
 
     img_name = (image.filename if image and image.filename else "upload.jpg")
     img_mime = (image.content_type if image and image.content_type else "image/jpeg")
@@ -83,6 +102,8 @@ async def post_analyze(
         pipeline,
         settings.max_upload_bytes,
         demo_id,
+        text,
+        url,
         image,
         audio,
     )
@@ -125,6 +146,8 @@ async def post_analyze_stream(
         pipeline,
         settings.max_upload_bytes,
         demo_id,
+        text,
+        url,
         image,
         audio,
     )

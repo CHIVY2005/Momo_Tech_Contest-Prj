@@ -112,3 +112,24 @@ def test_closed_loop_radar_block_rules_pin_protection_and_reset(tmp_path: Path) 
     # Reset restores clean transient state
     reset_res = client.post("/api/v1/radar/block-rules/reset", json={"analyst_pin": "2026"})
     assert reset_res.status_code == 200
+
+
+def test_empty_analyze_rejected_and_backup_gemini_key_reflected_in_health(tmp_path: Path) -> None:
+    cfg = Settings(
+        _env_file=None,
+        sqlite_path=str(tmp_path / "backup_key.db"),
+        gemini_api_key="",
+        gemini_backup_api_key="backup_only_key_123",
+        enable_live_network_checks=False,
+        enable_playwright_sandbox=False,
+    )
+    client = TestClient(create_app(cfg))
+
+    health = client.get("/api/v1/health").json()
+    assert health["gemini_configured"] is True
+
+    empty_sync = client.post("/api/v1/analyze", data={"mode": "personal", "text": "   "})
+    assert empty_sync.status_code == 400
+
+    empty_sse = client.post("/api/v1/analyze/stream", data={"mode": "personal", "text": ""})
+    assert empty_sse.status_code == 400

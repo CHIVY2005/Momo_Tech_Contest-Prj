@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import Settings
-from app.core.security import validate_upload_bytes
+from app.core.security import InvalidMediaError, validate_upload_bytes
 from app.db.repository import CaseRepository
 from app.schemas import (
     AnalysisReport,
@@ -122,6 +122,14 @@ class AnalysisPipeline:
             validate_upload_bytes(image_bytes, self.settings.max_upload_bytes, kind="image")
         if audio_bytes is not None:
             validate_upload_bytes(audio_bytes, self.settings.max_upload_bytes, kind="audio")
+
+        if (
+            not text.strip()
+            and not (url and url.strip())
+            and image_bytes is None
+            and audio_bytes is None
+        ):
+            raise InvalidMediaError("At least one non-empty evidence input is required.")
 
         trace: list[TraceStep] = []
         evidence: list[EvidenceItem] = []
@@ -354,6 +362,8 @@ class AnalysisPipeline:
             image_forensics=img_forensics,
             receipt_logic=receipt_logic,
             matched_playbooks=matched_pbs,
+            sandbox=sandbox_res,
+            active_block_rule_hit=block_hit,
             image_bytes=image_bytes,
             image_mime=image_mime,
             audio_bytes=audio_bytes,

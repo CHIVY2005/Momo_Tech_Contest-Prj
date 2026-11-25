@@ -131,9 +131,18 @@ def calibrate_risk(
                 fused = max(fused, 85)
             elif receipt_logic.logic_risk_points >= 40:
                 fused = max(fused, 72)
+            elif receipt_logic.logic_risk_points > 0 or (
+                receipt_logic.is_receipt_candidate
+                and receipt_logic.verification_status
+                not in ("NOT_APPLICABLE", "UNVERIFIED_SCREENSHOT")
+            ):
+                fused = max(fused, 45)
 
-        if image_forensics and image_forensics.tamper_score >= 50:
-            fused = max(fused, 70)
+        if image_forensics:
+            if image_forensics.tamper_score >= 50:
+                fused = max(fused, 70)
+            elif image_forensics.tamper_score >= 35:
+                fused = max(fused, 45)
 
     final_score = max(0, min(100, fused))
     verdict = score_to_verdict(final_score)

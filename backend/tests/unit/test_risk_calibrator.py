@@ -1,4 +1,12 @@
-from app.schemas import ImageForensicsResult, ReceiptLogicResult, ScamClassifierOutput, VietQRInfo
+from app.schemas import (
+    ActionBundle,
+    AnalysisReport,
+    ImageForensicsResult,
+    PreTransferIntervention,
+    ReceiptLogicResult,
+    ScamClassifierOutput,
+    VietQRInfo,
+)
 from app.services.guardrails import GuardrailResult
 from app.services.risk_calibrator import calibrate_risk
 
@@ -149,3 +157,59 @@ def test_merchant_clean_screenshot_and_degraded_fusion() -> None:
     )
     assert deg.final_score >= 80
     assert deg.verdict == "CRITICAL_SCAM"
+
+
+def test_minor_receipt_anomaly_with_zero_ai_score_never_contradicts_merchant_invariant() -> None:
+    anomaly_receipt = ReceiptLogicResult(
+        is_receipt_candidate=True,
+        bank_detected="Vietcombank",
+        reference_code="BAD!",
+        reference_valid=False,
+        verification_status="TAMPER_OR_LOGIC_ANOMALY",
+        logic_risk_points=25,
+        reasons=["Mã tham chiếu giao dịch không khớp định dạng chuẩn."],
+    )
+    img_res = ImageForensicsResult(
+        filename="bill.jpg",
+        format="JPEG",
+        width=400,
+        height=600,
+        dhash_hex="0011223344556677",
+        tamper_score=10,
+    )
+    cal = calibrate_risk(
+        mode="merchant",
+        tier1_score=25,
+        classifier=None,
+        ai_score=0,
+        guardrails=GuardrailResult(),
+        url_findings=[],
+        vietqr_findings=[],
+        sandbox=None,
+        image_forensics=img_res,
+        receipt_logic=anomaly_receipt,
+        active_block_rule_hit=False,
+        in_active_call=False,
+    )
+    assert cal.final_score >= 25
+    assert cal.verdict != "SAFE"
+    assert cal.receipt_verification_status == "TAMPER_OR_LOGIC_ANOMALY"
+
+    # Must validate cleanly against AnalysisReport merchant receipt invariant
+    report = AnalysisReport(
+        case_id="vs_cal_test01",
+        created_at="2026-11-26T00:00:00+00:00",
+        mode="merchant",
+        risk_score=cal.final_score,
+        verdict=cal.verdict,
+        confidence=cal.confidence,
+        receipt_verification_status=cal.receipt_verification_status,
+        summary_vi="Phát hiện mã tham chiếu biên lai bất thường.",
+        image_forensics=img_res,
+        receipt_logic=anomaly_receipt,
+        actions=ActionBundle(
+            merchant_balance_warning="Kiểm tra số dư thực tế hoặc Loa thông báo trước khi giao hàng.",
+            pre_transfer=PreTransferIntervention(should_hold_transfer=False),
+        ),
+    )
+    assert report.verdict == cal.verdict
