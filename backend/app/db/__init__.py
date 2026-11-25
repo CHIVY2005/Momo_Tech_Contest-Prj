@@ -1,0 +1,1 @@
+"""SQLite WAL persistence package."""
