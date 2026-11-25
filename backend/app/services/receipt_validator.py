@@ -77,7 +77,7 @@ def _parse_vn_timestamp(text: str) -> datetime | None:
         if not match:
             continue
         raw_ts = match.group(1).strip()
-        fmt = f"{base_fmt}:%S" if raw_ts.count(":") == 2 else base_fmt
+        fmt = base_fmt.replace("%H:%M", "%H:%M:%S") if raw_ts.count(":") == 2 else base_fmt
         try:
             naive = datetime.strptime(raw_ts, fmt)
             return naive.replace(tzinfo=VN_TZ)

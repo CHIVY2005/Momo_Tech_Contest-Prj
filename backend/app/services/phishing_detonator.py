@@ -1,4 +1,4 @@
-"""Sandboxed Playwright headless Chromium phishing detonator with per-request SSRF guard."""
+"""Sandboxed Playwright headless Chromium detonator proxied strictly through IP-pinned HTTP."""
 
 from __future__ import annotations
 
@@ -8,10 +8,19 @@ import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Final
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
-from app.core.security import validate_url_target
+import httpx
+
+from app.core.security import (
+    SsrfBlockedError,
+    async_validate_url_target,
+    build_ssrf_pinned_http_client,
+)
 from app.schemas import SandboxInspection
+
+MAX_SANDBOX_BODY_BYTES: Final[int] = 1_500_000
+MAX_SANDBOX_REDIRECTS: Final[int] = 4
 
 _PASSWORD_INPUT_RE: Final[re.Pattern[str]] = re.compile(
     r"<input[^>]+type=['\"]?password['\"]?",
@@ -52,7 +61,10 @@ def inspect_rendered_dom(
 ) -> SandboxInspection:
     """Pure analyzer inspecting rendered DOM HTML & title for credential/APK phishing traps."""
     effective_url = final_url or visited_url
-    host = (urlsplit(effective_url).hostname or "").lower().rstrip(".")
+    try:
+        host = (urlsplit(effective_url).hostname or "").lower().rstrip(".")
+    except ValueError:
+        host = ""
 
     has_password = bool(_PASSWORD_INPUT_RE.search(html))
     has_otp = bool(_OTP_SIGNAL_RE.search(html))
@@ -111,16 +123,58 @@ def inspect_rendered_dom(
     )
 
 
+async def _fetch_via_pinned_client(
+    safe_client: httpx.AsyncClient,
+    method: str,
+    target_url: str,
+    download_urls: list[str],
+) -> tuple[int, dict[str, str], bytes, str]:
+    """Fetch a browser subrequest hop-by-hop using SSRF-pinned sockets with bounded body size."""
+    curr = target_url
+    for _ in range(MAX_SANDBOX_REDIRECTS + 1):
+        if curr.lower().split("?", 1)[0].endswith(".apk"):
+            download_urls.append(curr)
+            return 204, {}, b"", curr
+
+        async with safe_client.stream(
+            method if method in ("GET", "HEAD") else "GET",
+            curr,
+            follow_redirects=False,
+            headers={"User-Agent": "Mozilla/5.0 VeriShieldSandbox/2.0"},
+        ) as resp:
+            if resp.status_code in (301, 302, 303, 307, 308) and resp.headers.get("location"):
+                curr = urljoin(curr, resp.headers["location"])
+                ok_hop, hop_reason, _ = await async_validate_url_target(curr, resolve_dns=True)
+                if not ok_hop:
+                    raise SsrfBlockedError(hop_reason or "Redirect target blocked")
+                continue
+
+            chunks: list[bytes] = []
+            total = 0
+            async for chunk in resp.aiter_bytes():
+                total += len(chunk)
+                if total > MAX_SANDBOX_BODY_BYTES:
+                    break
+                chunks.append(chunk)
+            clean_headers = {
+                k: v
+                for k, v in resp.headers.items()
+                if k.lower() not in ("content-encoding", "transfer-encoding", "content-length")
+            }
+            return resp.status_code, clean_headers, b"".join(chunks), curr
+
+    return 400, {}, b"", curr
+
+
 async def detonate_url_in_sandbox(
     url: str,
     enabled: bool = True,
     timeout_ms: int = 3000,
 ) -> SandboxInspection:
-    """Safely render suspicious URL in headless Chromium with route-level SSRF interception."""
+    """Render suspicious URL in headless Chromium with Service Workers blocked & IP-pinned routing."""
     cleaned = url.strip()
 
-    # Check static scheme/IP SSRF first even when disabled or offline
-    ok_static, static_reason, _ = validate_url_target(cleaned, resolve_dns=False)
+    ok_static, static_reason, _ = await async_validate_url_target(cleaned, resolve_dns=False)
     if not ok_static:
         return SandboxInspection(
             available=False,
@@ -133,7 +187,7 @@ async def detonate_url_in_sandbox(
     if not enabled:
         return SandboxInspection(available=False, visited_url=cleaned)
 
-    ok_dns, dns_reason, _ = validate_url_target(cleaned, resolve_dns=True)
+    ok_dns, dns_reason, _ = await async_validate_url_target(cleaned, resolve_dns=True)
     if not ok_dns:
         is_ssrf = dns_reason is not None and not dns_reason.startswith("DNS resolution failed")
         return SandboxInspection(
@@ -150,37 +204,47 @@ async def detonate_url_in_sandbox(
         return SandboxInspection(available=False, visited_url=cleaned)
 
     blocked_subrequest_reason: str | None = None
+    last_resolved_url = cleaned
     download_urls: list[str] = []
 
+    safe_client = build_ssrf_pinned_http_client(timeout_sec=max(1.5, timeout_ms / 1000.0))
     try:
         async with async_playwright() as pw:
             browser = await pw.chromium.launch(
                 headless=True,
-                args=["--disable-dev-shm-usage", "--no-sandbox"],
+                args=["--disable-dev-shm-usage", "--no-sandbox", "--disable-background-networking"],
             )
             try:
                 context = await browser.new_context(
                     viewport={"width": 800, "height": 500},
                     accept_downloads=False,
                     java_script_enabled=True,
+                    service_workers="block",
                 )
 
-                async def _ssrf_route_guard(route: Route) -> None:
-                    nonlocal blocked_subrequest_reason
+                async def _pinned_proxy_route(route: Route) -> None:
+                    nonlocal blocked_subrequest_reason, last_resolved_url
                     req_url = route.request.url
-                    sub_ok, sub_reason, _ = validate_url_target(req_url, resolve_dns=True)
-                    if not sub_ok:
-                        if sub_reason and not sub_reason.startswith("DNS resolution failed"):
-                            blocked_subrequest_reason = sub_reason
+                    if req_url.startswith(("data:", "blob:", "about:")):
+                        await route.continue_()
+                        return
+                    try:
+                        status, headers, body, resolved = await _fetch_via_pinned_client(
+                            safe_client,
+                            route.request.method,
+                            req_url,
+                            download_urls,
+                        )
+                        if route.request.is_navigation_request():
+                            last_resolved_url = resolved
+                        await route.fulfill(status=status, headers=headers, body=body)
+                    except SsrfBlockedError as exc:
+                        blocked_subrequest_reason = str(exc)
                         await route.abort("accessdenied")
-                        return
-                    if req_url.lower().split("?", 1)[0].endswith(".apk"):
-                        download_urls.append(req_url)
-                        await route.abort("aborted")
-                        return
-                    await route.continue_()
+                    except Exception:
+                        await route.abort("failed")
 
-                await context.route("**/*", _ssrf_route_guard)
+                await context.route("**/*", _pinned_proxy_route)
                 page = await context.new_page()
                 await page.goto(cleaned, wait_until="domcontentloaded", timeout=timeout_ms)
 
@@ -188,11 +252,11 @@ async def detonate_url_in_sandbox(
                     return SandboxInspection(
                         available=True,
                         visited_url=cleaned,
-                        final_url=page.url,
+                        final_url=last_resolved_url,
                         blocked_ssrf=True,
                         risk_points=90,
                         reasons=[
-                            f"Chặn sub-request từ trang web tới mạng nội bộ: {blocked_subrequest_reason}"
+                            f"Chặn sub-request/redirect tới mạng nội bộ: {blocked_subrequest_reason}"
                         ],
                     )
 
@@ -203,7 +267,7 @@ async def detonate_url_in_sandbox(
 
                 return inspect_rendered_dom(
                     visited_url=cleaned,
-                    final_url=page.url,
+                    final_url=last_resolved_url,
                     page_title=title,
                     html=html,
                     download_urls=download_urls,
@@ -213,3 +277,5 @@ async def detonate_url_in_sandbox(
                 await browser.close()
     except Exception:
         return SandboxInspection(available=False, visited_url=cleaned)
+    finally:
+        await safe_client.aclose()

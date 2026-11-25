@@ -1,7 +1,8 @@
-"""SSRF-safe URL redirect tracer, IDN Punycode/homoglyph detector, and brand-spoof analyzer."""
+"""SSRF-pinned streaming URL redirect tracer, Punycode/homoglyph detector, and hop scorer."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from functools import lru_cache
@@ -11,7 +12,11 @@ from urllib.parse import urljoin, urlsplit
 
 import httpx
 
-from app.core.security import validate_url_target
+from app.core.security import (
+    SsrfBlockedError,
+    async_validate_url_target,
+    build_ssrf_pinned_http_client,
+)
 from app.schemas import UrlFinding
 
 MAX_REDIRECT_HOPS: Final[int] = 5
@@ -25,7 +30,7 @@ _CONFUSABLE_MAP: Final[dict[str, str]] = {
     "1": "l",
     "3": "e",
     "5": "s",
-    "а": "a",  # Cyrillic small letters
+    "а": "a",
     "е": "e",
     "і": "i",
     "о": "o",
@@ -78,24 +83,34 @@ def _levenshtein_le_two(a: str, b: str) -> bool:
     return prev[-1] <= 2
 
 
-def _detect_brand_spoof(
-    ascii_host: str,
-    unicode_host: str,
-    url_path: str,
-) -> tuple[str | None, bool, list[str]]:
+def _score_single_url(target_url: str) -> tuple[str, str, str | None, bool, int, list[str]]:
+    """Compute static brand-spoof, homoglyph, TLD, and APK risk for a single URL."""
+    try:
+        parsed = urlsplit(target_url)
+        raw_host = (parsed.hostname or "").strip().rstrip(".").lower()
+    except ValueError:
+        return "", "", None, False, 90, ["URL sai định dạng cú pháp máy chủ."]
+
+    try:
+        ascii_host = raw_host.encode("idna").decode("ascii") if raw_host else ""
+        unicode_host = ascii_host.encode("ascii").decode("idna") if ascii_host else raw_host
+    except UnicodeError:
+        ascii_host = raw_host
+        unicode_host = raw_host
+
     reasons: list[str] = []
-    is_punycode = "xn--" in ascii_host
-    has_non_ascii = not unicode_host.isascii()
-    is_homoglyph = is_punycode or has_non_ascii
+    is_homoglyph = ("xn--" in ascii_host) or (not unicode_host.isascii())
+    spoofed_brand: str | None = None
 
     brand_rules = _load_brand_rules()
     for entry in brand_rules:
         if _is_official_domain(ascii_host, entry["official_domains"]):
-            return None, False, []
+            return raw_host, ascii_host, None, False, 0, []
 
     host_labels = [lbl for lbl in unicode_host.split(".") if lbl]
     core_skeleton = _skeletonize(".".join(host_labels[:-1]) if len(host_labels) > 1 else unicode_host)
-    full_target = f"{core_skeleton} {url_path.lower()}"
+    path_and_query = f"{parsed.path}?{parsed.query}" if parsed.query else parsed.path
+    full_target = f"{core_skeleton} {path_and_query.lower()}"
 
     for entry in brand_rules:
         brand_name: str = entry["brand"]
@@ -106,55 +121,19 @@ def _detect_brand_spoof(
             ):
                 if unicode_host != ascii_host or any(ch in unicode_host for ch in _CONFUSABLE_MAP):
                     is_homoglyph = True
+                spoofed_brand = brand_name
                 reasons.append(
                     f"Tên miền '{unicode_host}' mạo danh thương hiệu '{brand_name}' "
                     f"(không thuộc tên miền chính thức {', '.join(entry['official_domains'])})."
                 )
-                return brand_name, is_homoglyph, reasons
+                break
+        if spoofed_brand:
+            break
 
-    if is_homoglyph:
+    if is_homoglyph and not spoofed_brand:
         reasons.append(
             f"Tên miền chứa mã hóa IDN Punycode / ký tự đồng hình đáng ngờ ({ascii_host})."
         )
-    return None, is_homoglyph, reasons
-
-
-async def inspect_url(
-    url: str,
-    enable_network: bool = True,
-    client: httpx.AsyncClient | None = None,
-) -> UrlFinding:
-    """Inspect a URL statically and optionally follow up to 5 SSRF-checked redirect hops."""
-    cleaned = url.strip()
-    parsed = urlsplit(cleaned)
-    raw_host = (parsed.hostname or "").strip().rstrip(".").lower()
-
-    try:
-        ascii_host = raw_host.encode("idna").decode("ascii") if raw_host else ""
-        unicode_host = ascii_host.encode("ascii").decode("idna") if ascii_host else raw_host
-    except UnicodeError:
-        ascii_host = raw_host
-        unicode_host = raw_host
-
-    ok_target, block_reason, _ = validate_url_target(cleaned, resolve_dns=enable_network)
-    if not ok_target:
-        # Distinguish DNS lookup failure on offline dead phishing domains from actual SSRF blocks
-        is_ssrf = block_reason is not None and not block_reason.startswith("DNS resolution failed")
-        if is_ssrf:
-            return UrlFinding(
-                url=cleaned,
-                domain=raw_host,
-                normalized_ascii_domain=ascii_host,
-                is_blocked_ssrf=True,
-                risk_points=90,
-                reasons=[f"Chặn truy cập mục tiêu không an toàn (SSRF Guard): {block_reason}"],
-            )
-
-    spoofed_brand, is_homoglyph, reasons = _detect_brand_spoof(
-        ascii_host=ascii_host,
-        unicode_host=unicode_host,
-        url_path=f"{parsed.path}?{parsed.query}",
-    )
 
     risk = 0
     if spoofed_brand:
@@ -167,7 +146,6 @@ async def inspect_url(
         risk += 15
         reasons.append(f"Sử dụng đuôi tên miền rủi ro cao '.{tld}' phổ biến trong chiến dịch phishing.")
 
-    path_and_query = f"{parsed.path}?{parsed.query}" if parsed.query else parsed.path
     if re.search(r"\.apk(?:$|\?)", path_and_query, re.IGNORECASE):
         risk = max(risk + 25, 85)
         reasons.append("Đường dẫn trỏ trực tiếp tới tệp cài đặt Android (.apk) ngoài chợ ứng dụng.")
@@ -175,50 +153,110 @@ async def inspect_url(
         risk += 10
         reasons.append("Đường dẫn chứa từ khóa thu thập thông tin xác thực / OTP.")
 
+    return raw_host, ascii_host, spoofed_brand, is_homoglyph, min(100, risk), reasons
+
+
+async def inspect_url(
+    url: str,
+    enable_network: bool = True,
+    client: httpx.AsyncClient | None = None,
+) -> UrlFinding:
+    """Inspect URL statically and trace up to 5 SSRF-pinned streaming redirect hops."""
+    cleaned = url.strip()
+    raw_host, ascii_host, spoofed_brand, is_homoglyph, max_risk, all_reasons = _score_single_url(
+        cleaned
+    )
+
+    ok_target, block_reason, _ = await async_validate_url_target(
+        cleaned,
+        resolve_dns=enable_network,
+    )
+    if not ok_target:
+        is_ssrf = block_reason is not None and not block_reason.startswith("DNS resolution failed")
+        if is_ssrf:
+            return UrlFinding(
+                url=cleaned,
+                domain=raw_host,
+                normalized_ascii_domain=ascii_host,
+                is_blocked_ssrf=True,
+                risk_points=90,
+                reasons=[f"Chặn truy cập mục tiêu không an toàn (SSRF Guard): {block_reason}"],
+            )
+
     final_url: str | None = None
     hops = 0
 
     if enable_network and ok_target:
         current_url = cleaned
         owns_client = client is None
-        http_client = client or httpx.AsyncClient(timeout=3.5, follow_redirects=False)
+        http_client = client or build_ssrf_pinned_http_client(timeout_sec=3.5)
         try:
-            for _ in range(MAX_REDIRECT_HOPS):
-                resp = await http_client.get(
-                    current_url,
-                    follow_redirects=False,
-                    headers={"User-Agent": "VeriShield-SecurityInspector/2.0"},
-                )
-                if resp.status_code in (301, 302, 303, 307, 308):
-                    loc = resp.headers.get("location")
-                    if not loc:
-                        break
-                    next_url = urljoin(current_url, loc)
-                    hop_ok, hop_reason, _ = validate_url_target(next_url, resolve_dns=True)
-                    if not hop_ok:
-                        return UrlFinding(
-                            url=cleaned,
-                            domain=raw_host,
-                            normalized_ascii_domain=ascii_host,
-                            final_url=next_url,
-                            redirect_hops=hops + 1,
-                            is_blocked_ssrf=True,
-                            is_idn_homoglyph=is_homoglyph,
-                            spoofed_brand=spoofed_brand,
-                            risk_points=90,
-                            reasons=[
-                                *reasons,
-                                f"Chặn chuyển hướng HTTP tới đích nội bộ (SSRF Redirect): {hop_reason}",
-                            ],
+            async with asyncio.timeout(5.5):
+                for _ in range(MAX_REDIRECT_HOPS):
+                    async with http_client.stream(
+                        "GET",
+                        current_url,
+                        follow_redirects=False,
+                        headers={"User-Agent": "VeriShield-SecurityInspector/2.0"},
+                    ) as resp:
+                        status_code = resp.status_code
+                        loc = resp.headers.get("location")
+
+                    if status_code in (301, 302, 303, 307, 308) and loc:
+                        next_url = urljoin(current_url, loc)
+                        hop_ok, hop_reason, _ = await async_validate_url_target(
+                            next_url,
+                            resolve_dns=True,
                         )
-                    current_url = next_url
-                    hops += 1
-                    final_url = current_url
-                else:
-                    final_url = current_url
-                    break
-        except httpx.HTTPError:
-            reasons.append("Máy chủ đích không phản hồi hoặc đã ngắt kết nối sớm.")
+                        if not hop_ok:
+                            return UrlFinding(
+                                url=cleaned,
+                                domain=raw_host,
+                                normalized_ascii_domain=ascii_host,
+                                final_url=next_url,
+                                redirect_hops=hops + 1,
+                                is_blocked_ssrf=True,
+                                is_idn_homoglyph=is_homoglyph,
+                                spoofed_brand=spoofed_brand,
+                                risk_points=90,
+                                reasons=[
+                                    *all_reasons,
+                                    f"Chặn chuyển hướng HTTP tới đích nội bộ (SSRF Redirect): {hop_reason}",
+                                ],
+                            )
+
+                        _, _, hop_brand, hop_homo, hop_risk, hop_reasons = _score_single_url(
+                            next_url
+                        )
+                        if hop_brand and not spoofed_brand:
+                            spoofed_brand = hop_brand
+                        is_homoglyph = is_homoglyph or hop_homo
+                        max_risk = max(max_risk, hop_risk)
+                        for r in hop_reasons:
+                            if r not in all_reasons:
+                                all_reasons.append(r)
+
+                        current_url = next_url
+                        hops += 1
+                        final_url = current_url
+                    else:
+                        final_url = current_url
+                        break
+        except SsrfBlockedError as exc:
+            return UrlFinding(
+                url=cleaned,
+                domain=raw_host,
+                normalized_ascii_domain=ascii_host,
+                final_url=current_url,
+                redirect_hops=hops,
+                is_blocked_ssrf=True,
+                is_idn_homoglyph=is_homoglyph,
+                spoofed_brand=spoofed_brand,
+                risk_points=90,
+                reasons=[*all_reasons, f"Chặn kết nối DNS Rebinding / SSRF tại tầng socket: {exc}"],
+            )
+        except (TimeoutError, httpx.HTTPError):
+            all_reasons.append("Máy chủ đích không phản hồi hoặc quá thời gian kiểm tra.")
         finally:
             if owns_client:
                 await http_client.aclose()
@@ -232,6 +270,6 @@ async def inspect_url(
         is_blocked_ssrf=False,
         is_idn_homoglyph=is_homoglyph,
         spoofed_brand=spoofed_brand,
-        risk_points=min(100, risk),
-        reasons=reasons,
+        risk_points=min(100, max_risk),
+        reasons=all_reasons,
     )

@@ -10,6 +10,11 @@ def test_official_safety_advisory_with_otp_and_apk_keywords_is_recognized() -> N
     assert res.safety_advisory_detected is True
     assert res.prompt_injection_detected is False
 
+    # Plain concise advisory wording from Review Focus #4
+    concise_adv = "Cảnh báo bảo mật: KHÔNG cung cấp OTP, KHÔNG cài file .apk không rõ nguồn gốc."
+    res_concise = evaluate_guardrails(concise_adv, has_suspicious_url=False)
+    assert res_concise.safety_advisory_detected is True
+
 
 def test_suspicious_url_or_direct_transfer_demand_cancels_safety_advisory() -> None:
     with_url = (

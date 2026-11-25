@@ -1,4 +1,7 @@
 import io
+import math
+import struct
+import wave
 
 import pytest
 from PIL import Image
@@ -6,6 +9,7 @@ from PIL import Image
 from app.core.security import (
     InvalidMediaError,
     UploadTooLargeError,
+    async_validate_url_target,
     is_public_ip,
     validate_upload_bytes,
     validate_url_target,
@@ -13,7 +17,22 @@ from app.core.security import (
 )
 
 
-def test_blocks_loopback_private_metadata_cgnat_and_ipv4_mapped_ipv6() -> None:
+def _make_valid_wav_bytes(duration_ms: int = 80, sample_rate: int = 8000) -> bytes:
+    buf = io.BytesIO()
+    n_samples = int(sample_rate * duration_ms / 1000)
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        frames = bytearray()
+        for i in range(n_samples):
+            sample = int(12000 * math.sin(2 * math.pi * 440 * i / sample_rate))
+            frames.extend(struct.pack("<h", sample))
+        wf.writeframes(bytes(frames))
+    return buf.getvalue()
+
+
+def test_blocks_loopback_private_metadata_cgnat_and_all_ipv4_mapped_ipv6() -> None:
     blocked_ips = [
         "127.0.0.1",
         "10.0.0.5",
@@ -26,6 +45,7 @@ def test_blocks_loopback_private_metadata_cgnat_and_ipv4_mapped_ipv6() -> None:
         "::1",
         "::ffff:127.0.0.1",
         "::ffff:169.254.169.254",
+        "::ffff:8.8.8.8",  # Mapped IPv6 form itself is blocked even for public IPv4
         "fe80::1",
         "fc00::1",
     ]
@@ -36,36 +56,37 @@ def test_blocks_loopback_private_metadata_cgnat_and_ipv4_mapped_ipv6() -> None:
     assert is_public_ip("2606:4700:4700::1111") is True
 
 
-def test_validate_url_target_rejects_bad_schemes_credentials_and_mapped_ips() -> None:
-    ok_mapped, reason_mapped, _ = validate_url_target(
+@pytest.mark.asyncio
+async def test_validate_url_target_handles_malformed_authorities_and_async_dns() -> None:
+    malformed_urls = [
         "http://[::ffff:169.254.169.254]/latest/meta-data/",
-        resolve_dns=False,
-    )
-    assert ok_mapped is False and reason_mapped is not None
+        "http://[::ffff:8.8.8.8]/test",
+        "http://example.com:99999/path",
+        "http://example.com:notaport/path",
+        "http://[::1/broken",
+        "file:///etc/passwd",
+        "http://localhost:8000/api",
+    ]
+    for bad in malformed_urls:
+        ok, reason, _ = validate_url_target(bad, resolve_dns=False)
+        assert ok is False and reason is not None
+        a_ok, a_reason, _ = await async_validate_url_target(bad, resolve_dns=False)
+        assert a_ok is False and a_reason is not None
 
-    ok_scheme, _, _ = validate_url_target("file:///etc/passwd", resolve_dns=False)
-    assert ok_scheme is False
-
-    ok_localhost, _, _ = validate_url_target("http://localhost:8000/api", resolve_dns=False)
-    assert ok_localhost is False
-
-    ok_public, reason_public, _ = validate_url_target(
+    ok_public, reason_public, _ = await async_validate_url_target(
         "https://vietcombank.com.vn/khach-hang",
         resolve_dns=False,
     )
     assert ok_public is True and reason_public is None
 
 
-def test_upload_validation_enforces_size_and_magic_bytes() -> None:
+def test_upload_validation_enforces_size_magic_and_decodable_audio() -> None:
     buf = io.BytesIO()
     Image.new("RGB", (16, 16), color=(255, 0, 0)).save(buf, format="PNG")
-    valid_png = buf.getvalue()
+    validate_upload_bytes(buf.getvalue(), max_bytes=1024 * 1024, kind="image")
 
-    validate_upload_bytes(valid_png, max_bytes=1024 * 1024, kind="image")
-
-    # Valid MP3 ID3 header & WAV RIFF header
-    validate_upload_bytes(b"ID3\x04\x00\x00\x00\x00\x00\x00frame", max_bytes=1024, kind="audio")
-    validate_upload_bytes(b"RIFF\x24\x00\x00\x00WAVEfmt ", max_bytes=1024, kind="audio")
+    valid_wav = _make_valid_wav_bytes()
+    validate_upload_bytes(valid_wav, max_bytes=1024 * 1024, kind="audio")
 
     with pytest.raises(UploadTooLargeError):
         validate_upload_bytes(b"x" * 1025, max_bytes=1024, kind="image")
@@ -73,8 +94,11 @@ def test_upload_validation_enforces_size_and_magic_bytes() -> None:
         validate_upload_bytes(b"", max_bytes=1024, kind="image")
     with pytest.raises(InvalidMediaError):
         validate_upload_bytes(b"not-an-image-at-all", max_bytes=1024, kind="image")
+    # Truncated WAV header with magic prefix but zero decodable audio frames must fail (HTTP 400)
     with pytest.raises(InvalidMediaError):
-        validate_upload_bytes(b"not-valid-audio-bytes", max_bytes=1024, kind="audio")
+        validate_upload_bytes(b"RIFF\x24\x00\x00\x00WAVEfmt ", max_bytes=1024, kind="audio")
+    with pytest.raises(InvalidMediaError):
+        validate_upload_bytes(b"ID3\x04\x00\x00\x00\x00\x00\x00junk", max_bytes=1024, kind="audio")
 
 
 def test_verify_secret_constant_time_and_empty_handling() -> None:

@@ -11,6 +11,7 @@ from typing import Final
 from app.schemas import EvidenceItem, VietQRInfo
 
 NAPAS_GUID: Final[str] = "A000000727"
+SUPPORTED_NAPAS_SERVICES: Final[frozenset[str]] = frozenset({"QRIBFTTA", "QRIBFTTC"})
 
 _RECEIVE_SCAM_RE: Final[re.Pattern[str]] = re.compile(
     r"(?:quét\s+(?:mã\s+)?(?:qr\s+)?(?:này\s+)?để\s+(?:nhận|hoàn|lấy)|"
@@ -111,7 +112,6 @@ def parse_qr_payload(
     if not cleaned.startswith("000201"):
         return VietQRInfo(raw=cleaned, kind="TEXT_QR", crc_valid=True), evidence
 
-    # Verify ASCII printable + Tag 63 CRC-16/CCITT-FALSE at end of payload
     if len(cleaned) < 16 or not cleaned.isascii() or cleaned[-8:-4] != "6304":
         evidence.append(
             EvidenceItem(
@@ -143,22 +143,35 @@ def parse_qr_payload(
         )
         return VietQRInfo(raw=cleaned, kind="INVALID_CRC_VIETQR", crc_valid=False), evidence
 
-    bank_bin: str | None = None
-    bank_name: str | None = None
-    account_number: str | None = None
-    service_code: str | None = None
+    # Require valid Tag 38 NAPAS transfer template before classifying as VALID_VIETQR
+    if "38" not in top_fields:
+        return VietQRInfo(raw=cleaned, kind="TEXT_QR", crc_valid=True), evidence
 
-    if "38" in top_fields:
-        sub38, ok38 = read_tlv(top_fields["38"])
-        if ok38 and sub38.get("00") == NAPAS_GUID:
-            service_code = sub38.get("02", "QRIBFTTA")
-            if "01" in sub38:
-                acct_tlv, ok_acct = read_tlv(sub38["01"])
-                if ok_acct:
-                    bank_bin = acct_tlv.get("00")
-                    account_number = acct_tlv.get("01")
-                    if bank_bin:
-                        bank_name = _load_bin_map().get(bank_bin, f"BIN {bank_bin}")
+    sub38, ok38 = read_tlv(top_fields["38"])
+    if not ok38:
+        evidence.append(
+            EvidenceItem(
+                source="vietqr_parser",
+                severity="HIGH",
+                title="Trường định danh tài khoản NAPAS (Tag 38) bị hỏng",
+                detail="Cấu trúc TLV bên trong Tag 38 không hợp lệ.",
+                snippet=cleaned[:80],
+            )
+        )
+        return VietQRInfo(raw=cleaned, kind="INVALID_CRC_VIETQR", crc_valid=False), evidence
+
+    if sub38.get("00") != NAPAS_GUID or "01" not in sub38:
+        return VietQRInfo(raw=cleaned, kind="TEXT_QR", crc_valid=True), evidence
+
+    service_code = sub38.get("02", "QRIBFTTA")
+    acct_tlv, ok_acct = read_tlv(sub38["01"])
+    bank_bin = acct_tlv.get("00") if ok_acct else None
+    account_number = acct_tlv.get("01") if ok_acct else None
+
+    if not ok_acct or not bank_bin or not account_number or service_code not in SUPPORTED_NAPAS_SERVICES:
+        return VietQRInfo(raw=cleaned, kind="TEXT_QR", crc_valid=True), evidence
+
+    bank_name = _load_bin_map().get(bank_bin, f"BIN {bank_bin}")
 
     note: str | None = None
     if "62" in top_fields:
@@ -177,15 +190,15 @@ def parse_qr_payload(
                 severity="CRITICAL",
                 title="Bẫy lừa quét mã VietQR để 'nhận tiền'",
                 detail=(
-                    f"Mã QR là lệnh CHUYỂN TIỀN ĐI ({service_code or 'QRIBFTTA'})"
-                    f"{f' số tiền {amount} VND' if amount else ''} tới {bank_name or 'ngân hàng'} "
+                    f"Mã QR là lệnh CHUYỂN TIỀN ĐI ({service_code})"
+                    f"{f' số tiền {amount} VND' if amount else ''} tới {bank_name} "
                     "nhưng tin nhắn lại dụ quét mã để nhận tiền hoàn/nhận thưởng."
                 ),
             )
         )
 
     beneficiary_mismatch = False
-    if expected_merchant_account and account_number:
+    if expected_merchant_account:
         exp_digits = re.sub(r"\D", "", expected_merchant_account)
         act_digits = re.sub(r"\D", "", account_number)
         if exp_digits and act_digits and exp_digits != act_digits:

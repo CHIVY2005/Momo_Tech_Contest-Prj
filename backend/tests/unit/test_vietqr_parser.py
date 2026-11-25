@@ -54,9 +54,17 @@ def test_flags_vietqr_receive_money_scam_beneficiary_mismatch_and_bad_crc() -> N
     assert len(bad_ev) >= 1
 
 
-def test_distinguishes_url_qr_and_plain_text_qr() -> None:
+def test_non_napas_emv_payload_is_not_classified_as_valid_vietqr() -> None:
+    # EMVCo 000201 payload WITHOUT Tag 38 NAPAS GUID
+    body = "00020101021153037045802VN6304"
+    non_napas = body + crc16_ccitt_false(body.encode("ascii"))
+    info, ev = parse_qr_payload(
+        non_napas,
+        accompanying_text="Quét mã QR này để nhận tiền thưởng",
+    )
+    assert info.kind == "TEXT_QR"
+    assert info.receive_scam_detected is False
+    assert len(ev) == 0
+
     url_info, _ = parse_qr_payload("https://vneid-capnhat.vip/download.apk")
     assert url_info.kind == "URL_QR"
-
-    txt_info, _ = parse_qr_payload("MA KHUYEN MAI 2026")
-    assert txt_info.kind == "TEXT_QR"

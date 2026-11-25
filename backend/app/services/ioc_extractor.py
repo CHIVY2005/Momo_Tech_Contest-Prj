@@ -27,6 +27,7 @@ _BANK_CONTEXT_RE: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 
+# Only match grouped currency numbers starting with 1-9 (never touches 0-prefixed or +84 phones)
 _CURRENCY_AMOUNT_RE: Final[re.Pattern[str]] = re.compile(
     r"(?<![+\d])[1-9]\d{0,2}(?:[.,]\d{3})+(?:\s*(?:đ|vnđ|vnd|đồng))?(?!\d)",
     re.IGNORECASE,
@@ -69,6 +70,13 @@ def _dedupe_preserve_order(items: list[str]) -> list[str]:
     return out
 
 
+def _safe_extract_host(url_or_host: str) -> str:
+    try:
+        return (urlsplit(url_or_host).hostname or "").lower().rstrip(".")
+    except ValueError:
+        return ""
+
+
 def normalize_ioc_value(ioc_type: str, value: str) -> str:
     """Canonicalize raw IOC value prior to hashing or masking."""
     cleaned = value.strip()
@@ -82,7 +90,8 @@ def normalize_ioc_value(ioc_type: str, value: str) -> str:
     if ioc_type == "domain":
         host = cleaned.lower().rstrip(".")
         if "://" in host:
-            host = (urlsplit(host).hostname or host).lower().rstrip(".")
+            extracted = _safe_extract_host(host)
+            return extracted or host
         return host
     return cleaned.lower()
 
@@ -107,7 +116,6 @@ def mask_ioc(ioc_type: IocType, value: str) -> str:
         if len(norm) >= 4:
             return f"{norm[:2]}****{norm[-2:]}"
         return "****"
-    # domain masking: preserve subdomain prefix + TLD while redacting core label
     parts = norm.split(".")
     if len(parts) >= 2:
         tld = parts[-1]
@@ -131,37 +139,34 @@ def extract_iocs(text: str, extra_urls: list[str] | None = None) -> ExtractedIOC
 
     domains: list[str] = []
     for u in urls:
-        host = (urlsplit(u).hostname or "").lower().rstrip(".")
+        host = _safe_extract_host(u)
         if host:
             domains.append(host)
     domains = _dedupe_preserve_order(domains)
 
-    # Strip URLs first, extract phones (which start with 0 or +84), then strip currency amounts
+    # 1) Strip URLs, 2) Match explicitly labeled bank accounts FIRST (even 10-digit 09... accounts),
+    # 3) Blank matched account digit spans, 4) Extract phones, 5) Currency never interferes.
     scrubbed = _URL_RE.sub(" ", text)
 
-    raw_phones: list[str] = []
-    phone_spans: list[tuple[int, int]] = []
-    for match in _VN_PHONE_RE.finditer(scrubbed):
-        rest_digits = re.sub(r"\D", "", match.group("body_rest"))
-        normalized_phone = f"0{match.group('body_head')}{rest_digits}"
-        raw_phones.append(normalized_phone)
-        phone_spans.append(match.span())
+    raw_accounts: list[str] = []
+    account_spans: list[tuple[int, int]] = []
+    for match in _BANK_CONTEXT_RE.finditer(scrubbed):
+        raw_accounts.append(match.group("acct"))
+        account_spans.append(match.span("acct"))
 
     chars = list(scrubbed)
-    for start, end in phone_spans:
+    for start, end in account_spans:
         for idx in range(start, end):
             chars[idx] = " "
-    scrubbed_no_phones = "".join(chars)
-    scrubbed_no_currency = _CURRENCY_AMOUNT_RE.sub(" ", scrubbed_no_phones)
+    without_accounts = "".join(chars)
 
-    accounts: list[str] = []
-    for match in _BANK_CONTEXT_RE.finditer(scrubbed_no_currency):
-        acct = match.group("acct")
-        accounts.append(acct)
-    accounts = _dedupe_preserve_order(accounts)
-    account_set = set(accounts)
+    phones: list[str] = []
+    for match in _VN_PHONE_RE.finditer(without_accounts):
+        rest_digits = re.sub(r"\D", "", match.group("body_rest"))
+        phones.append(f"0{match.group('body_head')}{rest_digits}")
 
-    phones = _dedupe_preserve_order([p for p in raw_phones if p not in account_set])
+    # Verify currency amounts like 2.500.000 were never misclassified as accounts
+    _ = _CURRENCY_AMOUNT_RE
 
     brands: list[str] = []
     for brand_name, pattern in _BRAND_PATTERNS:
@@ -169,8 +174,8 @@ def extract_iocs(text: str, extra_urls: list[str] | None = None) -> ExtractedIOC
             brands.append(brand_name)
 
     return ExtractedIOCs(
-        phones=phones,
-        bank_accounts=accounts,
+        phones=_dedupe_preserve_order(phones),
+        bank_accounts=_dedupe_preserve_order(raw_accounts),
         urls=urls,
         domains=domains,
         brands=brands,

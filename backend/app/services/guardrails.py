@@ -68,12 +68,13 @@ _ADVISORY_HEADER_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
 
 _ADVISORY_PROTECTIVE_CLAUSES: Final[tuple[re.Pattern[str], ...]] = (
     re.compile(
-        r"(?:tuyệt\s+đối\s+không|không\s+bao\s+giờ).{0,55}"
-        r"(?:cung\s+cấp|chia\s+sẻ).{0,35}(?:mã\s+otp|otp|mật\s+khẩu)",
+        r"(?:tuyệt\s+đối\s+)?không(?:\s+bao\s+giờ)?\s+(?:cung\s+cấp|chia\s+sẻ|đưa).{0,35}"
+        r"(?:mã\s+otp|otp|mật\s+khẩu)",
         re.IGNORECASE | re.DOTALL,
     ),
     re.compile(
-        r"(?:không\s+bấm\s+vào\s+(?:đường\s+)?link\s+lạ|không\s+tải\s+(?:file|ứng\s+dụng)\s+\.apk)",
+        r"không\s+(?:bấm\s+vào\s+(?:đường\s+)?link\s+lạ|"
+        r"(?:tải|cài(?:\s+đặt)?)\s+(?:file\s+|ứng\s+dụng\s+)?\.apk)",
         re.IGNORECASE,
     ),
 )
@@ -183,7 +184,7 @@ def evaluate_guardrails(text: str, has_suspicious_url: bool = False) -> Guardrai
                 title="Nhận diện khuyến cáo an toàn chính thống",
                 detail=(
                     "Văn bản mang cấu trúc thông báo phòng chống lừa đảo (nhắc không chia sẻ OTP / "
-                    "không bấm link lạ) và không chứa yêu cầu chuyển tiền hay liên kết đáng ngờ."
+                    "không cài .apk lạ) và không chứa yêu cầu chuyển tiền hay liên kết đáng ngờ."
                 ),
             )
         )
