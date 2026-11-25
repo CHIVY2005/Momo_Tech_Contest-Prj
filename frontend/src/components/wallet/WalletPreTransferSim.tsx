@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, CheckCircle2, Lock, PhoneOff, ShieldAlert, Timer } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, Lock, PhoneOff, ShieldAlert, Timer } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { AnalysisReport } from "@/lib/types";
@@ -10,6 +10,8 @@ interface WalletPreTransferSimProps {
   transferAmountInput: string;
 }
 
+type WalletSimulationOutcome = "pending" | "aborted_safely" | "overridden_at_risk";
+
 export function WalletPreTransferSim({
   report,
   transferAmountInput,
@@ -17,23 +19,23 @@ export function WalletPreTransferSim({
   const pre = report.actions.pre_transfer;
   const [secondsLeft, setSecondsLeft] = useState<number>(pre.cooling_off_seconds);
   const [checkedQuestions, setCheckedQuestions] = useState<Record<number, boolean>>({});
-  const [abortedSafely, setAbortedSafely] = useState(false);
+  const [outcome, setOutcome] = useState<WalletSimulationOutcome>("pending");
 
   useEffect(() => {
     setSecondsLeft(pre.should_hold_transfer ? pre.cooling_off_seconds : 0);
     setCheckedQuestions({});
-    setAbortedSafely(false);
+    setOutcome("pending");
   }, [report.case_id, pre.cooling_off_seconds, pre.should_hold_transfer]);
 
   useEffect(() => {
-    if (secondsLeft <= 0 || pre.blocked_by_ops_rule || abortedSafely) {
+    if (secondsLeft <= 0 || pre.blocked_by_ops_rule || outcome !== "pending") {
       return;
     }
     const timer = window.setInterval(() => {
       setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [secondsLeft, pre.blocked_by_ops_rule, abortedSafely]);
+  }, [secondsLeft, pre.blocked_by_ops_rule, outcome]);
 
   if (!pre.should_hold_transfer && report.mode !== "wallet_transfer") {
     return null;
@@ -41,7 +43,9 @@ export function WalletPreTransferSim({
 
   const allVerified = pre.verification_questions.every((_, idx) => Boolean(checkedQuestions[idx]));
   const canProceedOverride =
-    !pre.blocked_by_ops_rule && secondsLeft === 0 && (pre.verification_questions.length === 0 || allVerified);
+    !pre.blocked_by_ops_rule &&
+    secondsLeft === 0 &&
+    (pre.verification_questions.length === 0 || allVerified);
 
   const parsedAmount = Number(transferAmountInput);
   const formattedAmount =
@@ -85,7 +89,7 @@ export function WalletPreTransferSim({
         </div>
       </div>
 
-      {abortedSafely ? (
+      {outcome === "aborted_safely" ? (
         <div
           role="status"
           className="mt-4 flex items-center gap-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 p-4 text-xs font-semibold text-emerald-200"
@@ -94,6 +98,28 @@ export function WalletPreTransferSim({
           <span>
             Đã hủy lệnh chuyển tiền an toàn! Số dư ví của bạn được bảo toàn nguyên vẹn.
           </span>
+        </div>
+      ) : outcome === "overridden_at_risk" ? (
+        <div
+          role="status"
+          className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/50 bg-amber-500/15 p-4 text-xs text-amber-100"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden="true" />
+            <span>
+              <strong>Mô phỏng Ghi nhận Miễn trừ Trách nhiệm:</strong> Người dùng đã chờ hết 30 giây làm
+              nguội và tích xác nhận tự chịu rủi ro cho hồ sơ{" "}
+              <code className="font-[family-name:var(--font-mono)]">{report.case_id}</code>. Hệ thống ví
+              đã ghi nhật ký cảnh báo bắt buộc trước khi giải ngân.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOutcome("pending")}
+            className="cursor-pointer rounded-lg border border-amber-400/50 bg-slate-950 px-2.5 py-1 text-[11px] font-semibold text-amber-200 hover:bg-slate-900"
+          >
+            Xem lại Khóa 30s
+          </button>
         </div>
       ) : pre.blocked_by_ops_rule ? (
         <div
@@ -123,7 +149,9 @@ export function WalletPreTransferSim({
               className="flex items-center gap-1.5 rounded-lg bg-slate-950 px-3 py-1.5 font-[family-name:var(--font-mono)] text-sm font-bold text-amber-300"
             >
               <Timer className="h-4 w-4 text-amber-400" aria-hidden="true" />
-              <span>{secondsLeft > 0 ? `Khóa làm nguội: ${secondsLeft}s` : "Đã hết 30s làm nguội"}</span>
+              <span>
+                {secondsLeft > 0 ? `Khóa làm nguội: ${secondsLeft}s` : "Đã hết 30s làm nguội"}
+              </span>
             </div>
           </div>
 
@@ -154,7 +182,7 @@ export function WalletPreTransferSim({
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
             <button
               type="button"
-              onClick={() => setAbortedSafely(true)}
+              onClick={() => setOutcome("aborted_safely")}
               className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-slate-950 transition-colors hover:bg-emerald-400"
             >
               <PhoneOff className="h-4 w-4" aria-hidden="true" />
@@ -164,6 +192,7 @@ export function WalletPreTransferSim({
             <button
               type="button"
               disabled={!canProceedOverride}
+              onClick={() => setOutcome("overridden_at_risk")}
               className="cursor-pointer rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-medium text-slate-300 transition-colors enabled:hover:border-rose-500/60 enabled:hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {secondsLeft > 0

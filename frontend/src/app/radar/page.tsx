@@ -9,6 +9,7 @@ import { BlockRuleManager } from "@/components/radar/BlockRuleManager";
 import { CampaignQueue } from "@/components/radar/CampaignQueue";
 import { IocGraphSvg } from "@/components/radar/IocGraphSvg";
 import { createBlockRule, fetchRadarGraph, resetBlockRules } from "@/lib/api";
+import { getNextRuleExpiryDelayMs } from "@/lib/radarLayout";
 import type { EmergingCampaign, IocType, RadarGraphResponse } from "@/lib/types";
 
 export default function RadarPage() {
@@ -16,12 +17,14 @@ export default function RadarPage() {
   const [analystPin, setAnalystPin] = useState("2026");
   const [busyCampaignId, setBusyCampaignId] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   const loadGraph = useCallback(async () => {
     try {
       const data = await fetchRadarGraph();
       setGraph(data);
+      setNowMs(Date.now());
     } catch (e) {
       setBanner({
         kind: "err",
@@ -33,6 +36,18 @@ export default function RadarPage() {
   useEffect(() => {
     void loadGraph();
   }, [loadGraph]);
+
+  useEffect(() => {
+    const activeRules = graph?.active_block_rules ?? [];
+    const delayMs = getNextRuleExpiryDelayMs(activeRules, nowMs);
+    if (delayMs === null) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void loadGraph();
+    }, delayMs);
+    return () => window.clearTimeout(timer);
+  }, [graph, nowMs, loadGraph]);
 
   async function handleBlockCampaign(camp: EmergingCampaign) {
     setBusyCampaignId(camp.campaign_id);
@@ -60,7 +75,11 @@ export default function RadarPage() {
     }
   }
 
-  async function handleManualBlock(iocType: IocType, rawValue: string, reason: string) {
+  async function handleManualBlock(
+    iocType: IocType,
+    rawValue: string,
+    reason: string,
+  ): Promise<boolean> {
     setIsMutating(true);
     setBanner(null);
     try {
@@ -75,11 +94,13 @@ export default function RadarPage() {
         text: `Đã mã hóa SHA-256 & khóa thực thể ${rule.masked_value} (TTL 30 phút).`,
       });
       await loadGraph();
+      return true;
     } catch (e) {
       setBanner({
         kind: "err",
         text: e instanceof Error ? e.message : "Lệnh chặn bị từ chối.",
       });
+      return false;
     } finally {
       setIsMutating(false);
     }
@@ -202,9 +223,10 @@ export default function RadarPage() {
           <BlockRuleManager
             rules={graph?.active_block_rules ?? []}
             analystPin={analystPin}
+            nowMs={nowMs}
             isBusy={isMutating || busyCampaignId !== null}
             onPinChange={setAnalystPin}
-            onCreateManualRule={(t, v, r) => void handleManualBlock(t, v, r)}
+            onCreateManualRule={handleManualBlock}
             onResetRules={() => void handleReset()}
           />
         </div>

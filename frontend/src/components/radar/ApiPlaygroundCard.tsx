@@ -28,25 +28,34 @@ export function ApiPlaygroundCard() {
   const [sampleText, setSampleText] = useState(PRESET_PAYLOADS[0]?.text ?? "");
   const [inActiveCall, setInActiveCall] = useState(true);
   const [isCalling, setIsCalling] = useState(false);
-  const [result, setResult] = useState<AnalysisReport | null>(null);
+  const [evaluated, setEvaluated] = useState<{
+    payload: string;
+    report: AnalysisReport;
+  } | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   async function runApiCheck() {
+    const submittedText = sampleText.trim();
+    if (!submittedText) return;
     setIsCalling(true);
     setErr(null);
+    setEvaluated(null);
+
     const fd = new FormData();
     fd.append("mode", "wallet_transfer");
     fd.append("in_active_call", String(inActiveCall));
-    fd.append("text", sampleText);
+    fd.append("text", submittedText);
     try {
       const report = await analyzeSync(fd);
-      setResult(report);
+      setEvaluated({ payload: submittedText, report });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Lỗi gọi API kiểm định.");
     } finally {
       setIsCalling(false);
     }
   }
+
+  const result = evaluated?.report ?? null;
 
   return (
     <section
@@ -75,6 +84,8 @@ export function ApiPlaygroundCard() {
             onClick={() => {
               setSampleText(p.text);
               setInActiveCall(p.inActiveCall);
+              setEvaluated(null);
+              setErr(null);
             }}
             className="cursor-pointer rounded-lg border border-slate-700 bg-[#0b1120] px-2.5 py-1.5 text-[11px] font-medium text-slate-200 hover:border-sky-400"
           >
@@ -92,7 +103,10 @@ export function ApiPlaygroundCard() {
             id="playground-payload"
             rows={2}
             value={sampleText}
-            onChange={(e) => setSampleText(e.target.value)}
+            onChange={(e) => {
+              setSampleText(e.target.value);
+              setEvaluated(null);
+            }}
             className="w-full rounded-xl border border-slate-700 bg-[#0b1120] px-3 py-2 font-[family-name:var(--font-mono)] text-xs text-slate-100"
           />
         </div>
@@ -102,7 +116,10 @@ export function ApiPlaygroundCard() {
             <input
               type="checkbox"
               checked={inActiveCall}
-              onChange={(e) => setInActiveCall(e.target.checked)}
+              onChange={(e) => {
+                setInActiveCall(e.target.checked);
+                setEvaluated(null);
+              }}
               className="h-4 w-4 cursor-pointer accent-amber-500"
             />
             <span>`in_active_call = true` (Đang trong cuộc gọi thoại)</span>
@@ -129,7 +146,7 @@ export function ApiPlaygroundCard() {
           </p>
         )}
 
-        {result && (
+        {result && evaluated && (
           <div className="space-y-2.5 rounded-xl border border-slate-800 bg-[#070b14] p-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-xs font-bold">
@@ -156,6 +173,7 @@ export function ApiPlaygroundCard() {
             <pre className="max-h-48 overflow-auto rounded-lg bg-slate-950 p-3 font-[family-name:var(--font-mono)] text-[11px] leading-relaxed text-sky-200">
               {JSON.stringify(
                 {
+                  evaluated_payload: evaluated.payload,
                   case_id: result.case_id,
                   risk_score: result.risk_score,
                   verdict: result.verdict,

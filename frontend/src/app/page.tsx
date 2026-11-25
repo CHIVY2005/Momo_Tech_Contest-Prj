@@ -25,16 +25,22 @@ const INITIAL_FORM: WorkbenchFormState = {
   audioFile: null,
 };
 
+interface SubmittedSnapshot {
+  report: AnalysisReport;
+  imageFile: File | null;
+  transferAmount: string;
+}
+
 export default function HomePage() {
   const [demos, setDemos] = useState<DemoScenario[]>([]);
   const [health, setHealth] = useState<SystemHealthResponse | null>(null);
   const [form, setForm] = useState<WorkbenchFormState>(INITIAL_FORM);
   const [activeDemo, setActiveDemo] = useState<DemoScenario | null>(null);
   const [traceSteps, setTraceSteps] = useState<TraceStep[]>([]);
-  const [report, setReport] = useState<AnalysisReport | null>(null);
+  const [submittedSnapshot, setSubmittedSnapshot] = useState<SubmittedSnapshot | null>(null);
+  const [submittedPreviewUrl, setSubmittedPreviewUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [localImagePreview, setLocalImagePreview] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -50,14 +56,15 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!form.imageFile) {
-      setLocalImagePreview(null);
+    const file = submittedSnapshot?.imageFile ?? null;
+    if (!file) {
+      setSubmittedPreviewUrl(null);
       return;
     }
-    const objUrl = URL.createObjectURL(form.imageFile);
-    setLocalImagePreview(objUrl);
+    const objUrl = URL.createObjectURL(file);
+    setSubmittedPreviewUrl(objUrl);
     return () => URL.revokeObjectURL(objUrl);
-  }, [form.imageFile]);
+  }, [submittedSnapshot]);
 
   async function executeAnalysis(overrideDemo?: DemoScenario) {
     abortRef.current?.abort();
@@ -66,7 +73,15 @@ export default function HomePage() {
 
     setErrorMsg(null);
     setTraceSteps([]);
+    setSubmittedSnapshot(null);
     setIsAnalyzing(true);
+
+    const capturedImageFile = !overrideDemo && !activeDemo ? form.imageFile : null;
+    const capturedAmount = overrideDemo
+      ? overrideDemo.transfer_amount
+        ? String(overrideDemo.transfer_amount)
+        : ""
+      : form.transferAmount;
 
     const fd = new FormData();
     if (overrideDemo) {
@@ -93,20 +108,32 @@ export default function HomePage() {
         fd,
         {
           onTrace: (step) => {
+            if (abortRef.current !== controller) return;
             setTraceSteps((prev) => {
               const filtered = prev.filter((p) => p.step_id !== step.step_id);
               return [...filtered, step];
             });
           },
           onResult: (res) => {
-            setReport(res);
+            if (abortRef.current !== controller) return;
+            setSubmittedSnapshot({
+              report: res,
+              imageFile: capturedImageFile,
+              transferAmount: capturedAmount,
+            });
           },
         },
         controller.signal,
       );
-      setReport(finalReport);
+      if (abortRef.current === controller) {
+        setSubmittedSnapshot({
+          report: finalReport,
+          imageFile: capturedImageFile,
+          transferAmount: capturedAmount,
+        });
+      }
     } catch (err) {
-      if ((err as Error).name !== "AbortError") {
+      if ((err as Error).name !== "AbortError" && abortRef.current === controller) {
         setErrorMsg(err instanceof Error ? err.message : "Đã xảy ra lỗi khi kết nối máy chủ.");
       }
     } finally {
@@ -132,9 +159,17 @@ export default function HomePage() {
   }
 
   function handleManualFormChange(next: WorkbenchFormState) {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setIsAnalyzing(false);
     setActiveDemo(null);
+    setSubmittedSnapshot(null);
+    setTraceSteps([]);
+    setErrorMsg(null);
     setForm(next);
   }
+
+  const report = submittedSnapshot?.report ?? null;
 
   return (
     <div className="space-y-6">
@@ -192,7 +227,13 @@ export default function HomePage() {
         onChange={handleManualFormChange}
         onSubmit={() => void executeAnalysis()}
         onClearDemo={() => {
+          abortRef.current?.abort();
+          abortRef.current = null;
+          setIsAnalyzing(false);
           setActiveDemo(null);
+          setSubmittedSnapshot(null);
+          setTraceSteps([]);
+          setErrorMsg(null);
           setForm(INITIAL_FORM);
         }}
       />
@@ -213,11 +254,14 @@ export default function HomePage() {
         <div className="space-y-6">
           <VerdictDashboard report={report} />
 
-          <WalletPreTransferSim report={report} transferAmountInput={form.transferAmount} />
+          <WalletPreTransferSim
+            report={report}
+            transferAmountInput={submittedSnapshot?.transferAmount ?? ""}
+          />
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
             <div className="lg:col-span-7">
-              <EvidenceTabs report={report} originalPreviewUrl={localImagePreview} />
+              <EvidenceTabs report={report} originalPreviewUrl={submittedPreviewUrl} />
             </div>
             <div className="lg:col-span-5">
               <ActionCopilotPanel report={report} />

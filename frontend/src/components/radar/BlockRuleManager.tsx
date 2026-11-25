@@ -9,15 +9,17 @@ import type { BlockRule, IocType } from "@/lib/types";
 interface BlockRuleManagerProps {
   rules: BlockRule[];
   analystPin: string;
+  nowMs: number;
   isBusy: boolean;
   onPinChange: (pin: string) => void;
-  onCreateManualRule: (iocType: IocType, rawValue: string, reason: string) => void;
+  onCreateManualRule: (iocType: IocType, rawValue: string, reason: string) => Promise<boolean>;
   onResetRules: () => void;
 }
 
 export function BlockRuleManager({
   rules,
   analystPin,
+  nowMs,
   isBusy,
   onPinChange,
   onCreateManualRule,
@@ -27,11 +29,13 @@ export function BlockRuleManager({
   const [rawValue, setRawValue] = useState("");
   const [reason, setReason] = useState("Tài khoản trung gian nhận tiền lừa đảo (Fraud Ops xác minh)");
 
-  function handleSubmit(ev: FormEvent) {
+  async function handleSubmit(ev: FormEvent) {
     ev.preventDefault();
     if (!rawValue.trim() || !reason.trim()) return;
-    onCreateManualRule(iocType, rawValue.trim(), reason.trim());
-    setRawValue("");
+    const created = await onCreateManualRule(iocType, rawValue.trim(), reason.trim());
+    if (created) {
+      setRawValue("");
+    }
   }
 
   return (
@@ -91,7 +95,10 @@ export function BlockRuleManager({
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-2.5 rounded-xl border border-slate-800 bg-[#0b1120] p-3.5">
+      <form
+        onSubmit={(ev) => void handleSubmit(ev)}
+        className="space-y-2.5 rounded-xl border border-slate-800 bg-[#0b1120] p-3.5"
+      >
         <p className="text-xs font-semibold text-slate-200">Ban hành Quy tắc Chặn Thủ công:</p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <div>
@@ -172,7 +179,7 @@ export function BlockRuleManager({
                 </div>
               </div>
               <span className="rounded bg-slate-950 px-2 py-0.5 font-[family-name:var(--font-mono)] text-[10px] text-amber-300">
-                {formatRemainingTtl(rule.expires_at)}
+                {formatRemainingTtl(rule.expires_at, nowMs)}
               </span>
             </div>
           ))

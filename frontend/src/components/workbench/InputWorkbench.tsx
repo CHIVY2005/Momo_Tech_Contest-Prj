@@ -87,8 +87,15 @@ export function InputWorkbench({
   function handleFileChange(kind: "imageFile" | "audioFile", file: File | null) {
     setFileError(null);
     if (file && file.size > MAX_CLIENT_UPLOAD_BYTES) {
+      if (kind === "imageFile" && imgInputRef.current) {
+        imgInputRef.current.value = "";
+      }
+      if (kind === "audioFile" && audInputRef.current) {
+        audInputRef.current.value = "";
+      }
+      updateField(kind, null);
       setFileError(
-        `Tệp "${file.name}" vượt quá giới hạn an toàn 10 MB. Vui lòng chọn tệp nhỏ hơn.`,
+        `Tệp "${file.name}" vượt quá giới hạn an toàn 10 MB. Đã gỡ tệp — vui lòng chọn tệp nhỏ hơn.`,
       );
       return;
     }
