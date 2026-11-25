@@ -1,0 +1,311 @@
+{
+  "version": "2.0.0",
+  "napas_bins": {
+    "970436": "Vietcombank",
+    "970407": "Techcombank",
+    "970422": "MB Bank",
+    "970418": "BIDV",
+    "970415": "VietinBank",
+    "970405": "Agribank",
+    "970416": "ACB",
+    "970432": "VPBank",
+    "970423": "TPBank",
+    "970403": "Sacombank",
+    "970441": "VIB",
+    "970443": "SHB",
+    "970437": "HDBank",
+    "970426": "MSB",
+    "970448": "OCB",
+    "970431": "Eximbank",
+    "970440": "SeABank",
+    "970454": "VietCapitalBank"
+  },
+  "official_brands": [
+    {
+      "brand": "Vietcombank",
+      "official_domains": ["vietcombank.com.vn"],
+      "keywords": ["vietcombank", "vcb", "digibank", "vietcmbank"]
+    },
+    {
+      "brand": "Techcombank",
+      "official_domains": ["techcombank.com", "techcombank.com.vn"],
+      "keywords": ["techcombank", "tcb"]
+    },
+    {
+      "brand": "MB Bank",
+      "official_domains": ["mbbank.com.vn"],
+      "keywords": ["mbbank", "mb-bank"]
+    },
+    {
+      "brand": "BIDV",
+      "official_domains": ["bidv.com.vn"],
+      "keywords": ["bidv", "smartbanking"]
+    },
+    {
+      "brand": "VietinBank",
+      "official_domains": ["vietinbank.vn"],
+      "keywords": ["vietinbank", "ipay"]
+    },
+    {
+      "brand": "Agribank",
+      "official_domains": ["agribank.com.vn"],
+      "keywords": ["agribank"]
+    },
+    {
+      "brand": "ACB",
+      "official_domains": ["acb.com.vn"],
+      "keywords": ["acbbank", "acb-one"]
+    },
+    {
+      "brand": "VPBank",
+      "official_domains": ["vpbank.com.vn"],
+      "keywords": ["vpbank"]
+    },
+    {
+      "brand": "TPBank",
+      "official_domains": ["tpb.vn"],
+      "keywords": ["tpbank"]
+    },
+    {
+      "brand": "Sacombank",
+      "official_domains": ["sacombank.com.vn"],
+      "keywords": ["sacombank"]
+    },
+    {
+      "brand": "NAPAS",
+      "official_domains": ["napas.com.vn"],
+      "keywords": ["napas", "napas247", "vietqr-napas"]
+    },
+    {
+      "brand": "VNeID",
+      "official_domains": ["vneid.gov.vn", "dichvucong.gov.vn", "bocongan.gov.vn"],
+      "keywords": ["vneid", "dichvucong", "dinhdanhdientu", "bocongan"]
+    },
+    {
+      "brand": "Cục Thuế",
+      "official_domains": ["gdt.gov.vn"],
+      "keywords": ["thuedientu", "etax", "cucthue", "tongcucthue"]
+    },
+    {
+      "brand": "EVN",
+      "official_domains": ["evn.com.vn"],
+      "keywords": ["dienluc", "evncskh"]
+    },
+    {
+      "brand": "ZaloPay",
+      "official_domains": ["zalopay.vn"],
+      "keywords": ["zalopay"]
+    },
+    {
+      "brand": "VNPay",
+      "official_domains": ["vnpay.vn"],
+      "keywords": ["vnpay"]
+    },
+    {
+      "brand": "Shopee",
+      "official_domains": ["shopee.vn"],
+      "keywords": ["shopee"]
+    }
+  ],
+  "playbooks": [
+    {
+      "id": "scam_napas_sms_points",
+      "name_vi": "Mạo danh SMS Brandname NAPAS / Ngân hàng đổi điểm & xác minh thẻ",
+      "modes": ["personal", "wallet_transfer"],
+      "keywords": ["napas", "đổi điểm thưởng", "xác minh thẻ", "hết hạn điểm", "thẻ tín dụng", "quà tặng tri ân"],
+      "psychological_tactics": ["Đánh vào tâm lý sợ mất quyền lợi sắp hết hạn", "Mạo danh tổ chức hạ tầng thanh toán quốc gia"],
+      "red_flags": ["NAPAS không trực tiếp phát hành thẻ hay gửi SMS kèm đường link đổi điểm cho cá nhân", "Tên miền lạ (.top, .vip, .xyz) giả giao diện ngân hàng"],
+      "counter_replies": ["NAPAS không quản lý điểm thưởng thẻ cá nhân và không gửi link qua SMS. Tôi sẽ gọi trực tiếp tổng đài in mặt sau thẻ."],
+      "urgent_steps": ["Tuyệt đối không nhập số thẻ, ngày hết hạn, CVV hoặc mã OTP lên đường link trong tin nhắn.", "Nếu lỡ nhập thông tin thẻ, khóa thẻ ngay trên ứng dụng ngân hàng chính thức."]
+    },
+    {
+      "id": "scam_police_vneid_apk",
+      "name_vi": "Giả danh Công an / Viện Kiểm sát / Cập nhật VNeID mức 2 (.apk)",
+      "modes": ["personal", "wallet_transfer"],
+      "keywords": ["công an", "viện kiểm sát", "vneid", "định danh mức 2", "tài khoản tạm giữ", "chứng minh trong sạch", "rửa tiền", "lệnh bắt", "file .apk"],
+      "psychological_tactics": ["Gây hoảng loạn pháp lý tột độ", "Cô lập nạn nhân: yêu cầu giữ bí mật, ở phòng riêng khi nghe điện thoại"],
+      "red_flags": ["Cơ quan Công an không làm việc, tống đạt giấy triệu tập qua điện thoại/Zalo", "Không có 'tài khoản tạm giữ xác minh trong sạch'", "Dụ cài ứng dụng .apk ngoài App Store / Google Play để chiếm quyền trợ năng (Accessibility)"],
+      "counter_replies": ["Đề nghị cán bộ gửi giấy mời làm việc trực tiếp có dấu đỏ về Công an phường nơi tôi cư trú; tôi không làm việc hay chuyển tiền qua điện thoại."],
+      "urgent_steps": ["Cúp máy ngay lập tức để thoát khỏi thao túng tâm lý.", "Không cài đặt file .apk và không quay video khuôn mặt sinh trắc học theo hướng dẫn từ xa."]
+    },
+    {
+      "id": "scam_vietqr_receive_refund",
+      "name_vi": "Lừa quét mã VietQR để 'nhận tiền hoàn / hủy gói cước / nhận thưởng'",
+      "modes": ["personal", "merchant", "wallet_transfer"],
+      "keywords": ["quét mã qr để nhận tiền", "nhận tiền hoàn", "hoàn tiền đơn hàng", "hủy gói bảo hiểm", "quét mã nhận thưởng", "trừ tiền tự động hàng tháng"],
+      "psychological_tactics": ["Lợi dụng sự nhầm lẫn giữa quét QR thanh toán và nhận tiền", "Hù dọa trừ phí 2–3 triệu/tháng nếu không hủy gấp"],
+      "red_flags": ["Chuẩn EMVCo VietQR (QRIBFTTA) chỉ dùng để CHUYỂN TIỀN ĐI, không tồn tại mã VietQR quét để nhận tiền về tài khoản"],
+      "counter_replies": ["Mã VietQR chỉ dùng để chuyển tiền đi, không thể quét để nhận tiền hoàn. Vui lòng chuyển khoản trực tiếp vào số tài khoản của tôi."],
+      "urgent_steps": ["Dừng ngay thao tác xác nhận PIN/sinh trắc học sau khi quét mã QR.", "Kiểm tra kỹ dòng chữ 'Chuyển tiền đến' trên màn hình ứng dụng."]
+    },
+    {
+      "id": "scam_merchant_fake_bill",
+      "name_vi": "Giả mạo biên lai chuyển khoản (Fake Bill Canvas / Ảnh nén Zalo / Dùng lại bill cũ)",
+      "modes": ["merchant"],
+      "keywords": ["chuyển khoản thành công", "giao hàng gấp", "shipper đang đợi", "liên ngân hàng bị treo", "ngân hàng bảo trì", "bill chuyển tiền"],
+      "psychological_tactics": ["Thúc giục chủ shop lúc đông khách", "Viện cớ nghẽn mạng liên ngân hàng để lấy hàng trước khi tiền về"],
+      "red_flags": ["Ảnh biên lai dựng từ web mẫu hoặc cắt ghép phông chữ/dấu phân cách", "Mã giao dịch FT sai quy chuẩn hoặc thời gian bất thường", "Gửi lại ảnh biên lai cũ đã dùng trước đó"],
+      "counter_replies": ["Shop chỉ xuất hàng khi tài khoản ngân hàng hoặc Loa thông báo báo đã nhận đủ tiền thực tế. Anh/chị vui lòng đợi tiền nổi số dư nhé."],
+      "urgent_steps": ["Mở trực tiếp ứng dụng ngân hàng của chính cửa hàng kiểm tra lịch sử số dư.", "Không giao hàng hoặc hoàn tiền mặt khi chỉ mới nhìn ảnh chụp màn hình."]
+    },
+    {
+      "id": "scam_qr_sticker_swap",
+      "name_vi": "Dán đè mã QR giả mạo tại quầy thu ngân cửa hàng",
+      "modes": ["merchant", "personal"],
+      "keywords": ["dán đè mã qr", "mã qr tại quầy", "sai tên chủ tài khoản", "quét mã cửa hàng"],
+      "psychological_tactics": ["Đánh tráo vật lý bảng mã QR tĩnh ở quán đông người không kiểm tra tên người nhận"],
+      "red_flags": ["Số tài khoản giải mã trong Tag 38 VietQR không khớp với tài khoản đăng ký của chủ cửa hàng"],
+      "counter_replies": ["Mã QR này đang trỏ sang tài khoản lạ không phải của cửa hàng, vui lòng kiểm tra lại bảng mã tại quầy."],
+      "urgent_steps": ["Đối chiếu tên chủ tài khoản hiển thị trên màn hình ngân hàng với tên chủ shop trước khi bấm chuyển."]
+    },
+    {
+      "id": "scam_biometric_qd2345_support",
+      "name_vi": "Giả nhân viên Ngân hàng hỗ trợ cập nhật Sinh trắc học (QĐ 2345)",
+      "modes": ["personal", "wallet_transfer"],
+      "keywords": ["cập nhật sinh trắc học", "quyết định 2345", "khóa giao dịch chuyển tiền", "nhân viên ngân hàng hỗ trợ từ xa", "chia sẻ màn hình"],
+      "psychological_tactics": ["Lợi dụng quy định xác thực sinh trắc học thật để dụ cài app điều khiển màn hình"],
+      "red_flags": ["Ngân hàng không bao giờ gọi video Zalo hướng dẫn cài app ngoài hoặc yêu cầu đọc OTP"],
+      "counter_replies": ["Tôi sẽ tự cập nhật sinh trắc học bằng CCCD gắn chip trên ứng dụng chính thức hoặc ra trực tiếp quầy giao dịch ngân hàng."],
+      "urgent_steps": ["Ngắt cuộc gọi chia sẻ màn hình ngay lập tức.", "Chỉ thực hiện sinh trắc học trực tiếp bên trong ứng dụng ngân hàng tải từ App Store / Google Play."]
+    },
+    {
+      "id": "scam_deepvoice_urgent_borrow",
+      "name_vi": "Chiếm đoạt Zalo / Giả giọng nói & Deepfake người thân vay tiền cấp cứu",
+      "modes": ["personal", "wallet_transfer"],
+      "keywords": ["chuyển gấp cho mẹ", "đang cấp cứu bệnh viện", "mượn gấp 10 triệu", "chuyển hộ vào tài khoản bạn", "gọi video bị mờ giật"],
+      "psychological_tactics": ["Đánh vào tình cảm gia đình và sự khẩn cấp sinh tử", "Cuộc gọi video ngắn 3–5 giây mờ nhiễu giả mất sóng rồi thúc chuyển vào STK tên người lạ"],
+      "counter_replies": ["Để mình gọi lại trực tiếp vào số điện thoại di động thường của bạn để xác nhận ngay nhé."],
+      "urgent_steps": ["Gọi điện thoại di động truyền thống (không gọi qua Zalo/Messenger) cho người thân đó để kiểm chứng.", "Đặc biệt cảnh giác khi người thân bảo chuyển tiền vào STK mang tên người khác."]
+    },
+    {
+      "id": "scam_task_ctv_commission",
+      "name_vi": "Tuyển Cộng tác viên (CTV) làm nhiệm vụ chốt đơn Shopee / TikTok hưởng hoa hồng",
+      "modes": ["personal", "wallet_transfer"],
+      "keywords": ["cộng tác viên", "làm nhiệm vụ", "hoa hồng 20%", "nạp tiền kích hoạt đơn", "đơn liên hoàn", "sai cú pháp nội dung chuyển khoản"],
+      "psychological_tactics": ["Mồi nhử trả thưởng thật 50k–100k ở 2 nhiệm vụ đầu", "Hiệu ứng chi phí chìm: báo 'sai cú pháp' bắt nạp gấp đôi để rút gốc"],
+      "red_flags": ["Việc làm thêm hợp pháp không bao giờ yêu cầu người lao động nạp tiền túi để thanh toán đơn hàng ảo"],
+      "counter_replies": ["Tôi không tham gia bất kỳ công việc nào yêu cầu nộp tiền trước hoặc nạp tiền gỡ lỗi hệ thống."],
+      "urgent_steps": ["Dừng nạp thêm tiền ngay lập tức — mọi khoản nạp thêm để 'rút tiền gốc' đều sẽ mất trắng.", "Lưu toàn bộ lịch sử STK nhận tiền và xuất PDF trình báo Công an."]
+    },
+    {
+      "id": "scam_fake_shipper_membership",
+      "name_vi": "Giả Shipper giao hàng báo chuyển nhầm vào tài khoản hội viên tự trừ phí",
+      "modes": ["personal", "wallet_transfer"],
+      "keywords": ["shipper giao hàng", "để hàng ở sảnh", "chuyển khoản tiền ship", "nhầm số tài khoản đăng ký thẻ hội viên", "trừ 3.5 triệu mỗi tháng", "link hủy hội viên"],
+      "psychological_tactics": ["Tạo thói quen chuyển tiền nhỏ 25k–30k rồi hù dọa kích hoạt gói bảo hiểm/hội viên tự động trừ tiền"],
+      "red_flags": ["Chuyển khoản vào một số tài khoản bình thường KHÔNG THỂ tự động đăng ký gói trừ tiền hàng tháng", "Gửi link giả trung tâm CSKH giao hàng để lấy OTP"],
+      "counter_replies": ["Tôi chỉ thanh toán khi trực tiếp nhận và kiểm tra kiện hàng; việc chuyển khoản không thể tự động trừ phí hội viên."],
+      "urgent_steps": ["Không bấm vào đường link 'hủy đăng ký hội viên' do người tự xưng shipper gửi."]
+    },
+    {
+      "id": "scam_upfront_loan_fee",
+      "name_vi": "Cho vay tín chấp online giải ngân nhanh nhưng bắt đóng phí bảo hiểm / giải tỏa",
+      "modes": ["personal", "wallet_transfer"],
+      "keywords": ["vay tín chấp lãi suất thấp", "duyệt hồ sơ vay", "phí bảo hiểm khoản vay", "sai số tài khoản giải ngân", "nộp 10% đối ứng mở khóa"],
+      "psychological_tactics": ["Đánh vào nhu cầu cần tiền gấp, gửi ảnh hợp đồng đóng dấu đỏ giả tạo niềm tin"],
+      "red_flags": ["Tổ chức tín dụng hợp pháp không bao giờ yêu cầu chuyển khoản phí trước vào tài khoản cá nhân để giải ngân hay sửa sai số tài khoản"],
+      "counter_replies": ["Khoản vay hợp pháp khấu trừ phí theo hợp đồng chính thức tại chi nhánh, tôi không chuyển tiền mở khóa vào tài khoản cá nhân."],
+      "urgent_steps": ["Tuyệt đối không chuyển 'tiền đối ứng sửa sai STK' dù bị dọa kiện vi phạm hợp đồng giả."]
+    },
+    {
+      "id": "scam_crypto_vip_investment",
+      "name_vi": "Sàn đầu tư Chứng khoán quốc tế / Tiền số / Vàng lãi suất cam kết",
+      "modes": ["personal", "wallet_transfer"],
+      "keywords": ["chuyên gia đọc lệnh", "cam kết lợi nhuận", "bao lỗ", "nộp thuế thu nhập cá nhân 10% để rút tiền", "sàn nội bộ ipo"],
+      "psychological_tactics": ["Hiệu ứng bầy đàn bằng hàng chục tài khoản chim mồi khoe lãi trong nhóm Telegram/Zalo"],
+      "red_flags": ["Lợi nhuận 1–3%/ngày phi thực tế", "Bắt nộp thêm tiền mặt bên ngoài mới cho rút số dư trên app"],
+      "counter_replies": ["Sàn hợp pháp không thu phí hay thuế rút tiền vào tài khoản cá nhân ngoài hệ thống."],
+      "urgent_steps": ["Ngừng nạp tiền rút vốn và trình báo ngay các số tài khoản trung gian đã nhận tiền."]
+    },
+    {
+      "id": "scam_sim_lock_telecom",
+      "name_vi": "Giả danh Cục Viễn thông / Nhà mạng báo khóa SIM hai chiều sau 2 giờ",
+      "modes": ["personal"],
+      "keywords": ["cục viễn thông", "khóa sim sau 2 giờ", "sim chưa chuẩn hóa thuê bao", "bấm phím 9 gặp tổng đài viên", "đứng tên sim lừa đảo"],
+      "psychological_tactics": ["Cuộc gọi tự động ghi âm sẵn (Robocall) dẫn dắt sang kịch bản giả Công an điều tra"],
+      "red_flags": ["Cục Viễn thông không gọi điện trực tiếp dọa khóa SIM từng cá nhân hay nối máy sang cơ quan Công an"],
+      "counter_replies": ["Tôi sẽ tự kiểm tra thông tin thuê bao qua cú pháp tin nhắn TTTB gửi 1414 của nhà mạng chính thức."],
+      "urgent_steps": ["Cúp máy ngay khi nghe cuộc gọi tự động yêu cầu bấm phím số gặp nhân viên."]
+    },
+    {
+      "id": "scam_evn_tax_apk",
+      "name_vi": "Giả danh Điện lực EVN cắt điện / Cục Thuế hoàn thuế eTax Mobile",
+      "modes": ["personal"],
+      "keywords": ["cắt điện sau 2 giờ", "nợ tiền điện", "quyết toán thuế", "hoàn thuế thu nhập", "cập nhật etax", "tải ứng dụng thuế"],
+      "psychological_tactics": ["Đe dọa gián đoạn sinh hoạt (cắt điện) hoặc phạt chậm nộp thuế"],
+      "red_flags": ["Dẫn sang trang web không có đuôi .gov.vn / evn.com.vn để tải tệp .apk"],
+      "counter_replies": ["Tôi chỉ tra cứu hóa đơn và thuế trên ứng dụng chính thức tải từ kho ứng dụng hoặc cổng dịch vụ công .gov.vn."],
+      "urgent_steps": ["Không cài đặt ứng dụng qua đường link gửi trong Zalo."]
+    },
+    {
+      "id": "scam_credit_card_upgrade_cashout",
+      "name_vi": "Mời nâng hạn mức / Rút tiền mặt thẻ tín dụng 0% phí qua link lạ",
+      "modes": ["personal", "wallet_transfer"],
+      "keywords": ["nâng hạn mức thẻ tín dụng miễn phí", "rút tiền mặt thẻ tín dụng 0%", "nhập số cvv", "mã otp xác nhận hạn mức"],
+      "psychological_tactics": ["Đánh vào nhu cầu xoay vòng vốn thẻ tín dụng"],
+      "red_flags": ["Hỏi 3 số bảo mật CVV/CVC mặt sau thẻ và mã OTP giao dịch thanh toán trực tuyến"],
+      "counter_replies": ["Ngân hàng không bao giờ yêu cầu cung cấp mã CVV và OTP để nâng hạn mức thẻ."],
+      "urgent_steps": ["Khóa tính năng thanh toán trực tuyến của thẻ ngay nếu đã lộ CVV."]
+    },
+    {
+      "id": "scam_sms_brandname_bts_spoof",
+      "name_vi": "Trạm BTS giả phát tán SMS Brandname Ngân hàng báo đăng nhập thiết bị lạ",
+      "modes": ["personal"],
+      "keywords": ["tài khoản của quý khách vừa đăng nhập trên thiết bị lạ", "hủy giao dịch tại", "xác thực bảo mật tại http"],
+      "psychological_tactics": ["Chèn tin nhắn giả vào đúng luồng SMS thương hiệu thật trên điện thoại"],
+      "red_flags": ["Ngân hàng Việt Nam khẳng định KHÔNG gửi tin nhắn SMS có kèm đường link đăng nhập"],
+      "counter_replies": ["Ngân hàng không gửi link trong SMS; tôi sẽ tự mở ứng dụng ngân hàng để kiểm tra phiên đăng nhập."],
+      "urgent_steps": ["Không bấm vào bất kỳ đường link nào nằm trong tin nhắn SMS dù tên người gửi giống hệt ngân hàng."]
+    },
+    {
+      "id": "scam_hotel_resort_fanpage_clone",
+      "name_vi": "Fanpage tích xanh giả mạo Khu nghỉ dưỡng / Vé máy bay bắt chuyển cọc lại",
+      "modes": ["personal", "wallet_transfer"],
+      "keywords": ["đặt phòng resort", "chuyển cọc giữ phòng", "sai nội dung chuyển khoản hệ thống kế toán không nhận", "chuyển lại để hoàn tự động"],
+      "psychological_tactics": ["Giá khuyến mãi hấp dẫn kèm tích xanh mua lại, sau khi nhận cọc thì báo 'sai cú pháp kế toán'"],
+      "red_flags": ["Tài khoản nhận tiền là cá nhân hoặc công ty thương mại lạ không trùng tên pháp nhân khách sạn", "Bắt chuyển khoản lần 2 lần 3 vì 'sai nội dung'"],
+      "counter_replies": ["Hệ thống kế toán ngân hàng luôn đối soát thủ công được nội dung chuyển khoản; tôi không chuyển thêm lần hai."],
+      "urgent_steps": ["Dừng chuyển khoản bổ sung và gọi số điện thoại cố định trên Google Maps / website chính thức của khách sạn."]
+    },
+    {
+      "id": "scam_fake_recovery_lawyer",
+      "name_vi": "Mạo danh Luật sư / Cục A05 nhận 'thu hồi tiền bị lừa đảo' trên Facebook",
+      "modes": ["personal", "wallet_transfer"],
+      "keywords": ["hỗ trợ lấy lại tiền bị treo", "thu hồi tiền lừa đảo", "hack thu hồi vốn", "đóng phí mở cổng đóng băng"],
+      "psychological_tactics": ["Đánh vào tâm lý tuyệt vọng muốn gỡ lại tiền của nạn nhân vừa bị lừa"],
+      "red_flags": ["Cơ quan chức năng tiếp nhận tố giác trực tiếp tại trụ sở, không chạy quảng cáo Facebook nhận thu hồi tiền có thu phí trước"],
+      "counter_replies": ["Tôi chỉ nộp đơn trình báo trực tiếp tại cơ quan Công an, không đóng phí thu hồi tiền qua mạng."],
+      "urgent_steps": ["Trình báo trực tiếp tại Công an xã/phường nơi cư trú kèm hồ sơ PDF bằng chứng."]
+    },
+    {
+      "id": "scam_romance_customs_parcel",
+      "name_vi": "Quà tặng quốc tế / Bưu phẩm giá trị cao kẹt Hải quan bắt đóng phí thông quan",
+      "modes": ["personal", "wallet_transfer"],
+      "keywords": ["kiện hàng quốc tế", "phí hải quan", "bưu phẩm chứa ngoại tệ", "nộp phạt chống rửa tiền sân bay"],
+      "psychological_tactics": ["Xây dựng tình cảm trực tuyến dài ngày rồi gửi 'quà giá trị lớn'"],
+      "red_flags": ["Hải quan Việt Nam không thu thuế/phạt thông quan qua số tài khoản ngân hàng cá nhân"],
+      "counter_replies": ["Thuế hải quan chỉ nộp vào Kho bạc Nhà nước theo tờ khai chính thức, không chuyển vào tài khoản cá nhân."],
+      "urgent_steps": ["Ngừng chuyển mọi khoản phí vận chuyển/hải quan."]
+    },
+    {
+      "id": "scam_charity_mule_impersonation",
+      "name_vi": "Giả mạo trang từ thiện / Mặt trận Tổ quốc kêu gọi quyên góp vào STK cá nhân",
+      "modes": ["personal", "wallet_transfer"],
+      "keywords": ["ủng hộ đồng bào", "kêu gọi từ thiện khẩn cấp", "chuyển vào số tài khoản trưởng ban"],
+      "psychological_tactics": ["Lợi dụng lòng trắc ẩn và hình ảnh thương tâm để tráo số tài khoản nhận quyên góp"],
+      "red_flags": ["Số tài khoản nhận không thuộc danh sách công bố trên cổng thông tin chính thức"],
+      "counter_replies": ["Tôi sẽ đối chiếu đúng số tài khoản tiếp nhận công bố trên báo chí chính thống trước khi ủng hộ."],
+      "urgent_steps": ["Kiểm tra chéo số tài khoản trên cổng thông tin chính phủ / báo chính thống."]
+    },
+    {
+      "id": "scam_child_competition_vote_link",
+      "name_vi": "Nhờ bình chọn cuộc thi tài năng / ảnh cho con qua đường link chiếm quyền tài khoản",
+      "modes": ["personal"],
+      "keywords": ["bình chọn cho bé", "cuộc thi tài năng nhí", "đăng nhập zalo bình chọn", "nhập mã xác nhận bình chọn"],
+      "psychological_tactics": ["Mạo danh bạn bè nhờ bình chọn gấp để nạn nhân mất cảnh giác đăng nhập Zalo/ngân hàng giả"],
+      "red_flags": ["Trang bình chọn yêu cầu đăng nhập mật khẩu và mã kích hoạt Zalo/OTP"],
+      "counter_replies": ["Trang bình chọn đang yêu cầu mật khẩu đăng nhập đáng ngờ, tài khoản của bạn có thể đã bị chiếm quyền."],
+      "urgent_steps": ["Gọi điện báo ngay cho người bạn có tài khoản gửi link để họ đổi mật khẩu."]
+    }
+  ]
+}
