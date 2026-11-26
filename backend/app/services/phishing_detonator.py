@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import os
 import re
 import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Final
 from urllib.parse import urljoin, urlsplit
+from weakref import WeakKeyDictionary
 
 import httpx
 
@@ -23,6 +25,29 @@ from app.schemas import SandboxInspection
 
 MAX_SANDBOX_BODY_BYTES: Final[int] = 1_500_000
 MAX_SANDBOX_REDIRECT_HOPS: Final[int] = 5
+
+_LOOP_SEMAPHORES: WeakKeyDictionary[asyncio.AbstractEventLoop, tuple[int, asyncio.Semaphore]] = (
+    WeakKeyDictionary()
+)
+
+
+def _get_playwright_concurrency_limit() -> int:
+    raw = os.getenv("PLAYWRIGHT_MAX_CONCURRENCY", "2").strip()
+    try:
+        return max(1, min(8, int(raw)))
+    except ValueError:
+        return 2
+
+
+def _get_playwright_semaphore() -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    limit = _get_playwright_concurrency_limit()
+    cached = _LOOP_SEMAPHORES.get(loop)
+    if cached is not None and cached[0] == limit:
+        return cached[1]
+    sem = asyncio.Semaphore(limit)
+    _LOOP_SEMAPHORES[loop] = (limit, sem)
+    return sem
 
 _DISABLE_DIRECT_BROWSER_EGRESS_JS: Final[str] = """
 (() => {
@@ -243,7 +268,7 @@ async def detonate_url_in_sandbox(
 
     safe_client = build_ssrf_pinned_http_client(timeout_sec=deadline_sec)
     try:
-        async with asyncio.timeout(deadline_sec):
+        async with asyncio.timeout(deadline_sec), _get_playwright_semaphore():
             ok_dns, dns_reason, _ = await async_validate_url_target(
                 cleaned,
                 resolve_dns=True,

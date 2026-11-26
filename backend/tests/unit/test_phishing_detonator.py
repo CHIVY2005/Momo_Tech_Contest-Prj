@@ -48,3 +48,28 @@ async def test_sandbox_blocks_ssrf_and_handles_disabled_flag() -> None:
     )
     assert disabled.available is False
     assert disabled.blocked_ssrf is False
+
+
+@pytest.mark.asyncio
+async def test_playwright_concurrency_semaphore_bounds_parallel_sessions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+
+    from app.services.phishing_detonator import _get_playwright_semaphore
+
+    monkeypatch.setenv("PLAYWRIGHT_MAX_CONCURRENCY", "1")
+    sem = _get_playwright_semaphore()
+    active = 0
+    peak = 0
+
+    async def _worker() -> None:
+        nonlocal active, peak
+        async with sem:
+            active += 1
+            peak = max(peak, active)
+            await asyncio.sleep(0.02)
+            active -= 1
+
+    await asyncio.gather(_worker(), _worker(), _worker())
+    assert peak == 1

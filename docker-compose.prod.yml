@@ -1,20 +1,42 @@
 services:
   backend:
+    image: verishield-backend:v2
     ports: !override []
     expose:
       - "8000"
+    mem_limit: 2200m
+    cpus: 1.5
     environment:
       - APP_ENV=${APP_ENV:-production}
       - ANALYST_PIN=${ANALYST_PIN:?Set ANALYST_PIN explicitly in deploy/.env.prod}
+      - UVICORN_WORKERS=${UVICORN_WORKERS:-1}
+      - PLAYWRIGHT_MAX_CONCURRENCY=${PLAYWRIGHT_MAX_CONCURRENCY:-1}
+      - CORS_ORIGINS=${CORS_ORIGINS:-["https://verishield.joiboi.app"]}
 
   frontend:
+    image: verishield-frontend:v2
     ports: !override []
     expose:
       - "3000"
+    mem_limit: 512m
+    cpus: 0.5
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 3
 
   caddy:
     image: caddy:2.8-alpine
     restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.5
     environment:
       - DOMAIN=${DOMAIN:-verishield.joiboi.app}
     ports:
@@ -25,9 +47,16 @@ services:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:2019/config/"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
     depends_on:
-      - backend
-      - frontend
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
 
 volumes:
   caddy_data:
