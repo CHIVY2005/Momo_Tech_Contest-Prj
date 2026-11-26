@@ -22,7 +22,6 @@ class Settings(BaseSettings):
         env_file=(
             str(_REPO_ROOT_DIR / ".env"),
             str(_BACKEND_DIR / ".env"),
-            ".env",
         ),
         env_file_encoding="utf-8",
         extra="ignore",

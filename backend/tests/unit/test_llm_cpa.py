@@ -1,6 +1,9 @@
+from pathlib import Path
+
 import httpx
 import pytest
 import respx
+from pydantic import ValidationError
 
 from app.config import Settings
 from app.schemas import ExtractedIOCs
@@ -56,6 +59,19 @@ def test_parse_structured_llm_json_handles_fences_thinking_blocks_and_null_lists
     assert "NAPAS" in parsed.summary_vi
     assert parsed.highlighted_phrases == []
     assert parsed.bill_visual_anomalies == []
+
+    for bad_score in (-1, 101, True, False):
+        with pytest.raises((ValidationError, ValueError)):
+            parse_structured_llm_json(
+                {"ai_risk_score": bad_score, "summary_vi": "Điểm không hợp lệ"}
+            )
+
+    env_example = (Path(__file__).resolve().parents[2] / ".env.example").read_text(
+        encoding="utf-8"
+    )
+    assert "\nLLM_PROVIDER=auto\n" in env_example
+    assert "\nGEMINI_BASE_URL=\n" in env_example
+    assert "\nGEMINI_MODEL=" in env_example
 
 
 @pytest.mark.asyncio

@@ -6,6 +6,7 @@ import asyncio
 import base64
 import json
 import logging
+import math
 import random
 import re
 import time
@@ -54,11 +55,17 @@ class GeminiStructuredSchema(BaseModel):
     @field_validator("ai_risk_score", mode="before")
     @classmethod
     def _coerce_score(cls, val: object) -> int:
+        if isinstance(val, bool):
+            raise ValueError("Boolean is not a valid ai_risk_score")
         if isinstance(val, (int, float)):
-            return max(0, min(100, round(val)))
-        if isinstance(val, str) and val.strip():
-            return max(0, min(100, round(float(val.strip()))))
-        raise ValueError("Invalid ai_risk_score")
+            num = float(val)
+        elif isinstance(val, str) and val.strip():
+            num = float(val.strip())
+        else:
+            raise ValueError("Invalid ai_risk_score")
+        if not math.isfinite(num) or num < 0.0 or num > 100.0:
+            raise ValueError(f"ai_risk_score out of range 0..100: {num}")
+        return round(num)
 
     @field_validator(
         "manipulation_tactics",
