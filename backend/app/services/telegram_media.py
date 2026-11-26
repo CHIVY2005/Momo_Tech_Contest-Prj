@@ -1,9 +1,12 @@
-"""Telegram Bot API media extraction, bounded SSRF-safe download, and typing indicator."""
+"""Telegram Bot API media extraction, bounded SSRF-safe download, typing & callback ack."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import mimetypes
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Literal
@@ -27,10 +30,12 @@ __all__ = [
     "TelegramAttachment",
     "TelegramMediaFetchError",
     "TelegramMediaTooLargeError",
+    "answer_telegram_callback_query",
     "build_verdict_inline_keyboard",
     "download_telegram_file",
     "extract_telegram_attachment",
     "send_telegram_typing_action",
+    "telegram_typing_scope",
     "truncate_telegram_text",
 ]
 
@@ -257,3 +262,47 @@ async def send_telegram_typing_action(bot_token: str, chat_id: int | str) -> Non
         return
     finally:
         await client.aclose()
+
+
+async def answer_telegram_callback_query(
+    bot_token: str,
+    callback_query_id: str,
+    text: str = "",
+) -> None:
+    """Best-effort acknowledgement to stop the spinner on an inline keyboard button."""
+    api_url = f"https://api.telegram.org/bot{bot_token}/answerCallbackQuery"
+    body: dict[str, Any] = {"callback_query_id": callback_query_id}
+    if text:
+        body["text"] = text[:180]
+    client = build_ssrf_pinned_http_client(timeout_sec=3.0)
+    try:
+        await client.post(api_url, json=body)
+    except Exception:
+        return
+    finally:
+        await client.aclose()
+
+
+@asynccontextmanager
+async def telegram_typing_scope(
+    bot_token: str,
+    chat_id: int | str | None,
+    interval_sec: float = 4.5,
+) -> AsyncIterator[None]:
+    """Keep Telegram's 5-second typing indicator alive throughout long multimodal analysis."""
+    if not bot_token or chat_id is None:
+        yield
+        return
+
+    async def _loop() -> None:
+        while True:
+            await send_telegram_typing_action(bot_token, chat_id)
+            await asyncio.sleep(interval_sec)
+
+    task = asyncio.create_task(_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
