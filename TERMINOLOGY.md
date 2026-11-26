@@ -82,8 +82,8 @@ Các giá trị enum ở tầng API và cơ sở dữ liệu **không thay đổ
 ### 4.2 Chế độ kiểm tra (`AnalyzeMode`)
 | Enum nội bộ | Nhãn hiển thị |
 |---|---|---|
-| `personal` | Cá nhân |
-| `merchant` | Người bán / Cửa hàng |
+| `personal` | Tin nhắn và đường dẫn |
+| `merchant` | Xác minh thanh toán |
 | `wallet_transfer` | Trước khi chuyển tiền |
 
 ### 4.3 Mức độ nghiêm trọng của bằng chứng (`SeverityLevel`)

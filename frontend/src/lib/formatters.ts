@@ -75,6 +75,25 @@ export function formatVietQrAmount(amount?: string | null): string {
   return trimmed;
 }
 
+/**
+ * Extract raw integer digits for backend transfer_amount submission while stripping formatting dots/spaces.
+ */
+export function parseRawAmountDigits(input: string): string {
+  const digits = input.replace(/\D/g, "").slice(0, 15);
+  if (!digits) return "";
+  const stripped = digits.replace(/^0+/, "");
+  return stripped || "0";
+}
+
+/**
+ * Format raw integer digits with Vietnamese dot thousands separators for display in numeric inputs.
+ */
+export function formatVndInputDisplay(rawDigits: string): string {
+  const clean = parseRawAmountDigits(rawDigits);
+  if (!clean) return "";
+  return clean.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
 export function shouldShowReceiptCard(report: {
   receipt_verification_status: string;
   receipt_logic?: { is_receipt_candidate: boolean } | null;

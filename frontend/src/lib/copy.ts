@@ -10,19 +10,22 @@ import type {
 
 export const BRAND_COPY = {
   name: "VeriShield AI",
-  version: "v2.0",
-  tagline:
-    "Phân tích bằng chứng số · Ngăn chặn lừa đảo trước khi chuyển tiền · Quy trình xử lý gian lận toàn diện",
-  pageTitle:
-    "VeriShield AI — Phân tích bằng chứng số và ngăn chặn lừa đảo trước khi chuyển tiền",
+  version: "2.0",
+  tagline: "Trợ lý phòng chống lừa đảo trực tuyến",
+  pageTitle: "VeriShield AI — Kiểm tra trước khi chuyển tiền",
   pageDescription:
-    "Công cụ kiểm tra tin nhắn, đường dẫn, mã VietQR, ảnh biên lai và ghi âm cuộc gọi giúp phát hiện sớm dấu hiệu lừa đảo và bảo vệ tài sản.",
-  footerNotice:
-    "Nền tảng phân tích bằng chứng số hỗ trợ phát hiện dấu hiệu lừa đảo. Kết quả chỉ mang tính tham khảo, không thay thế việc xác minh qua ngân hàng.",
+    "Phát hiện dấu hiệu lừa đảo trong tin nhắn, đường dẫn, mã QR, biên lai và cuộc gọi đáng ngờ.",
+  heroHeading: "Kiểm tra trước khi chuyển tiền.",
+  heroDescription:
+    "Phát hiện dấu hiệu lừa đảo trong tin nhắn, đường dẫn, mã QR, biên lai và cuộc gọi đáng ngờ.",
+  footerSummary:
+    "Trợ lý hỗ trợ nhận diện dấu hiệu lừa đảo trước khi chuyển tiền.",
+  footerLimitation:
+    "Kết quả chỉ mang tính tham khảo, không thay thế việc xác minh trực tiếp từ ngân hàng hoặc cơ quan chức năng.",
   privacySummary:
-    "Dữ liệu mẫu tổng hợp · Không lưu dữ liệu định danh cá nhân chưa qua xử lý",
+    "Số điện thoại và số tài khoản được che giấu trước khi lưu hồ sơ; ảnh tải lên không lưu bản gốc trong cơ sở dữ liệu.",
   technicalArchitectureSummary:
-    "Kiến trúc xử lý 3 tầng: phân tích bằng chứng xác định (ELA, dHash, EMVCo VietQR, kiểm tra SSRF/Punycode), phân loại ngữ nghĩa cục bộ (multilingual-e5-small INT8 ONNX) và suy luận ngữ cảnh đa phương thức (Gemini 2.5 Flash).",
+    "Phân tích kết hợp kiểm tra bằng chứng xác định (ELA, dHash, chuẩn VietQR, kiểm tra đường dẫn và môi trường cách ly), phân loại ngữ nghĩa cục bộ (multilingual-e5-small INT8 ONNX) và suy luận ngữ cảnh đa phương thức.",
 } as const;
 
 export const SHARED_DISCLAIMERS = {
@@ -67,19 +70,19 @@ export const MODE_COPY: Record<
   }
 > = {
   personal: {
-    label: "Cá nhân",
-    shortLabel: "Cá nhân",
+    label: "Tin nhắn và đường dẫn",
+    shortLabel: "Tin nhắn & đường dẫn",
     hint: "Kiểm tra tin nhắn, đường dẫn, mã QR hoặc tệp ghi âm cuộc gọi",
   },
   merchant: {
-    label: "Người bán / Cửa hàng",
-    shortLabel: "Cửa hàng",
-    hint: "Phân tích tính xác thực của hình ảnh biên lai và mã VietQR",
+    label: "Xác minh thanh toán",
+    shortLabel: "Xác minh thanh toán",
+    hint: "Kiểm tra ảnh biên lai chuyển khoản và đối chiếu mã VietQR",
   },
   wallet_transfer: {
     label: "Trước khi chuyển tiền",
-    shortLabel: "Chuyển tiền",
-    hint: "Bật cảnh báo khi đang nghe điện thoại và tạm dừng để kiểm tra 30 giây",
+    shortLabel: "Trước chuyển tiền",
+    hint: "Đánh giá rủi ro và nhắc tạm dừng 30 giây khi đang nghe điện thoại",
   },
 };
 

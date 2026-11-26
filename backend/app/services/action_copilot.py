@@ -38,17 +38,17 @@ def build_action_bundle(
 
     if hold_for_block:
         headline = (
-            "Giao dịch bị chặn — số tài khoản hoặc tên miền đang nằm trong danh sách chặn rủi ro "
-            "của hệ thống"
+            "Khuyến nghị dừng chuyển tiền — số tài khoản hoặc tên miền đang nằm trong danh sách "
+            "cảnh báo của hệ thống"
         )
     elif hold_for_call:
         headline = (
-            "Tạm dừng để kiểm tra 30 giây — bạn đang nghe điện thoại và có dấu hiệu bị thúc ép "
-            "chuyển tiền"
+            "Tạm dừng để kiểm tra 30 giây — hãy bình tĩnh xác minh lại khi đang nghe cuộc gọi "
+            "thúc ép chuyển tiền"
         )
     elif hold_for_score:
         headline = (
-            "Tạm dừng để kiểm tra 30 giây — phát hiện dấu hiệu rủi ro cao trước khi chuyển tiền"
+            "Tạm dừng để kiểm tra 30 giây — phát hiện nhiều dấu hiệu rủi ro trước khi chuyển tiền"
         )
     else:
         headline = ""

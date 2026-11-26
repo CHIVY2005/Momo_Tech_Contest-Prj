@@ -4,9 +4,11 @@ import test from "node:test";
 import { analyzeStream } from "../api.ts";
 import {
   formatVietQrAmount,
+  formatVndInputDisplay,
   isValidAnalysisReport,
   isValidTraceStep,
   maskDisplayIoc,
+  parseRawAmountDigits,
   sanitizeValidationErrorDetail,
   shouldShowReceiptCard,
   validateAnalystPinInput,
@@ -61,6 +63,17 @@ test("formatVietQrAmount never renders NaN VND on PII-scrubbed amounts", () => {
   assert.equal(formatVietQrAmount("19****01"), "19****01");
   assert.ok(formatVietQrAmount("1850000").includes("VND"));
   assert.ok(!formatVietQrAmount("19****01").includes("NaN"));
+});
+
+test("parseRawAmountDigits and formatVndInputDisplay format thousands while keeping raw backend digits", () => {
+  assert.equal(parseRawAmountDigits("15.000.000"), "15000000");
+  assert.equal(parseRawAmountDigits("00150000 VND"), "150000");
+  assert.equal(parseRawAmountDigits("000"), "0");
+  assert.equal(parseRawAmountDigits("abc"), "");
+  assert.equal(formatVndInputDisplay("15000000"), "15.000.000");
+  assert.equal(formatVndInputDisplay("500000"), "500.000");
+  assert.equal(formatVndInputDisplay("0"), "0");
+  assert.equal(formatVndInputDisplay(""), "");
 });
 
 test("shouldShowReceiptCard shows receipt card whenever calibrated status is applicable", () => {

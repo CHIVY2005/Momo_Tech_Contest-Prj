@@ -265,7 +265,7 @@ export default function RadarPage() {
             className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3.5 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-500/25"
           >
             <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Về trang kiểm tra</span>
+            <span>Về kiểm tra lừa đảo</span>
           </Link>
         </div>
       </section>

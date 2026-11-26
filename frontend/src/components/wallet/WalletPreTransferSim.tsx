@@ -72,7 +72,7 @@ export function WalletPreTransferSim({
   const formattedAmount =
     trimmedAmt !== "" && Number.isFinite(parsedAmount) && parsedAmount >= 0
       ? `${parsedAmount.toLocaleString("vi-VN")} VND`
-      : "Chưa nhập số tiền (mô phỏng trước khi chuyển tiền)";
+      : "Chưa nhập số tiền";
 
   const vqrAcct = report.vietqr_findings.find((v) => v.account_number)?.account_number;
   const rawMention = vqrAcct ?? report.iocs.bank_accounts[0] ?? report.iocs.phones[0] ?? null;
@@ -89,23 +89,23 @@ export function WalletPreTransferSim({
   // Announce only major milestones to screen readers (prevents per-second aria-live spam)
   const srMilestone =
     secondsLeft === 0
-      ? "Đã hết thời gian tạm dừng để kiểm tra 30 giây."
+      ? "Đã hoàn tất 30 giây kiểm tra lại."
       : secondsLeft === 10
-        ? "Còn 10 giây tạm dừng để kiểm tra."
+        ? "Còn 10 giây đếm ngược kiểm tra."
         : secondsLeft === pre.cooling_off_seconds
-          ? `Đang tạm dừng để kiểm tra trong ${pre.cooling_off_seconds} giây.`
+          ? `Bắt đầu đếm ngược ${pre.cooling_off_seconds} giây để bạn bình tĩnh kiểm tra lại trước khi chuyển tiền.`
           : "";
 
   return (
     <section
       aria-labelledby="wallet-guard-heading"
-      className="rounded-2xl border-2 border-rose-500/60 bg-gradient-to-b from-[#1a1120] to-surface p-5 shadow-xl"
+      className="rounded-2xl border-2 border-rose-500/60 bg-surface p-5 shadow-xl"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Lock className="h-5 w-5 text-rose-400" aria-hidden="true" />
           <h3 id="wallet-guard-heading" className="text-sm font-bold text-ink">
-            Ngăn chặn lừa đảo trước khi chuyển tiền
+            Nhắc tạm dừng 30 giây trước khi chuyển tiền
           </h3>
         </div>
         {pre.triggered_by_active_call && (
@@ -114,6 +114,12 @@ export function WalletPreTransferSim({
           </span>
         )}
       </div>
+
+      <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">
+        Công cụ này nhắc bạn tạm dừng 30 giây để bình tĩnh xác minh trước khi tự thực hiện giao
+        dịch trên ứng dụng ngân hàng. VeriShield AI không can thiệp hay khóa trực tiếp tài khoản
+        ngân hàng của bạn.
+      </p>
 
       <div className="mt-3 grid grid-cols-1 gap-2.5 rounded-xl border border-border-subtle bg-surface-subtle p-3 text-xs sm:grid-cols-2">
         <div>
@@ -132,7 +138,10 @@ export function WalletPreTransferSim({
           className="mt-4 flex items-center gap-2.5 rounded-xl border border-emerald-500/45 bg-emerald-500/15 p-4 text-xs font-semibold text-emerald-200"
         >
           <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden="true" />
-          <span>Bạn đã hủy giao dịch an toàn. Tài sản của bạn vẫn được bảo toàn.</span>
+          <span>
+            Lựa chọn an toàn. Hãy đóng màn hình chuyển khoản trên ứng dụng ngân hàng và xác minh lại
+            qua kênh chính thức trước khi giao dịch.
+          </span>
         </div>
       ) : outcome === "overridden_at_risk" ? (
         <div
@@ -142,9 +151,9 @@ export function WalletPreTransferSim({
           <div className="flex items-start gap-2.5">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden="true" />
             <span>
-              <strong>Mô phỏng xác nhận tiếp tục:</strong> Bạn đã chờ hết thời gian tạm dừng để
-              kiểm tra 30 giây và xác nhận đã cân nhắc rủi ro trước khi chuyển tiền. Hệ thống đã ghi
-              nhận cảnh báo trước giao dịch.
+              <strong>Đã hoàn tất bước nhắc kiểm tra:</strong> Bạn đã đọc cảnh báo và chờ hết 30
+              giây. Nếu vẫn quyết định chuyển tiền, hãy đối chiếu lại thật kỹ tên người nhận trên
+              ứng dụng ngân hàng trước khi xác nhận.
             </span>
           </div>
           <button
@@ -152,7 +161,7 @@ export function WalletPreTransferSim({
             onClick={startFreshHold}
             className="min-h-[38px] cursor-pointer rounded-lg border border-amber-400/50 bg-surface-deep px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-surface-elevated"
           >
-            Bật lại tạm dừng 30 giây
+            Đếm lại 30 giây
           </button>
         </div>
       ) : pre.blocked_by_ops_rule ? (
@@ -162,11 +171,11 @@ export function WalletPreTransferSim({
         >
           <div className="flex items-center gap-2 font-bold text-rose-200">
             <Ban className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>Giao dịch bị chặn do dấu hiệu nghi vấn</span>
+            <span>Khuyến nghị dừng chuyển tiền — dấu hiệu đã bị cảnh báo</span>
           </div>
           <p className="mt-1.5 leading-relaxed">
             {pre.warning_headline ||
-              "Tài khoản nhận hoặc tên miền trong giao dịch này đang nằm trong danh sách chặn rủi ro trên toàn hệ thống. Không nên tiếp tục chuyển tiền."}
+              "Số tài khoản hoặc tên miền này đang nằm trong danh sách cảnh báo trên hệ thống giám sát gian lận. Bạn nên dừng giao dịch ngay trên ứng dụng ngân hàng."}
           </p>
         </div>
       ) : pre.should_hold_transfer ? (
@@ -184,7 +193,7 @@ export function WalletPreTransferSim({
                 <span>
                   {secondsLeft > 0
                     ? `Tạm dừng để kiểm tra: ${secondsLeft} giây`
-                    : "Đã hết 30 giây tạm dừng"}
+                    : "Đã hoàn tất 30 giây kiểm tra"}
                 </span>
               </div>
             </div>
@@ -206,7 +215,7 @@ export function WalletPreTransferSim({
           {pre.verification_questions.length > 0 && (
             <fieldset className="space-y-1.5 rounded-xl border border-border-subtle bg-surface-subtle p-3.5">
               <legend className="px-1 text-xs font-semibold text-ink">
-                Tự kiểm tra nhanh trước khi quyết định (chọn từng mục):
+                Hãy tự rà soát các điểm sau trước khi quyết định chuyển tiền:
               </legend>
               {pre.verification_questions.map((q, idx) => (
                 <label
@@ -234,7 +243,11 @@ export function WalletPreTransferSim({
               className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-xs font-bold text-slate-950 shadow-md shadow-emerald-500/20 transition-colors hover:bg-emerald-400 sm:text-sm"
             >
               <PhoneOff className="h-4 w-4" aria-hidden="true" />
-              <span>Dừng chuyển tiền và ngắt cuộc gọi ngay</span>
+              <span>
+                {pre.triggered_by_active_call
+                  ? "Dừng chuyển tiền và ngắt cuộc gọi"
+                  : "Tôi sẽ dừng chuyển tiền"}
+              </span>
             </button>
 
             <button
@@ -244,15 +257,15 @@ export function WalletPreTransferSim({
               className="tabular-num min-h-[44px] cursor-pointer rounded-xl border border-border-strong bg-surface-subtle px-4 py-2 text-xs font-medium text-ink-secondary transition-colors enabled:hover:border-rose-500/60 enabled:hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {secondsLeft > 0
-                ? `Đang tạm dừng để kiểm tra (${secondsLeft} giây)`
-                : "Tôi đã kiểm tra kỹ và tự chịu trách nhiệm"}
+                ? `Chờ thêm ${secondsLeft} giây để xác nhận`
+                : "Tôi đã tự kiểm tra và vẫn muốn tiếp tục"}
             </button>
           </div>
         </div>
       ) : (
         <p className="mt-3 text-xs text-emerald-300">
-          Chưa kích hoạt tạm dừng để kiểm tra. Bạn vẫn nên đối chiếu kỹ tên người nhận trước khi xác
-          nhận chuyển tiền.
+          Chưa cần kích hoạt nhắc tạm dừng 30 giây. Bạn vẫn nên đối chiếu kỹ tên người nhận trên ứng
+          dụng ngân hàng trước khi xác nhận chuyển tiền.
         </p>
       )}
     </section>

@@ -47,14 +47,9 @@ export default function RootLayout({
                 <ShieldCheck className="h-5 w-5" aria-hidden="true" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold tracking-tight text-ink sm:text-base">
-                    VeriShield AI
-                  </span>
-                  <span className="tabular-num rounded border border-sky-500/40 bg-sky-500/15 px-1.5 py-0.5 font-mono text-[11px] font-medium text-sky-300">
-                    v2.0
-                  </span>
-                </div>
+                <span className="block text-sm font-bold tracking-tight text-ink sm:text-base">
+                  {BRAND_COPY.name}
+                </span>
                 <p className="hidden text-xs text-ink-muted sm:block">
                   {BRAND_COPY.tagline}
                 </p>
@@ -73,20 +68,31 @@ export default function RootLayout({
           {children}
         </main>
 
-        <footer className="mt-10 border-t border-border-subtle/80 bg-surface-deep py-5">
-          <div className="mx-auto max-w-7xl space-y-2.5 px-4 text-xs text-ink-muted sm:px-6 lg:px-8">
-            <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
-              <p>
-                <strong className="font-semibold text-ink-secondary">{BRAND_COPY.name}</strong> —{" "}
-                {BRAND_COPY.footerNotice}
+        <footer className="mt-12 border-t border-border-subtle/80 bg-surface-deep py-6">
+          <div className="mx-auto max-w-7xl space-y-3 px-4 text-xs text-ink-muted sm:px-6 lg:px-8">
+            <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-baseline">
+              <p className="text-ink-secondary">
+                <strong className="font-semibold text-ink">{BRAND_COPY.name}</strong> —{" "}
+                {BRAND_COPY.footerSummary}
               </p>
-              <p className="text-[11px] text-ink-muted">{BRAND_COPY.privacySummary}</p>
+              <span className="tabular-num shrink-0 font-mono text-[11px] text-ink-muted">
+                Phiên bản {BRAND_COPY.version}
+              </span>
             </div>
+
+            <div className="space-y-1 text-[11px] leading-relaxed text-ink-muted">
+              <p>{BRAND_COPY.footerLimitation}</p>
+              <p>
+                <span className="font-medium text-ink-secondary">Quyền riêng tư:</span>{" "}
+                {BRAND_COPY.privacySummary}
+              </p>
+            </div>
+
             <details className="text-[11px] text-ink-muted">
-              <summary className="inline-flex cursor-pointer items-center font-medium text-ink-secondary hover:text-ink">
-                Thông tin kỹ thuật hệ thống
+              <summary className="inline-flex cursor-pointer items-center font-medium text-ink-secondary transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400">
+                Thông tin kỹ thuật
               </summary>
-              <p className="mt-1.5 leading-relaxed text-ink-muted">
+              <p className="mt-1.5 max-w-4xl leading-relaxed text-ink-muted">
                 {BRAND_COPY.technicalArchitectureSummary}
               </p>
             </details>

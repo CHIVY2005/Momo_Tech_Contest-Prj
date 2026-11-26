@@ -16,8 +16,8 @@ _VERDICT_VI: dict[str, str] = {
     "CRITICAL_SCAM": "Cảnh báo rủi ro rất cao — có nhiều dấu hiệu lừa đảo",
 }
 _MODE_VI: dict[str, str] = {
-    "personal": "Cá nhân",
-    "merchant": "Người bán / Cửa hàng",
+    "personal": "Tin nhắn và đường dẫn",
+    "merchant": "Xác minh thanh toán",
     "wallet_transfer": "Trước khi chuyển tiền",
 }
 _RECEIPT_STATUS_VI: dict[str, str] = {

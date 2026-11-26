@@ -3,24 +3,22 @@
 import {
   ChevronDown,
   ChevronUp,
-  FileAudio,
-  ImagePlus,
   Link2,
   Loader2,
+  MessageSquareText,
   PhoneCall,
+  ReceiptText,
   RotateCcw,
   ScanSearch,
-  Store,
-  UserCheck,
   Wallet,
-  X,
 } from "lucide-react";
-import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, type KeyboardEvent, useRef } from "react";
 
 import { MODE_COPY } from "@/lib/copy";
+import { formatVndInputDisplay, parseRawAmountDigits } from "@/lib/formatters";
 import type { AnalyzeMode } from "@/lib/types";
 
-const MAX_CLIENT_UPLOAD_BYTES = 10 * 1024 * 1024;
+import { MediaUploadZone } from "./MediaUploadZone";
 
 export interface WorkbenchFormState {
   mode: AnalyzeMode;
@@ -49,19 +47,19 @@ const MODE_OPTIONS: Array<{
   id: AnalyzeMode;
   label: string;
   hint: string;
-  Icon: typeof UserCheck;
+  Icon: typeof MessageSquareText;
 }> = [
   {
     id: "personal",
     label: MODE_COPY.personal.label,
     hint: MODE_COPY.personal.hint,
-    Icon: UserCheck,
+    Icon: MessageSquareText,
   },
   {
     id: "merchant",
     label: MODE_COPY.merchant.label,
     hint: MODE_COPY.merchant.hint,
-    Icon: Store,
+    Icon: ReceiptText,
   },
   {
     id: "wallet_transfer",
@@ -82,46 +80,13 @@ export function InputWorkbench({
   onSubmit,
   onClearDemo,
 }: InputWorkbenchProps) {
-  const [fileError, setFileError] = useState<string | null>(null);
-  const imgInputRef = useRef<HTMLInputElement | null>(null);
-  const audInputRef = useRef<HTMLInputElement | null>(null);
   const radioRefs = useRef<Array<HTMLButtonElement | null>>([]);
-
-  useEffect(() => {
-    if (value.imageFile === null && imgInputRef.current) {
-      imgInputRef.current.value = "";
-    }
-  }, [value.imageFile]);
-
-  useEffect(() => {
-    if (value.audioFile === null && audInputRef.current) {
-      audInputRef.current.value = "";
-    }
-  }, [value.audioFile]);
 
   function updateField<K extends keyof WorkbenchFormState>(
     key: K,
     fieldVal: WorkbenchFormState[K],
   ) {
     onChange({ ...value, [key]: fieldVal });
-  }
-
-  function handleFileChange(kind: "imageFile" | "audioFile", file: File | null) {
-    setFileError(null);
-    if (file && file.size > MAX_CLIENT_UPLOAD_BYTES) {
-      if (kind === "imageFile" && imgInputRef.current) {
-        imgInputRef.current.value = "";
-      }
-      if (kind === "audioFile" && audInputRef.current) {
-        audInputRef.current.value = "";
-      }
-      updateField(kind, null);
-      setFileError(
-        `Tệp "${file.name}" vượt quá dung lượng tối đa 10 MB. Vui lòng chọn tệp nhỏ hơn.`,
-      );
-      return;
-    }
-    updateField(kind, file);
   }
 
   function handleFormSubmit(ev: FormEvent) {
@@ -147,12 +112,16 @@ export function InputWorkbench({
   }
 
   const activeModeMeta = MODE_OPTIONS.find((m) => m.id === value.mode) ?? MODE_OPTIONS[0];
-  const ActiveModeIcon = activeModeMeta?.Icon ?? UserCheck;
+  const ActiveModeIcon = activeModeMeta?.Icon ?? MessageSquareText;
 
   if (collapsed && onToggleCollapsed) {
     const snippetSource =
       activeDemoTitle ??
-      (value.text.trim() || value.url.trim() || value.imageFile?.name || value.audioFile?.name || "Phiên kiểm tra hiện tại");
+      (value.text.trim() ||
+        value.url.trim() ||
+        value.imageFile?.name ||
+        value.audioFile?.name ||
+        "Phiên kiểm tra hiện tại");
     const snippet =
       snippetSource.length > 92 ? `${snippetSource.slice(0, 90)}…` : snippetSource;
 
@@ -221,8 +190,7 @@ export function InputWorkbench({
         <div>
           <h2 className="text-base font-bold text-ink">Công cụ kiểm tra lừa đảo</h2>
           <p className="text-xs text-ink-muted">
-            Dán tin nhắn, đường dẫn hoặc tải lên ảnh biên lai, mã QR và tệp ghi âm để kiểm tra dấu
-            hiệu bất thường.
+            Chọn mục đích kiểm tra, dán nội dung hoặc tải tệp đính kèm.
           </p>
         </div>
 
@@ -256,7 +224,7 @@ export function InputWorkbench({
 
       <div
         role="radiogroup"
-        aria-label="Chế độ thẩm định"
+        aria-label="Mục đích kiểm tra"
         className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3"
       >
         {MODE_OPTIONS.map(({ id, label, hint, Icon }, idx) => {
@@ -273,7 +241,7 @@ export function InputWorkbench({
               aria-checked={selected}
               onClick={() => updateField("mode", id)}
               onKeyDown={(ev) => handleRadioKeyDown(ev, idx)}
-              className={`min-h-[60px] cursor-pointer rounded-xl border p-3 text-left transition-colors ${
+              className={`min-h-[60px] cursor-pointer rounded-xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400 ${
                 selected
                   ? "border-amber-400 bg-amber-500/15 text-ink"
                   : "border-border-subtle bg-surface-subtle text-ink-secondary hover:border-border-strong hover:bg-surface-elevated"
@@ -286,26 +254,26 @@ export function InputWorkbench({
                 />
                 <span>{label}</span>
               </div>
-              <p className="mt-1 text-[11px] text-ink-muted">{hint}</p>
+              <p className="mt-1 text-[11px] leading-snug text-ink-muted">{hint}</p>
             </button>
           );
         })}
       </div>
 
-      <div className="space-y-3.5">
+      <div className="space-y-4">
         <div>
           <label
             htmlFor="wb-text-input"
             className="mb-1.5 block text-xs font-semibold text-ink-secondary"
           >
-            Nội dung tin nhắn, cuộc trò chuyện hoặc mô tả giao dịch
+            Nội dung cần kiểm tra
           </label>
           <textarea
             id="wb-text-input"
             rows={4}
             value={value.text}
             onChange={(e) => updateField("text", e.target.value)}
-            placeholder="Dán tin nhắn SMS, Zalo, yêu cầu chuyển tiền hoặc tình huống bạn nghi ngờ tại đây..."
+            placeholder="Dán tin nhắn, cuộc trò chuyện hoặc mô tả giao dịch..."
             className="w-full rounded-xl border border-border-strong bg-surface-subtle px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:border-amber-400"
           />
         </div>
@@ -317,14 +285,14 @@ export function InputWorkbench({
               className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-ink-secondary"
             >
               <Link2 className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
-              <span>Đường dẫn đáng ngờ (tùy chọn)</span>
+              <span>Đường dẫn (tùy chọn)</span>
             </label>
             <input
               id="wb-url-input"
               type="text"
               value={value.url}
               onChange={(e) => updateField("url", e.target.value)}
-              placeholder="https://..."
+              placeholder="https://example.com"
               className="w-full rounded-xl border border-border-strong bg-surface-subtle px-3 py-2.5 font-mono text-xs text-ink placeholder:text-ink-muted focus:border-amber-400"
             />
           </div>
@@ -335,7 +303,7 @@ export function InputWorkbench({
                 htmlFor="wb-merchant-stk"
                 className="mb-1.5 block text-xs font-semibold text-amber-300"
               >
-                Số tài khoản nhận tiền của cửa hàng (đối chiếu biên lai hoặc QR)
+                Số tài khoản nhận (tùy chọn)
               </label>
               <input
                 id="wb-merchant-stk"
@@ -352,17 +320,26 @@ export function InputWorkbench({
                 htmlFor="wb-transfer-amount"
                 className="mb-1.5 block text-xs font-semibold text-ink-secondary"
               >
-                Số tiền dự kiến chuyển (VND, tùy chọn)
+                Số tiền dự kiến chuyển (tùy chọn)
               </label>
-              <input
-                id="wb-transfer-amount"
-                type="number"
-                min={0}
-                value={value.transferAmount}
-                onChange={(e) => updateField("transferAmount", e.target.value)}
-                placeholder="Ví dụ: 15000000"
-                className="tabular-num w-full rounded-xl border border-border-strong bg-surface-subtle px-3 py-2.5 font-mono text-xs text-ink placeholder:text-ink-muted focus:border-amber-400"
-              />
+              <div className="relative">
+                <input
+                  id="wb-transfer-amount"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={formatVndInputDisplay(value.transferAmount)}
+                  onChange={(e) => updateField("transferAmount", parseRawAmountDigits(e.target.value))}
+                  placeholder="Ví dụ: 15.000.000"
+                  className="tabular-num w-full rounded-xl border border-border-strong bg-surface-subtle py-2.5 pr-12 pl-3 font-mono text-xs text-ink placeholder:text-ink-muted focus:border-amber-400"
+                />
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 font-mono text-[11px] text-ink-muted"
+                >
+                  VND
+                </span>
+              </div>
             </div>
           )}
         </div>
@@ -378,8 +355,8 @@ export function InputWorkbench({
                 Tôi đang nghe điện thoại khi chuẩn bị chuyển tiền
               </span>
               <p className="mt-0.5 text-[11px] text-ink-muted">
-                Tự động tăng mức cảnh báo rủi ro và tạm dừng để kiểm tra 30 giây khi người lạ đang
-                thúc giục bạn qua điện thoại.
+                Tăng mức cảnh báo và bật nhắc tạm dừng 30 giây để kiểm tra lại nếu đang có người
+                thúc giục qua điện thoại.
               </p>
             </div>
           </div>
@@ -391,7 +368,7 @@ export function InputWorkbench({
             aria-checked={value.inActiveCall}
             aria-labelledby="wb-active-call-label"
             onClick={() => updateField("inActiveCall", !value.inActiveCall)}
-            className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg px-1"
+            className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg px-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
           >
             <span
               className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors ${
@@ -409,91 +386,31 @@ export function InputWorkbench({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="rounded-xl border border-dashed border-border-strong bg-surface-subtle p-3 transition-colors hover:border-amber-500/50">
-            <div className="flex items-center justify-between gap-2">
-              <label
-                htmlFor="wb-image-upload"
-                className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink-secondary"
-              >
-                <ImagePlus className="h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
-                <span>Ảnh chụp màn hình, biên lai hoặc mã QR (tối đa 10 MB)</span>
-              </label>
-              {value.imageFile && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    updateField("imageFile", null);
-                    if (imgInputRef.current) imgInputRef.current.value = "";
-                  }}
-                  aria-label="Gỡ tệp hình ảnh đã chọn"
-                  className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-ink-muted hover:bg-surface-elevated hover:text-ink"
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
-              )}
-            </div>
-            <input
-              ref={imgInputRef}
-              id="wb-image-upload"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={(e) => handleFileChange("imageFile", e.target.files?.[0] ?? null)}
-              className="mt-2 block w-full cursor-pointer text-xs text-ink-muted file:mr-2.5 file:cursor-pointer file:rounded-lg file:border-0 file:bg-surface-elevated file:px-3 file:py-2 file:text-xs file:font-medium file:text-ink hover:file:bg-slate-700"
-            />
-          </div>
-
-          <div className="rounded-xl border border-dashed border-border-strong bg-surface-subtle p-3 transition-colors hover:border-sky-500/50">
-            <div className="flex items-center justify-between gap-2">
-              <label
-                htmlFor="wb-audio-upload"
-                className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink-secondary"
-              >
-                <FileAudio className="h-4 w-4 shrink-0 text-sky-400" aria-hidden="true" />
-                <span>Tệp ghi âm cuộc gọi (.wav, .mp3, .m4a — tối đa 10 MB)</span>
-              </label>
-              {value.audioFile && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    updateField("audioFile", null);
-                    if (audInputRef.current) audInputRef.current.value = "";
-                  }}
-                  aria-label="Gỡ tệp ghi âm đã chọn"
-                  className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-ink-muted hover:bg-surface-elevated hover:text-ink"
-                >
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
-              )}
-            </div>
-            <input
-              ref={audInputRef}
-              id="wb-audio-upload"
-              type="file"
-              accept="audio/*"
-              onChange={(e) => handleFileChange("audioFile", e.target.files?.[0] ?? null)}
-              className="mt-2 block w-full cursor-pointer text-xs text-ink-muted file:mr-2.5 file:cursor-pointer file:rounded-lg file:border-0 file:bg-surface-elevated file:px-3 file:py-2 file:text-xs file:font-medium file:text-ink hover:file:bg-slate-700"
-            />
-          </div>
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+          <MediaUploadZone
+            kind="image"
+            label="Ảnh màn hình, biên lai hoặc mã QR"
+            file={value.imageFile}
+            isUploading={isAnalyzing}
+            onFileChange={(file) => updateField("imageFile", file)}
+          />
+          <MediaUploadZone
+            kind="audio"
+            label="Tệp ghi âm cuộc gọi"
+            file={value.audioFile}
+            isUploading={isAnalyzing}
+            onFileChange={(file) => updateField("audioFile", file)}
+          />
         </div>
-
-        {fileError && (
-          <p
-            role="alert"
-            className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-200"
-          >
-            {fileError}
-          </p>
-        )}
 
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
           <p className="text-[11px] text-ink-muted">
-            Dữ liệu được phân tích an toàn và không lưu dữ liệu định danh cá nhân chưa qua xử lý.
+            Số điện thoại và số tài khoản được che giấu trước khi lưu hồ sơ.
           </p>
           <button
             type="submit"
             disabled={isAnalyzing}
-            className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-bold text-slate-950 shadow-md transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-bold text-slate-950 shadow-md transition-colors hover:bg-amber-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isAnalyzing ? (
               <>
