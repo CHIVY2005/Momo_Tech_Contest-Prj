@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from "react";
 
+import { MODE_COPY } from "@/lib/copy";
 import type { AnalyzeMode } from "@/lib/types";
 
 const MAX_CLIENT_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -52,20 +53,20 @@ const MODE_OPTIONS: Array<{
 }> = [
   {
     id: "personal",
-    label: "Cá nhân",
-    hint: "Tin nhắn, đường link, QR, ghi âm cuộc gọi",
+    label: MODE_COPY.personal.label,
+    hint: MODE_COPY.personal.hint,
     Icon: UserCheck,
   },
   {
     id: "merchant",
-    label: "Chủ cửa hàng",
-    hint: "Pháp y ảnh biên lai chuyển khoản & VietQR",
+    label: MODE_COPY.merchant.label,
+    hint: MODE_COPY.merchant.hint,
     Icon: Store,
   },
   {
     id: "wallet_transfer",
-    label: "Ví Trước Chuyển Tiền",
-    hint: "Cảm biến đang nghe máy + Khóa làm nguội 30s",
+    label: MODE_COPY.wallet_transfer.label,
+    hint: MODE_COPY.wallet_transfer.hint,
     Icon: Wallet,
   },
 ];
@@ -116,7 +117,7 @@ export function InputWorkbench({
       }
       updateField(kind, null);
       setFileError(
-        `Tệp "${file.name}" vượt quá giới hạn an toàn 10 MB. Đã gỡ tệp — vui lòng chọn tệp nhỏ hơn.`,
+        `Tệp "${file.name}" vượt quá dung lượng tối đa 10 MB. Vui lòng chọn tệp nhỏ hơn.`,
       );
       return;
     }
@@ -151,13 +152,13 @@ export function InputWorkbench({
   if (collapsed && onToggleCollapsed) {
     const snippetSource =
       activeDemoTitle ??
-      (value.text.trim() || value.url.trim() || value.imageFile?.name || value.audioFile?.name || "Phiên điều tra hiện tại");
+      (value.text.trim() || value.url.trim() || value.imageFile?.name || value.audioFile?.name || "Phiên kiểm tra hiện tại");
     const snippet =
       snippetSource.length > 92 ? `${snippetSource.slice(0, 90)}…` : snippetSource;
 
     return (
       <section
-        aria-label="Tóm tắt đầu vào đang thẩm định"
+        aria-label="Tóm tắt thông tin đang kiểm tra"
         className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border-subtle bg-surface/95 px-4 py-3 shadow-md"
       >
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-xs">
@@ -181,7 +182,7 @@ export function InputWorkbench({
           )}
           {value.audioFile && (
             <span className="shrink-0 rounded-md border border-border-strong bg-surface-subtle px-2 py-0.5 font-mono text-[11px] text-ink-secondary">
-              Audio: {value.audioFile.name}
+              Ghi âm: {value.audioFile.name}
             </span>
           )}
         </div>
@@ -194,7 +195,7 @@ export function InputWorkbench({
               className="inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-lg border border-border-strong bg-surface-subtle px-3 py-1.5 text-xs font-medium text-ink-secondary transition-colors hover:border-amber-400 hover:text-ink"
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Nhập tự do</span>
+              <span>Nhập nội dung khác</span>
             </button>
           )}
           <button
@@ -203,7 +204,7 @@ export function InputWorkbench({
             onClick={onToggleCollapsed}
             className="inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-200 transition-colors hover:border-amber-400 hover:bg-amber-500/20"
           >
-            <span>Mở form chỉnh sửa</span>
+            <span>Chỉnh sửa thông tin</span>
             <ChevronDown className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
@@ -218,22 +219,21 @@ export function InputWorkbench({
     >
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-base font-bold text-ink">
-            Bàn Điều tra Đa phương thức (Multimodal Workbench)
-          </h2>
+          <h2 className="text-base font-bold text-ink">Công cụ kiểm tra lừa đảo</h2>
           <p className="text-xs text-ink-muted">
-            Kết hợp phân tích văn bản, URL Punycode/SSRF, pháp y ELA ảnh biên lai và chuyển ngữ cuộc gọi.
+            Dán tin nhắn, đường dẫn hoặc tải lên ảnh biên lai, mã QR và tệp ghi âm để kiểm tra dấu
+            hiệu bất thường.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {activeDemoTitle && (
             <div className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-200">
-              <span>Kịch bản mẫu: {activeDemoTitle}</span>
+              <span>Tình huống mẫu: {activeDemoTitle}</span>
               <button
                 type="button"
                 onClick={onClearDemo}
-                aria-label="Xóa kịch bản mẫu để nhập tự do"
+                aria-label="Xóa tình huống mẫu để nhập nội dung khác"
                 className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded text-amber-300 hover:bg-amber-500/20"
               >
                 <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
@@ -298,14 +298,14 @@ export function InputWorkbench({
             htmlFor="wb-text-input"
             className="mb-1.5 block text-xs font-semibold text-ink-secondary"
           >
-            Nội dung tin nhắn / hội thoại / mô tả giao dịch
+            Nội dung tin nhắn, cuộc trò chuyện hoặc mô tả giao dịch
           </label>
           <textarea
             id="wb-text-input"
             rows={4}
             value={value.text}
             onChange={(e) => updateField("text", e.target.value)}
-            placeholder="Dán tin nhắn SMS, Zalo, nội dung yêu cầu chuyển khoản hoặc kịch bản nghi ngờ tại đây..."
+            placeholder="Dán tin nhắn SMS, Zalo, yêu cầu chuyển tiền hoặc tình huống bạn nghi ngờ tại đây..."
             className="w-full rounded-xl border border-border-strong bg-surface-subtle px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:border-amber-400"
           />
         </div>
@@ -317,7 +317,7 @@ export function InputWorkbench({
               className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-ink-secondary"
             >
               <Link2 className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
-              <span>Đường dẫn đáng ngờ (URL / Link rút gọn)</span>
+              <span>Đường dẫn đáng ngờ (tùy chọn)</span>
             </label>
             <input
               id="wb-url-input"
@@ -335,14 +335,14 @@ export function InputWorkbench({
                 htmlFor="wb-merchant-stk"
                 className="mb-1.5 block text-xs font-semibold text-amber-300"
               >
-                STK nhận tiền chuẩn của cửa hàng (đối chiếu Bill/QR)
+                Số tài khoản nhận tiền của cửa hàng (đối chiếu biên lai hoặc QR)
               </label>
               <input
                 id="wb-merchant-stk"
                 type="text"
                 value={value.expectedMerchantAccount}
                 onChange={(e) => updateField("expectedMerchantAccount", e.target.value)}
-                placeholder="VD: 190311112222"
+                placeholder="Ví dụ: 190311112222"
                 className="tabular-num w-full rounded-xl border border-amber-500/45 bg-surface-subtle px-3 py-2.5 font-mono text-xs text-ink placeholder:text-ink-muted focus:border-amber-400"
               />
             </div>
@@ -352,7 +352,7 @@ export function InputWorkbench({
                 htmlFor="wb-transfer-amount"
                 className="mb-1.5 block text-xs font-semibold text-ink-secondary"
               >
-                Số tiền dự kiến chuyển (VND — tùy chọn)
+                Số tiền dự kiến chuyển (VND, tùy chọn)
               </label>
               <input
                 id="wb-transfer-amount"
@@ -360,7 +360,7 @@ export function InputWorkbench({
                 min={0}
                 value={value.transferAmount}
                 onChange={(e) => updateField("transferAmount", e.target.value)}
-                placeholder="VD: 15000000"
+                placeholder="Ví dụ: 15000000"
                 className="tabular-num w-full rounded-xl border border-border-strong bg-surface-subtle px-3 py-2.5 font-mono text-xs text-ink placeholder:text-ink-muted focus:border-amber-400"
               />
             </div>
@@ -374,16 +374,12 @@ export function InputWorkbench({
               aria-hidden="true"
             />
             <div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span id="wb-active-call-label" className="text-xs font-semibold text-ink">
-                  Tôi đang nghe điện thoại khi thực hiện giao dịch này
-                </span>
-                <code className="rounded bg-surface-elevated px-1.5 py-0.5 font-mono text-[10px] text-amber-300">
-                  in_active_call
-                </code>
-              </div>
+              <span id="wb-active-call-label" className="text-xs font-semibold text-ink">
+                Tôi đang nghe điện thoại khi chuẩn bị chuyển tiền
+              </span>
               <p className="mt-0.5 text-[11px] text-ink-muted">
-                Kích hoạt cộng hưởng rủi ro &amp; Khóa làm nguội 30 giây khi kẻ gian thúc ép qua điện thoại.
+                Tự động tăng mức cảnh báo rủi ro và tạm dừng để kiểm tra 30 giây khi người lạ đang
+                thúc giục bạn qua điện thoại.
               </p>
             </div>
           </div>
@@ -421,7 +417,7 @@ export function InputWorkbench({
                 className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink-secondary"
               >
                 <ImagePlus className="h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
-                <span>Ảnh chụp màn hình / Biên lai / Mã QR (&le;10MB)</span>
+                <span>Ảnh chụp màn hình, biên lai hoặc mã QR (tối đa 10 MB)</span>
               </label>
               {value.imageFile && (
                 <button
@@ -454,7 +450,7 @@ export function InputWorkbench({
                 className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink-secondary"
               >
                 <FileAudio className="h-4 w-4 shrink-0 text-sky-400" aria-hidden="true" />
-                <span>Tệp ghi âm cuộc gọi (.wav/.mp3/.m4a &le;10MB)</span>
+                <span>Tệp ghi âm cuộc gọi (.wav, .mp3, .m4a — tối đa 10 MB)</span>
               </label>
               {value.audioFile && (
                 <button
@@ -463,7 +459,7 @@ export function InputWorkbench({
                     updateField("audioFile", null);
                     if (audInputRef.current) audInputRef.current.value = "";
                   }}
-                  aria-label="Gỡ tệp âm thanh đã chọn"
+                  aria-label="Gỡ tệp ghi âm đã chọn"
                   className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-ink-muted hover:bg-surface-elevated hover:text-ink"
                 >
                   <X className="h-4 w-4" aria-hidden="true" />
@@ -492,7 +488,7 @@ export function InputWorkbench({
 
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
           <p className="text-[11px] text-ink-muted">
-            Tầng 1 chạy nội bộ (&lt;50ms) · Tầng 2 thẩm định AI đa phương thức cô lập an toàn, không lưu PII thô.
+            Dữ liệu được phân tích an toàn và không lưu dữ liệu định danh cá nhân chưa qua xử lý.
           </p>
           <button
             type="submit"
@@ -502,12 +498,12 @@ export function InputWorkbench({
             {isAnalyzing ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                <span>Đang điều tra đa tầng...</span>
+                <span>Đang kiểm tra...</span>
               </>
             ) : (
               <>
                 <ScanSearch className="h-4 w-4" aria-hidden="true" />
-                <span>Phân tích &amp; Kiểm chứng Ngay</span>
+                <span>Kiểm tra ngay</span>
               </>
             )}
           </button>

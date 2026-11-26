@@ -20,31 +20,32 @@ _MERCHANT_HINT_RE = re.compile(
 )
 
 TELEGRAM_WELCOME_TEXT: Final[str] = (
-    "🛡 <b>Chào mừng đến với VeriShield AI — Trợ lý Chống Lừa đảo 1-Chạm!</b>\n\n"
-    "Bạn có thể gửi hoặc chuyển tiếp (Forward) trực tiếp vào đây:\n"
-    "• <b>Tin nhắn / Link:</b> SMS, Zalo, đường dẫn nghi giả mạo\n"
-    "• <b>Ảnh Biên lai / VietQR:</b> Soi pháp y ELA, giải mã EMVCo CRC-16\n"
-    "• <b>Ghi âm / Voice:</b> Gỡ băng cuộc gọi &amp; phát hiện kịch bản mạo danh\n\n"
+    "🛡 <b>Chào mừng đến với VeriShield AI — Trợ lý kiểm tra lừa đảo một chạm</b>\n\n"
+    "Bạn có thể gửi hoặc chuyển tiếp trực tiếp vào đây:\n"
+    "• <b>Tin nhắn hoặc đường dẫn:</b> Tin nhắn SMS, Zalo, đường dẫn nghi giả mạo\n"
+    "• <b>Ảnh biên lai hoặc mã VietQR:</b> Phân tích tính xác thực của hình ảnh và kiểm tra mã QR\n"
+    "• <b>Ghi âm cuộc gọi:</b> Chuyển lời thoại sang văn bản và phát hiện dấu hiệu giả mạo\n\n"
     "⚡ <b>Lệnh nhanh:</b>\n"
-    "• /demo — Chạy thử ngay 5 kịch bản thực chiến bằng 1 cú chạm\n"
-    "• /bill <code>190311112222</code> — Gửi kèm ảnh biên lai để đối chiếu STK shop\n"
-    "• /call <i>nội dung</i> — Kích hoạt chốt chặn đang nghe điện thoại (Khóa 30s)\n"
-    "• /help — Xem chi tiết định dạng &amp; giới hạn tệp (≤ 10 MB)\n\n"
-    "👇 <i>Hoặc bấm ngay một kịch bản mẫu bên dưới để trải nghiệm tức thì:</i>"
+    "• /demo — Thử ngay 5 tình huống mẫu chỉ với một chạm\n"
+    "• /bill <code>190311112222</code> — Gửi kèm ảnh biên lai để đối chiếu số tài khoản cửa hàng\n"
+    "• /call <i>nội dung</i> — Bật cảnh báo khi đang nghe điện thoại (tạm dừng để kiểm tra 30 giây)\n"
+    "• /help — Xem hướng dẫn gửi tin nhắn, ảnh và tệp ghi âm (tối đa 10 MB)\n\n"
+    "👇 <i>Hoặc chọn một tình huống mẫu bên dưới để kiểm tra ngay:</i>"
 )
 
 TELEGRAM_HELP_TEXT: Final[str] = (
-    "📘 <b>Hướng dẫn sử dụng VeriShield AI Bot</b>\n\n"
-    "1️⃣ <b>Tin nhắn / Link:</b> Chuyển tiếp thẳng văn bản hoặc URL vào khung chat.\n"
-    "2️⃣ <b>Ảnh Fake Bill / VietQR:</b> Gửi Photo hoặc File ảnh (JPG/PNG/WebP ≤ 10 MB).\n"
-    "3️⃣ <b>Chế độ Chủ cửa hàng:</b> Gửi ảnh biên lai kèm chú thích "
-    "<code>/bill 190311112222</code> (thay bằng STK của shop).\n"
-    "4️⃣ <b>Đang nghe điện thoại thúc ép:</b> Gửi <code>/call nội dung cuộc gọi</code> "
-    "để bật cảnh báo cộng hưởng &amp; khóa làm nguội 30 giây.\n"
-    "5️⃣ <b>Cuộc gọi ghi âm:</b> Gửi tin nhắn thoại (Voice) hoặc tệp .mp3/.wav/.m4a (≤ 10 MB).\n"
-    "6️⃣ <b>Thử nhanh cho Giám khảo:</b> Gõ /demo hoặc <code>/demo 1</code> đến <code>/demo 5</code>.\n\n"
-    "⚠️ <i>Lưu ý: Ảnh chụp biên lai KHÔNG phải bằng chứng tiền đã vào tài khoản — "
-    "luôn kiểm tra app ngân hàng hoặc Loa thông báo trước khi giao hàng.</i>"
+    "📘 <b>Hướng dẫn sử dụng VeriShield AI trên Telegram</b>\n\n"
+    "1️⃣ <b>Tin nhắn hoặc đường dẫn:</b> Gửi hoặc chuyển tiếp trực tiếp nội dung vào khung chat.\n"
+    "2️⃣ <b>Ảnh biên lai hoặc mã VietQR:</b> Gửi ảnh chụp hoặc tệp ảnh (JPG, PNG, WebP — tối đa 10 MB).\n"
+    "3️⃣ <b>Dành cho người bán:</b> Gửi ảnh biên lai kèm chú thích "
+    "<code>/bill 190311112222</code> (thay bằng số tài khoản nhận tiền của cửa hàng).\n"
+    "4️⃣ <b>Khi đang nghe điện thoại lạ:</b> Gửi <code>/call nội dung cuộc gọi</code> "
+    "để tăng mức cảnh báo rủi ro và bật tạm dừng để kiểm tra 30 giây.\n"
+    "5️⃣ <b>Tệp ghi âm cuộc gọi:</b> Gửi tin nhắn thoại hoặc tệp .mp3, .wav, .m4a (tối đa 10 MB).\n"
+    "6️⃣ <b>Thử tình huống mẫu:</b> Gõ /demo hoặc <code>/demo 1</code> đến <code>/demo 5</code>.\n\n"
+    "⚠️ <i>Lưu ý: Ảnh chụp biên lai không phải bằng chứng tiền đã vào tài khoản. "
+    "Luôn kiểm tra trực tiếp biến động số dư trên ứng dụng ngân hàng hoặc loa thông báo "
+    "trước khi giao hàng.</i>"
 )
 
 
@@ -148,7 +149,7 @@ def truncate_telegram_text(text: str, max_len: int = TELEGRAM_MAX_TEXT_LEN) -> s
     """Ensure plain text fits safely below Telegram's 4096-character message ceiling."""
     if len(text) <= max_len:
         return text
-    suffix = "\n… (xem đầy đủ bằng chứng trong Hồ sơ PDF hoặc VeriShield Web)"
+    suffix = "\n… (xem đầy đủ bằng chứng trong báo cáo PDF hoặc trang web VeriShield AI)"
     keep = max(64, max_len - len(suffix))
     return text[:keep].rstrip() + suffix
 
@@ -196,13 +197,13 @@ def build_verdict_inline_keyboard(case_id: str, public_base_url: str) -> dict[st
         "inline_keyboard": [
             [
                 {
-                    "text": "📄 Tải Hồ sơ Tố giác PDF",
+                    "text": "📄 Tải báo cáo bằng chứng (PDF)",
                     "url": f"{base}/api/v1/cases/{case_id}/report.pdf",
                 }
             ],
             [
-                {"text": "🛡 Mở VeriShield Web", "url": f"{base}/"},
-                {"text": "📡 Fraud Ops Radar", "url": f"{base}/radar"},
+                {"text": "🛡 Mở trang web VeriShield AI", "url": f"{base}/"},
+                {"text": "📡 Trung tâm giám sát gian lận", "url": f"{base}/radar"},
             ],
         ]
     }
@@ -229,9 +230,9 @@ def parse_telegram_command(raw_text: str, has_attachment: bool) -> ParsedTelegra
     if cmd == "demo":
         if not arg_text:
             return ParsedTelegramCommand(
-                "🧪 <b>5 Kịch bản Thực chiến 1-Chạm (Dành cho Hội đồng Giám khảo)</b>\n\n"
-                "Bấm trực tiếp một nút bên dưới (hoặc gõ <code>/demo 1</code> đến <code>/demo 5</code>) "
-                "để chạy thử luồng điều tra đa phương thức ngay trên Telegram:",
+                "🧪 <b>5 tình huống mẫu kiểm tra một chạm</b>\n\n"
+                "Chọn trực tiếp một nút bên dưới (hoặc gõ <code>/demo 1</code> đến <code>/demo 5</code>) "
+                "để xem cách hệ thống phân tích và cảnh báo ngay trên Telegram:",
                 "personal",
                 None,
                 "",
@@ -241,9 +242,10 @@ def parse_telegram_command(raw_text: str, has_attachment: bool) -> ParsedTelegra
     if cmd == "call":
         if not has_attachment and not arg_text:
             return ParsedTelegramCommand(
-                "📞 <b>Chế độ Đang nghe điện thoại thúc ép chuyển tiền (/call)</b>\n"
+                "📞 <b>Kiểm tra khi đang nghe điện thoại (/call)</b>\n"
                 "Hãy gửi <code>/call nội dung người gọi đang yêu cầu</code> "
-                "(hoặc gửi kèm file ghi âm) để kích hoạt cộng hưởng rủi ro &amp; Khóa làm nguội 30 giây.",
+                "(hoặc gửi kèm tệp ghi âm) để tăng mức cảnh báo rủi ro và bật "
+                "tạm dừng để kiểm tra 30 giây.",
                 "wallet_transfer",
                 None,
                 "",
@@ -261,9 +263,9 @@ def parse_telegram_command(raw_text: str, has_attachment: bool) -> ParsedTelegra
                 remaining = parts[1].strip() if len(parts) > 1 else ""
         if not has_attachment and not remaining:
             return ParsedTelegramCommand(
-                "🏪 <b>Chế độ Kiểm tra Biên lai Chủ cửa hàng (/bill)</b>\n"
+                "🏪 <b>Kiểm tra biên lai cho người bán (/bill)</b>\n"
                 "Hãy gửi ảnh biên lai chuyển khoản hoặc mã VietQR kèm chú thích "
-                "<code>/bill 190311112222</code> (thay bằng STK nhận tiền của shop).",
+                "<code>/bill 190311112222</code> (thay bằng số tài khoản nhận tiền của cửa hàng).",
                 "merchant",
                 expected_stk,
                 "",
@@ -276,10 +278,10 @@ def parse_telegram_command(raw_text: str, has_attachment: bool) -> ParsedTelegra
 def format_telegram_verdict_reply(report: AnalysisReport) -> str:
     """Format safe HTML Vietnamese safety verdict, 30s shield & counter-reply for Telegram."""
     badge_map = {
-        "SAFE": "🟢 ÍT RỦI RO",
-        "SUSPICIOUS": "🟡 NGHI VẤN — CẦN KIỂM CHỨNG",
-        "HIGH_RISK": "🟠 RỦI RO CAO — TẠM DỪNG GIAO DỊCH",
-        "CRITICAL_SCAM": "🔴 CẢNH BÁO ĐỎ — DẤU HIỆU LỪA ĐẢO RÕ RỆT",
+        "SAFE": "🟢 Chưa phát hiện dấu hiệu bất thường",
+        "SUSPICIOUS": "🟡 Cần thận trọng — nên xác minh thêm",
+        "HIGH_RISK": "🟠 Cảnh báo rủi ro cao — tạm dừng giao dịch",
+        "CRITICAL_SCAM": "🔴 Cảnh báo rủi ro rất cao — có nhiều dấu hiệu lừa đảo",
     }
     lines = [
         f"🛡 <b>VeriShield AI</b> | <b>{badge_map[report.verdict]} ({report.risk_score}/100)</b>",
@@ -287,32 +289,39 @@ def format_telegram_verdict_reply(report: AnalysisReport) -> str:
     ]
     if report.matched_playbooks:
         pbs = ", ".join(_esc(pb, 90) for pb in report.matched_playbooks[:2])
-        lines.append(f"🎯 <b>Kịch bản khớp:</b> {pbs}")
+        lines.append(f"🎯 <b>Kịch bản tương tự:</b> {pbs}")
     if any(q.receive_scam_detected for q in report.vietqr_findings):
         lines.append(
-            "🚨 <b>Bẫy quét VietQR:</b> Mã QR này là LỆNH CHUYỂN TIỀN ĐI — "
-            "tuyệt đối không quét để 'nhận hoàn tiền'!"
+            "🚨 <b>Bẫy quét mã VietQR:</b> Mã QR này là lệnh chuyển tiền đi, "
+            "không thể quét để nhận tiền hoàn hay nhận thưởng."
         )
     if any(q.beneficiary_mismatch for q in report.vietqr_findings):
         lines.append(
-            "🚨 <b>Tráo mã QR:</b> Tài khoản trong mã VietQR KHÔNG KHỚP với STK cửa hàng!"
+            "🚨 <b>Lệch tài khoản nhận:</b> Số tài khoản trong mã VietQR không khớp với "
+            "số tài khoản của cửa hàng."
         )
     pre = report.actions.pre_transfer
     if pre.should_hold_transfer:
         hold_line = (
-            f"⏱ <b>Chốt chặn Phút 89 (Khóa làm nguội {pre.cooling_off_seconds}s):</b> "
+            f"⏱ <b>Ngăn chặn lừa đảo trước khi chuyển tiền "
+            f"(Tạm dừng để kiểm tra {pre.cooling_off_seconds} giây):</b> "
             f"{_esc(pre.warning_headline, 240)}"
         )
         if pre.verification_questions:
-            hold_line += f"\n• <i>Tự kiểm chứng:</i> {_esc(pre.verification_questions[0], 180)}"
+            hold_line += f"\n• <i>Tự kiểm tra nhanh:</i> {_esc(pre.verification_questions[0], 180)}"
         lines.append(hold_line)
     if report.transcript:
-        lines.append(f'🎙 <b>Gỡ băng lời thoại:</b> <i>"{_esc(report.transcript, 200)}"</i>')
+        lines.append(f'🎙 <b>Nội dung từ ghi âm:</b> <i>"{_esc(report.transcript, 200)}"</i>')
     if report.actions.merchant_balance_warning:
-        lines.append(f"⚠️ <b>Cảnh báo Tiểu thương:</b> {_esc(report.actions.merchant_balance_warning, 320)}")
+        lines.append(
+            f"⚠️ <b>Lưu ý cho người bán:</b> {_esc(report.actions.merchant_balance_warning, 320)}"
+        )
     if report.actions.counter_replies:
-        lines.append(f'💬 <b>Gợi ý phản hồi:</b> "{_esc(report.actions.counter_replies[0], 260)}"')
+        lines.append(f'💬 <b>Gợi ý câu trả lời:</b> "{_esc(report.actions.counter_replies[0], 260)}"')
     if report.actions.urgent_steps:
         lines.append(f"✅ <b>Việc cần làm ngay:</b> {_esc(report.actions.urgent_steps[0], 260)}")
-    lines.append(f"🆔 <b>Mã hồ sơ:</b> <code>{_esc(report.case_id, 64)}</code>")
+    lines.append(
+        f"ℹ️ <i>Kết quả chỉ mang tính tham khảo. Mã hồ sơ:</i> "
+        f"<code>{_esc(report.case_id, 64)}</code>"
+    )
     return _join_html_lines_bounded(lines)

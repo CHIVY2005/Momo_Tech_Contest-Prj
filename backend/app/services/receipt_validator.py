@@ -44,44 +44,41 @@ def build_trusted_merchant_summary(
     cleaned = raw_summary.strip()
     if receipt_status == "UNVERIFIED_SCREENSHOT":
         return (
-            "Ảnh chụp biên lai không ghi nhận dấu hiệu cắt ghép kỹ thuật, nhưng trạng thái thanh toán "
-            "CHƯA ĐƯỢC XÁC MINH từ ngân hàng (UNVERIFIED_SCREENSHOT). Chỉ giao hàng sau khi trực tiếp "
-            "kiểm tra biến động số dư thực tế trên ứng dụng ngân hàng hoặc Loa thông báo."
+            "Ảnh chụp biên lai chưa ghi nhận dấu hiệu chỉnh sửa, nhưng hệ thống không thể xác nhận "
+            "tiền đã vào tài khoản chỉ từ ảnh chụp. Chỉ giao hàng sau khi kiểm tra trực tiếp biến động "
+            "số dư trên ứng dụng ngân hàng hoặc loa thông báo nhận tiền."
         )
     if receipt_status == "REPLAYED_RECEIPT":
         return (
-            "CẢNH BÁO ĐỎ: Ảnh biên lai hoặc mã tham chiếu trùng khớp với giao dịch cũ đã gửi trước đó "
-            "(REPLAYED_RECEIPT — chưa xác minh thanh toán mới). Tuyệt đối chưa giao hàng và kiểm tra "
-            "trực tiếp biến động số dư ngân hàng."
+            "Cảnh báo rủi ro rất cao: Ảnh biên lai hoặc mã giao dịch này trùng khớp với một biên lai "
+            "đã từng xuất hiện trước đó. Không giao hàng và hãy kiểm tra trực tiếp biến động số dư "
+            "trên ứng dụng ngân hàng."
         )
     if receipt_status == "BENEFICIARY_MISMATCH":
         if has_qr_beneficiary_mismatch and not has_ocr_beneficiary_mismatch:
             return (
-                "CẢNH BÁO ĐỎ: Mã thanh toán VietQR trỏ sang tài khoản thụ hưởng KHÁC với tài khoản "
-                "của cửa hàng (BENEFICIARY_MISMATCH — chưa xác minh tiền vào tài khoản chủ shop). "
-                "Tuyệt đối dừng giao hàng và kiểm tra số dư thực tế."
+                "Cảnh báo rủi ro rất cao: Mã VietQR trỏ sang số tài khoản khác với tài khoản nhận tiền "
+                "của cửa hàng. Hãy dừng giao hàng và kiểm tra trực tiếp biến động số dư."
             )
         if has_qr_beneficiary_mismatch and has_ocr_beneficiary_mismatch:
             return (
-                "CẢNH BÁO ĐỎ: Cả mã thanh toán VietQR và chữ in trên biên lai đều trỏ sang tài khoản "
-                "thụ hưởng KHÁC với tài khoản của cửa hàng (BENEFICIARY_MISMATCH). Tuyệt đối dừng "
-                "giao hàng và đối chiếu số dư thực tế."
+                "Cảnh báo rủi ro rất cao: Cả mã VietQR và thông tin trên biên lai đều trỏ sang số tài "
+                "khoản khác với tài khoản của cửa hàng. Hãy dừng giao hàng và đối chiếu biến động số dư."
             )
         return (
-            "CẢNH BÁO ĐỎ: Số tài khoản thụ hưởng in trên biên lai KHÔNG KHỚP với tài khoản của cửa hàng "
-            "(BENEFICIARY_MISMATCH — tiền chưa được xác minh vào tài khoản chủ shop). Tuyệt đối dừng "
-            "giao hàng và đối chiếu số dư thực tế."
+            "Cảnh báo rủi ro rất cao: Số tài khoản nhận trên biên lai không khớp với tài khoản của "
+            "cửa hàng. Hãy dừng giao hàng và kiểm tra trực tiếp biến động số dư."
         )
     if receipt_status == "TAMPER_OR_LOGIC_ANOMALY":
         return (
-            "CẢNH BÁO: Phát hiện dấu hiệu chỉnh sửa ảnh hoặc bất thường logic nghiệp vụ trên biên lai "
-            "(TAMPER_OR_LOGIC_ANOMALY — chưa xác minh thanh toán). Tuyệt đối chưa giao hàng trước khi "
-            "kiểm tra biến động số dư thực tế hoặc Loa thông báo."
+            "Cảnh báo rủi ro cao: Phát hiện dấu hiệu chỉnh sửa hình ảnh hoặc sai lệch thông tin trên "
+            "biên lai. Không giao hàng trước khi kiểm tra trực tiếp biến động số dư trên ứng dụng "
+            "ngân hàng hoặc loa thông báo nhận tiền."
         )
     if mode == "merchant" and _FALSE_SETTLEMENT_RE.search(cleaned):
         return (
-            "Chưa xác minh tiền đã vào tài khoản — vui lòng kiểm tra trực tiếp biến động số dư "
-            "ngân hàng hoặc Loa thông báo trước khi giao hàng."
+            "Chưa thể xác nhận tiền đã vào tài khoản từ ảnh chụp — hãy kiểm tra trực tiếp biến động "
+            "số dư trên ứng dụng ngân hàng hoặc loa thông báo nhận tiền trước khi giao hàng."
         )
     return cleaned
 
@@ -204,7 +201,7 @@ def validate_receipt_logic(
     if is_replayed_hash:
         risk += 85
         reasons.append(
-            "Ảnh biên lai hoặc mã tham chiếu trùng với giao dịch cũ đã gửi trước đó (Bill Replay)."
+            "Ảnh biên lai hoặc mã giao dịch trùng với một biên lai đã từng xuất hiện trước đó."
         )
 
     amount_chars = list(cleaned)
@@ -244,7 +241,7 @@ def validate_receipt_logic(
     if amount_anomaly:
         risk += 30
         reasons.append(
-            "Định dạng số tiền trộn lẫn dấu chấm và dấu phẩy hàng nghìn bất thường (dấu hiệu sửa tay)."
+            "Định dạng số tiền trộn lẫn dấu chấm và dấu phẩy bất thường, có dấu hiệu bị chỉnh sửa."
         )
 
     ref_code: str | None = None
@@ -262,8 +259,8 @@ def validate_receipt_logic(
             ref_valid = False
             risk += 25
             reasons.append(
-                f"Mã tham chiếu giao dịch vượt quá độ dài hỗ trợ (>{MAX_REF_CODE_LEN} ký tự) "
-                "nên không hợp lệ để đối soát."
+                f"Mã giao dịch vượt quá độ dài thông thường (trên {MAX_REF_CODE_LEN} ký tự) "
+                "nên không hợp lệ để đối chiếu."
             )
         else:
             ref_code = raw_ref
@@ -276,7 +273,7 @@ def validate_receipt_logic(
                 ref_valid = False
                 risk += 25
                 reasons.append(
-                    f"Mã tham chiếu giao dịch '{ref_code}' không đúng chuẩn độ dài/cấu trúc ngân hàng VN."
+                    f"Mã giao dịch '{ref_code}' không khớp với cấu trúc phổ biến của ngân hàng Việt Nam."
                 )
 
     now_vn = (reference_now or datetime.now(UTC)).astimezone(VN_TZ)
@@ -286,22 +283,23 @@ def validate_receipt_logic(
     if malformed_ts:
         ts_anomaly = True
         risk += 35
-        reasons.append("Ngày giờ trên biên lai không tồn tại trên lịch biểu thực tế (dấu hiệu làm giả).")
+        reasons.append("Ngày giờ trên biên lai không hợp lệ, có dấu hiệu bị chỉnh sửa.")
     elif parsed_ts is not None:
         delta_minutes = (parsed_ts - now_vn).total_seconds() / 60.0
         if delta_minutes > 10.0:
             ts_anomaly = True
             risk += 35
             reasons.append(
-                f"Thời gian trên biên lai ({parsed_ts.strftime('%d/%m/%Y %H:%M')}) nằm ở tương lai "
-                f"so với thời điểm kiểm tra ({now_vn.strftime('%d/%m/%Y %H:%M')} GMT+7)."
+                f"Thời gian trên biên lai ({parsed_ts.strftime('%d/%m/%Y %H:%M')}) lớn hơn "
+                f"thời điểm kiểm tra hiện tại ({now_vn.strftime('%d/%m/%Y %H:%M')})."
             )
         elif delta_minutes < -(7 * 24 * 60):
             ts_anomaly = True
             risk += 25
+            ts_str = parsed_ts.strftime("%d/%m/%Y %H:%M")
             reasons.append(
-                f"Biên lai ghi nhận từ hơn 7 ngày trước ({parsed_ts.strftime('%d/%m/%Y %H:%M')}) — "
-                "nghi vấn tái sử dụng ảnh biên lai cũ."
+                f"Biên lai ghi nhận thời điểm từ hơn 7 ngày trước ({ts_str}), "
+                "cần kiểm tra nguy cơ dùng lại ảnh cũ."
             )
 
     beneficiary_checked = False
@@ -331,7 +329,7 @@ def validate_receipt_logic(
     if geometry_anomaly:
         risk += 25
         reasons.append(
-            "Tọa độ khung chữ OCR phát hiện dòng văn bản có chiều cao lệch chuẩn (>2.15x trung vị)."
+            "Kích thước chữ giữa các dòng trên biên lai chênh lệch bất thường, có dấu hiệu chèn đè số tiền."
         )
 
     status: ReceiptVerificationStatus

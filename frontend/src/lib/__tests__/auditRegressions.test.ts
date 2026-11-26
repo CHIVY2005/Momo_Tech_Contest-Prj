@@ -33,7 +33,7 @@ test("consumeUtf8SseStream ignores unterminated trailing frame at EOF", async ()
   assert.equal(received[0]?.event, "trace");
 });
 
-test("sanitizeValidationErrorDetail omits raw input values such as PIN or bank account", () => {
+test("sanitizeValidationErrorDetail omits raw input values and internal field names", () => {
   const detail = [
     {
       type: "string_too_short",
@@ -43,7 +43,8 @@ test("sanitizeValidationErrorDetail omits raw input values such as PIN or bank a
     },
   ];
   const msg = sanitizeValidationErrorDetail(detail);
-  assert.ok(msg.includes("analyst_pin"));
+  assert.ok(msg.includes("mã PIN xác thực"));
+  assert.ok(!msg.includes("analyst_pin"));
   assert.ok(!msg.includes("999"));
 });
 
@@ -56,7 +57,7 @@ test("maskDisplayIoc conceals middle digits on raw accounts and phones without d
 });
 
 test("formatVietQrAmount never renders NaN VND on PII-scrubbed amounts", () => {
-  assert.equal(formatVietQrAmount(null), "QR tĩnh / Tự nhập");
+  assert.equal(formatVietQrAmount(null), "QR tĩnh (tự nhập số tiền)");
   assert.equal(formatVietQrAmount("19****01"), "19****01");
   assert.ok(formatVietQrAmount("1850000").includes("VND"));
   assert.ok(!formatVietQrAmount("19****01").includes("NaN"));

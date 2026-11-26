@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { TRACE_STAGES } from "@/lib/copy";
 import type { TraceStep } from "@/lib/types";
 
 interface LiveTracePanelProps {
@@ -17,25 +18,6 @@ interface LiveTracePanelProps {
   isAnalyzing: boolean;
   hasReport?: boolean;
 }
-
-const EXPECTED_PIPELINE_STAGES: Array<{ step_id: string; defaultTitle: string }> = [
-  {
-    step_id: "media_forensics",
-    defaultTitle: "Pháp y ảnh (ELA/dHash/VietQR) & Chuyển ngữ cục bộ",
-  },
-  {
-    step_id: "cyber_guardrails",
-    defaultTitle: "Kiểm tra Block Rules, SSRF/Punycode URL & Guardrails",
-  },
-  {
-    step_id: "onnx_and_kb",
-    defaultTitle: "Phân loại Ngữ nghĩa E5 ONNX & Đối chiếu 20 Kịch bản VN",
-  },
-  {
-    step_id: "multimodal_calibration",
-    defaultTitle: "Thẩm định Đa phương thức & Hiệu chuẩn Điểm Rủi ro",
-  },
-];
 
 function isTerminalStatus(status: TraceStep["status"] | undefined): boolean {
   return status === "done" || status === "warning" || status === "skipped";
@@ -59,7 +41,7 @@ export function LiveTracePanel({
   }
 
   const byId = new Map(steps.map((s) => [s.step_id, s]));
-  const completedCount = EXPECTED_PIPELINE_STAGES.filter((st) =>
+  const completedCount = TRACE_STAGES.filter((st) =>
     isTerminalStatus(byId.get(st.step_id)?.status),
   ).length;
   const hasWarning = steps.some((s) => s.status === "warning");
@@ -73,7 +55,7 @@ export function LiveTracePanel({
   if (!isExpanded) {
     return (
       <section
-        aria-label="Tóm tắt tiến trình điều tra"
+        aria-label="Tóm tắt tiến trình kiểm tra"
         className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-subtle bg-surface/95 px-4 py-2.5 shadow-sm"
       >
         <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -83,14 +65,14 @@ export function LiveTracePanel({
             <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
           )}
           <span className="font-semibold text-ink">
-            Hoàn tất điều tra {completedCount}/{EXPECTED_PIPELINE_STAGES.length} tầng
+            Đã hoàn tất {completedCount}/{TRACE_STAGES.length} bước kiểm tra
           </span>
           <span className="tabular-num rounded bg-surface-subtle px-2 py-0.5 font-mono text-[11px] text-ink-secondary">
-            {totalMs >= 1000 ? `${(totalMs / 1000).toFixed(2)}s` : `${totalMs}ms`}
+            {totalMs >= 1000 ? `${(totalMs / 1000).toFixed(2)} giây` : `${totalMs} ms`}
           </span>
           {hasWarning && (
             <span className="rounded border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-200">
-              Có cảnh báo kỹ thuật
+              Có lưu ý kỹ thuật
             </span>
           )}
         </div>
@@ -101,7 +83,7 @@ export function LiveTracePanel({
           onClick={() => setManualExpanded(true)}
           className="inline-flex min-h-[34px] cursor-pointer items-center gap-1 rounded-lg border border-border-strong bg-surface-subtle px-2.5 py-1 text-xs font-medium text-ink-secondary hover:border-sky-400 hover:text-ink"
         >
-          <span>Xem chi tiết trace</span>
+          <span>Xem tiến trình kiểm tra</span>
           <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
       </section>
@@ -110,25 +92,23 @@ export function LiveTracePanel({
 
   return (
     <section
-      aria-label="Tiến trình điều tra thời gian thực"
+      aria-label="Tiến trình kiểm tra"
       aria-live="polite"
       className="rounded-2xl border border-border-subtle bg-surface/95 p-4 shadow-lg"
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <h3 className="text-xs font-bold tracking-wide text-ink-secondary uppercase">
-            Luồng Điều tra Thời gian thực (SSE Pipeline Trace)
-          </h3>
+          <h3 className="text-xs font-bold text-ink-secondary">Tiến trình kiểm tra</h3>
           <span className="tabular-num rounded bg-surface-subtle px-2 py-0.5 font-mono text-[11px] text-ink-muted">
-            {completedCount}/{EXPECTED_PIPELINE_STAGES.length} tầng
+            {completedCount}/{TRACE_STAGES.length} bước
           </span>
         </div>
 
         <div className="flex items-center gap-2">
           {isAnalyzing && (
-            <span className="inline-flex items-center gap-1.5 font-mono text-xs text-amber-300">
+            <span className="inline-flex items-center gap-1.5 text-xs text-amber-300">
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-              <span>Đang xử lý...</span>
+              <span>Đang kiểm tra...</span>
             </span>
           )}
           {canCompact && (
@@ -138,7 +118,7 @@ export function LiveTracePanel({
               onClick={() => setManualExpanded(false)}
               className="inline-flex min-h-[32px] cursor-pointer items-center gap-1 rounded-lg border border-border-strong bg-surface-subtle px-2.5 py-1 text-xs font-medium text-ink-secondary hover:border-sky-400 hover:text-ink"
             >
-              <span>Thu gọn trace</span>
+              <span>Thu gọn</span>
               <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           )}
@@ -146,10 +126,10 @@ export function LiveTracePanel({
       </div>
 
       <ol className="grid grid-cols-1 gap-2.5 md:grid-cols-2 lg:grid-cols-4">
-        {EXPECTED_PIPELINE_STAGES.map((stage, idx) => {
+        {TRACE_STAGES.map((stage, idx) => {
           const step = byId.get(stage.step_id);
           const prevStep =
-            idx > 0 ? byId.get(EXPECTED_PIPELINE_STAGES[idx - 1]?.step_id ?? "") : undefined;
+            idx > 0 ? byId.get(TRACE_STAGES[idx - 1]?.step_id ?? "") : undefined;
           const isExplicitRunning = step?.status === "running";
           const isInferredRunning =
             !step && isAnalyzing && (idx === 0 || isTerminalStatus(prevStep?.status));
@@ -188,7 +168,7 @@ export function LiveTracePanel({
                 </div>
                 {step && step.status !== "running" && (
                   <span className="tabular-num shrink-0 rounded bg-surface-elevated px-1.5 py-0.5 font-mono text-[10px] text-ink-secondary">
-                    {step.duration_ms}ms
+                    {step.duration_ms} ms
                   </span>
                 )}
               </div>
@@ -196,8 +176,8 @@ export function LiveTracePanel({
                 {step
                   ? step.detail
                   : isRunning
-                    ? "Đang thực thi bước kiểm định..."
-                    : "Đang chờ bước trước..."}
+                    ? "Đang thực hiện kiểm tra..."
+                    : "Chờ bước trước hoàn tất..."}
               </p>
             </li>
           );

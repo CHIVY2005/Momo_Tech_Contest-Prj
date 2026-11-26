@@ -134,27 +134,27 @@
       "modes": ["personal", "merchant", "wallet_transfer"],
       "keywords": ["quét mã qr để nhận tiền", "nhận tiền hoàn", "hoàn tiền đơn hàng", "hủy gói bảo hiểm", "quét mã nhận thưởng", "trừ tiền tự động hàng tháng"],
       "psychological_tactics": ["Lợi dụng sự nhầm lẫn giữa quét QR thanh toán và nhận tiền", "Hù dọa trừ phí 2–3 triệu/tháng nếu không hủy gấp"],
-      "red_flags": ["Chuẩn EMVCo VietQR (QRIBFTTA) chỉ dùng để CHUYỂN TIỀN ĐI, không tồn tại mã VietQR quét để nhận tiền về tài khoản"],
+      "red_flags": ["Mã VietQR chỉ dùng để chuyển tiền đi, không tồn tại mã VietQR quét để nhận tiền về tài khoản"],
       "counter_replies": ["Mã VietQR chỉ dùng để chuyển tiền đi, không thể quét để nhận tiền hoàn. Vui lòng chuyển khoản trực tiếp vào số tài khoản của tôi."],
       "urgent_steps": ["Dừng ngay thao tác xác nhận PIN/sinh trắc học sau khi quét mã QR.", "Kiểm tra kỹ dòng chữ 'Chuyển tiền đến' trên màn hình ứng dụng."]
     },
     {
       "id": "scam_merchant_fake_bill",
-      "name_vi": "Giả mạo biên lai chuyển khoản (Fake Bill Canvas / Ảnh nén Zalo / Dùng lại bill cũ)",
+      "name_vi": "Giả mạo biên lai chuyển khoản (ảnh chỉnh sửa hoặc dùng lại biên lai cũ)",
       "modes": ["merchant"],
       "keywords": ["chuyển khoản thành công", "giao hàng gấp", "shipper đang đợi", "liên ngân hàng bị treo", "ngân hàng bảo trì", "bill chuyển tiền"],
-      "psychological_tactics": ["Thúc giục chủ shop lúc đông khách", "Viện cớ nghẽn mạng liên ngân hàng để lấy hàng trước khi tiền về"],
-      "red_flags": ["Ảnh biên lai dựng từ web mẫu hoặc cắt ghép phông chữ/dấu phân cách", "Mã giao dịch FT sai quy chuẩn hoặc thời gian bất thường", "Gửi lại ảnh biên lai cũ đã dùng trước đó"],
-      "counter_replies": ["Shop chỉ xuất hàng khi tài khoản ngân hàng hoặc Loa thông báo báo đã nhận đủ tiền thực tế. Anh/chị vui lòng đợi tiền nổi số dư nhé."],
-      "urgent_steps": ["Mở trực tiếp ứng dụng ngân hàng của chính cửa hàng kiểm tra lịch sử số dư.", "Không giao hàng hoặc hoàn tiền mặt khi chỉ mới nhìn ảnh chụp màn hình."]
+      "psychological_tactics": ["Thúc giục chủ cửa hàng lúc đông khách", "Viện cớ nghẽn mạng liên ngân hàng để lấy hàng trước khi tiền về"],
+      "red_flags": ["Ảnh biên lai dựng từ mẫu có sẵn hoặc cắt ghép phông chữ và dấu phân cách", "Mã giao dịch sai quy chuẩn hoặc thời gian bất thường", "Gửi lại ảnh biên lai cũ đã dùng trước đó"],
+      "counter_replies": ["Cửa hàng chỉ xuất hàng khi ứng dụng ngân hàng hoặc loa thông báo xác nhận đã nhận đủ tiền thực tế. Anh/chị vui lòng đợi tiền vào số dư nhé."],
+      "urgent_steps": ["Mở trực tiếp ứng dụng ngân hàng của cửa hàng để kiểm tra lịch sử số dư.", "Không giao hàng hoặc hoàn tiền mặt khi chỉ mới xem ảnh chụp màn hình."]
     },
     {
       "id": "scam_qr_sticker_swap",
       "name_vi": "Dán đè mã QR giả mạo tại quầy thu ngân cửa hàng",
       "modes": ["merchant", "personal"],
       "keywords": ["dán đè mã qr", "mã qr tại quầy", "sai tên chủ tài khoản", "quét mã cửa hàng"],
-      "psychological_tactics": ["Đánh tráo vật lý bảng mã QR tĩnh ở quán đông người không kiểm tra tên người nhận"],
-      "red_flags": ["Số tài khoản giải mã trong Tag 38 VietQR không khớp với tài khoản đăng ký của chủ cửa hàng"],
+      "psychological_tactics": ["Đánh tráo bảng mã QR tĩnh ở quán đông người khiến khách không để ý tên người nhận"],
+      "red_flags": ["Số tài khoản đọc được trong mã VietQR không khớp với tài khoản đăng ký của cửa hàng"],
       "counter_replies": ["Mã QR này đang trỏ sang tài khoản lạ không phải của cửa hàng, vui lòng kiểm tra lại bảng mã tại quầy."],
       "urgent_steps": ["Đối chiếu tên chủ tài khoản hiển thị trên màn hình ngân hàng với tên chủ shop trước khi bấm chuyển."]
     },
@@ -170,7 +170,7 @@
     },
     {
       "id": "scam_deepvoice_urgent_borrow",
-      "name_vi": "Chiếm đoạt Zalo / Giả giọng nói & Deepfake người thân vay tiền cấp cứu",
+      "name_vi": "Chiếm đoạt Zalo hoặc giả giọng nói, hình ảnh người thân vay tiền cấp cứu",
       "modes": ["personal", "wallet_transfer"],
       "keywords": ["chuyển gấp cho mẹ", "đang cấp cứu bệnh viện", "mượn gấp 10 triệu", "chuyển hộ vào tài khoản bạn", "gọi video bị mờ giật"],
       "psychological_tactics": ["Đánh vào tình cảm gia đình và sự khẩn cấp sinh tử", "Cuộc gọi video ngắn 3–5 giây mờ nhiễu giả mất sóng rồi thúc chuyển vào STK tên người lạ"],
@@ -222,7 +222,7 @@
       "name_vi": "Giả danh Cục Viễn thông / Nhà mạng báo khóa SIM hai chiều sau 2 giờ",
       "modes": ["personal"],
       "keywords": ["cục viễn thông", "khóa sim sau 2 giờ", "sim chưa chuẩn hóa thuê bao", "bấm phím 9 gặp tổng đài viên", "đứng tên sim lừa đảo"],
-      "psychological_tactics": ["Cuộc gọi tự động ghi âm sẵn (Robocall) dẫn dắt sang kịch bản giả Công an điều tra"],
+      "psychological_tactics": ["Dùng cuộc gọi ghi âm tự động để dẫn dắt sang kịch bản giả danh công an điều tra"],
       "red_flags": ["Cục Viễn thông không gọi điện trực tiếp dọa khóa SIM từng cá nhân hay nối máy sang cơ quan Công an"],
       "counter_replies": ["Tôi sẽ tự kiểm tra thông tin thuê bao qua cú pháp tin nhắn TTTB gửi 1414 của nhà mạng chính thức."],
       "urgent_steps": ["Cúp máy ngay khi nghe cuộc gọi tự động yêu cầu bấm phím số gặp nhân viên."]

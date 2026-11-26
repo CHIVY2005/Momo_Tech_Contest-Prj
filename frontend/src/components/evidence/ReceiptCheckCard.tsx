@@ -3,6 +3,7 @@
 import { AlertTriangle, CheckCircle2, MinusCircle, ShieldAlert } from "lucide-react";
 
 import { maskDisplayIoc } from "@/lib/api";
+import { RECEIPT_STATUS_COPY, SHARED_DISCLAIMERS } from "@/lib/copy";
 import type {
   ImageForensicsResult,
   ReceiptLogicResult,
@@ -41,7 +42,7 @@ function StatusRow({
           <p className="text-xs font-semibold leading-snug text-ink">{label}</p>
         </div>
         <span
-          className={`shrink-0 rounded px-2 py-0.5 font-mono text-[10px] font-semibold ${
+          className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold ${
             state === "pass"
               ? "bg-emerald-500/15 text-emerald-300"
               : state === "fail"
@@ -49,7 +50,7 @@ function StatusRow({
                 : "bg-surface-elevated text-ink-secondary"
           }`}
         >
-          {state === "pass" ? "ỔN ĐỊNH" : state === "fail" ? "BẤT THƯỜNG" : "CHƯA ĐỐI CHIẾU"}
+          {state === "pass" ? "Bình thường" : state === "fail" ? "Có bất thường" : "Chưa đủ thông tin"}
         </span>
       </div>
       <p className="pl-6 text-[11px] leading-relaxed text-ink-muted">{detail}</p>
@@ -128,9 +129,8 @@ export function ReceiptCheckCard({
         >
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
           <p className="leading-relaxed">
-            <strong className="text-amber-200">Rào chắn Trung thực Tiểu thương: </strong>
-            {merchantBalanceWarning ??
-              "Ảnh chụp biên lai không chứng minh tiền đã vào tài khoản. Luôn kiểm tra số dư ngân hàng thực tế hoặc Loa thông báo trước khi giao hàng."}
+            <strong className="text-amber-200">Lưu ý dành cho người bán: </strong>
+            {merchantBalanceWarning ?? SHARED_DISCLAIMERS.merchantHonestyFallback}
           </p>
         </div>
       )}
@@ -143,73 +143,75 @@ export function ReceiptCheckCard({
           </span>
           {receipt?.reference_code && (
             <span className="tabular-num font-mono text-sky-300">
-              Mã GD: {receipt.reference_code}
+              Mã giao dịch: {receipt.reference_code}
             </span>
           )}
           {receipt?.extracted_recipient_account && (
             <span className="tabular-num font-mono text-amber-300">
-              STK nhận: {maskDisplayIoc(receipt.extracted_recipient_account)}
+              Số tài khoản nhận: {maskDisplayIoc(receipt.extracted_recipient_account)}
             </span>
           )}
         </div>
         <span
-          className={`tabular-num rounded border px-2 py-0.5 font-mono text-[11px] font-semibold ${
+          className={`rounded border px-2 py-0.5 text-[11px] font-semibold ${
             isAlertStatus
               ? "border-rose-500/50 bg-rose-500/15 text-rose-200"
               : "border-amber-500/40 bg-amber-500/10 text-amber-200"
           }`}
         >
-          Trạng thái: {verificationStatus} ({riskPoints} đ)
+          {RECEIPT_STATUS_COPY[verificationStatus]}
         </span>
       </div>
 
       <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
         <StatusRow
           state={elaExifState}
-          label="Pháp y Vật lý Ảnh (ELA & EXIF)"
+          label="Phân tích tính xác thực của hình ảnh"
           detail={
             imageForensics
-              ? `Điểm ELA/EXIF: ${imageForensics.tamper_score}/100${
-                  imageForensics.exif_software ? ` · Phần mềm: ${imageForensics.exif_software}` : ""
+              ? `Mức nghi vấn chỉnh sửa: ${imageForensics.tamper_score}/100${
+                  imageForensics.editing_software_detected
+                    ? " · Phát hiện dấu vết phần mềm chỉnh sửa ảnh"
+                    : ""
                 }`
-              : "Chưa có dữ liệu pháp y ảnh đính kèm"
+              : "Chưa có hình ảnh biên lai đính kèm."
           }
         />
         <StatusRow
           state={refState}
-          label="Cấu trúc Mã Giao dịch Ngân hàng"
-          detail="Đối chiếu quy tắc sinh mã FT/MB/TCB/BIDV khi trích xuất được mã tham chiếu"
+          label="Cấu trúc mã giao dịch ngân hàng"
+          detail="Đối chiếu định dạng mã giao dịch phổ biến của ngân hàng khi đọc được từ biên lai."
         />
         <StatusRow
           state={timestampState}
-          label="Tính hợp lý Thời gian Giao dịch"
-          detail="Kiểm tra ngày giờ tương lai hoặc sai định dạng lịch biểu khi đọc được thời gian"
+          label="Thời gian giao dịch"
+          detail="Kiểm tra ngày giờ sai định dạng hoặc vượt quá thời điểm hiện tại."
         />
         <StatusRow
           state={amountState}
-          label="Định dạng Dấu phân cách Tiền tệ VND"
-          detail="Phát hiện lỗi ghép số tiền lẻ/dấu chấm phẩy sai quy chuẩn khi có trường số tiền"
+          label="Định dạng số tiền"
+          detail="Phát hiện lỗi ghép số hoặc dấu phân cách tiền tệ không đúng chuẩn."
         />
         <StatusRow
           state={geometryState}
-          label="Hình học Dòng chữ Số tiền & Tài khoản"
-          detail="Đo phương sai chiều cao bounding-box OCR chống chèn chữ đè (cần >= 4 dòng chữ)"
+          label="Bố cục chữ số tiền và tài khoản"
+          detail="Kiểm tra độ đồng đều của kích thước chữ để nhận diện dấu hiệu chèn đè số tiền."
         />
         <StatusRow
           state={beneficiaryState}
-          label="Khớp Tài khoản Thụ hưởng Cửa hàng"
-          detail="Chỉ xác nhận khi có STK chuẩn của chủ shop và đọc được STK nhận trên biên lai/QR"
+          label="Khớp số tài khoản nhận của cửa hàng"
+          detail="Đối chiếu số tài khoản trên biên lai hoặc mã QR với số tài khoản cửa hàng đã nhập."
         />
         <StatusRow
           state={replayState}
-          label="Chống Tái sử dụng Biên lai Cũ (Replay)"
-          detail="Tra cứu dHash & mã tham chiếu trên sổ cái khi có dấu vân tay biên lai"
+          label="Kiểm tra biên lai bị dùng lại"
+          detail="Kiểm tra xem ảnh biên lai hoặc mã giao dịch này đã từng xuất hiện trước đó hay chưa."
         />
       </div>
 
       {receipt && receipt.reasons.length > 0 && (
         <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-100">
-          <p className="font-semibold text-rose-200">Lý do phát hiện bất thường biên lai:</p>
+          <p className="font-semibold text-rose-200">Các điểm bất thường được phát hiện:</p>
           <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[11px] leading-relaxed">
             {receipt.reasons.map((reason, idx) => (
               <li key={`rc-reason-${idx}`}>{reason}</li>
@@ -217,6 +219,17 @@ export function ReceiptCheckCard({
           </ul>
         </div>
       )}
+
+      <details className="rounded-xl border border-border-subtle bg-surface-subtle/70 px-3.5 py-2.5 text-[11px] text-ink-muted">
+        <summary className="cursor-pointer font-medium text-ink-secondary hover:text-ink">
+          Thông tin kỹ thuật đối chiếu biên lai
+        </summary>
+        <p className="mt-1.5 font-mono">
+          Điểm rủi ro nghiệp vụ: {riskPoints} · ELA/EXIF:{" "}
+          {imageForensics ? `${imageForensics.tamper_score}/100` : "Chưa có"}
+          {imageForensics?.exif_software ? ` · EXIF: ${imageForensics.exif_software}` : ""}
+        </p>
+      </details>
     </div>
   );
 }

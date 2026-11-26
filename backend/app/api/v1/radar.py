@@ -28,7 +28,7 @@ async def get_radar_graph(request: Request) -> RadarGraphResponse:
 async def post_block_rule(body: CreateBlockRuleRequest, request: Request) -> BlockRule:
     settings = request.app.state.settings
     if not verify_secret(body.analyst_pin, settings.analyst_pin):
-        raise HTTPException(status_code=403, detail="Mã PIN chuyên viên không hợp lệ.")
+        raise HTTPException(status_code=403, detail="Mã PIN xác thực không đúng. Vui lòng kiểm tra lại.")
 
     repo: CaseRepository = request.app.state.repo
     try:
@@ -52,7 +52,7 @@ async def post_revoke_block_rule(
 ) -> dict[str, Any]:
     settings = request.app.state.settings
     if not verify_secret(body.analyst_pin, settings.analyst_pin):
-        raise HTTPException(status_code=403, detail="Mã PIN chuyên viên không hợp lệ.")
+        raise HTTPException(status_code=403, detail="Mã PIN xác thực không đúng. Vui lòng kiểm tra lại.")
 
     repo: CaseRepository = request.app.state.repo
     revoked = repo.revoke_block_rule(rule_id)
@@ -66,7 +66,7 @@ async def post_reset_block_rules(
 ) -> dict[str, Any]:
     settings = request.app.state.settings
     if not verify_secret(body.analyst_pin, settings.analyst_pin):
-        raise HTTPException(status_code=403, detail="Mã PIN chuyên viên không hợp lệ.")
+        raise HTTPException(status_code=403, detail="Mã PIN xác thực không đúng. Vui lòng kiểm tra lại.")
 
     repo: CaseRepository = request.app.state.repo
     cleared = repo.reset_transient_rules()

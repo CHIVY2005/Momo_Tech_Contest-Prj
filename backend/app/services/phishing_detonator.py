@@ -139,13 +139,15 @@ def inspect_rendered_dom(
         )
     if has_password:
         risk += 20
-        reasons.append("Trang chứa biểu mẫu thu thập mật khẩu (<input type='password'>).")
+        reasons.append("Trang web có biểu mẫu yêu cầu nhập mật khẩu.")
     if has_otp:
         risk += 25
-        reasons.append("Trang yêu cầu nhập mã xác thực OTP / thông tin thẻ.")
+        reasons.append("Trang web yêu cầu nhập mã OTP hoặc thông tin thẻ ngân hàng.")
     if has_apk:
         risk = max(risk + 35, 85)
-        reasons.append("Trang phát tán tệp cài đặt Android (.apk) có nguy cơ chiếm quyền thiết bị.")
+        reasons.append(
+            "Trang web chứa liên kết tải tệp cài đặt Android (.apk) có nguy cơ chiếm quyền thiết bị."
+        )
 
     if is_any_official:
         risk = 0
@@ -249,14 +251,14 @@ async def detonate_url_in_sandbox(
     deadline_sec = max(0.25, timeout_ms / 1000.0)
     cleaned = url.strip()
 
-    ok_static, static_reason, _ = await async_validate_url_target(cleaned, resolve_dns=False)
+    ok_static, _static_reason, _ = await async_validate_url_target(cleaned, resolve_dns=False)
     if not ok_static:
         return SandboxInspection(
             available=False,
             visited_url=cleaned,
             blocked_ssrf=True,
             risk_points=90,
-            reasons=[f"Buồng cô lập chặn địa chỉ nội bộ (SSRF Guard): {static_reason}"],
+            reasons=["Đã chặn truy cập trong môi trường cách ly vì đường dẫn trỏ tới địa chỉ nội bộ."],
         )
 
     if not enabled:
@@ -288,7 +290,9 @@ async def detonate_url_in_sandbox(
                     visited_url=cleaned,
                     blocked_ssrf=is_ssrf,
                     risk_points=90 if is_ssrf else 0,
-                    reasons=[f"Chặn kết nối không an toàn: {dns_reason}"] if is_ssrf else [],
+                    reasons=["Đã chặn kết nối tới địa chỉ mạng nội bộ không an toàn."]
+                    if is_ssrf
+                    else [],
                 )
 
             # Pre-resolve initial navigation hops via IP-pinned client to establish true final origin
@@ -388,8 +392,7 @@ async def detonate_url_in_sandbox(
                                     blocked_ssrf=True,
                                     risk_points=90,
                                     reasons=[
-                                        "Chặn điều hướng/sub-request tới mạng nội bộ: "
-                                        f"{blocked_subrequest_reason}"
+                                        "Đã chặn chuyển hướng tới địa chỉ mạng nội bộ không an toàn."
                                     ],
                                 )
                             if deferred_main_nav_url is not None:
@@ -411,7 +414,7 @@ async def detonate_url_in_sandbox(
                             blocked_ssrf=True,
                             risk_points=90,
                             reasons=[
-                                f"Chặn sub-request/redirect tới mạng nội bộ: {blocked_subrequest_reason}"
+                                "Đã chặn yêu cầu kết nối tới địa chỉ mạng nội bộ không an toàn."
                             ],
                         )
 
@@ -425,16 +428,16 @@ async def detonate_url_in_sandbox(
                     )
                 finally:
                     await browser.close()
-    except SsrfBlockedError as exc:
+    except SsrfBlockedError:
         return SandboxInspection(
             available=True,
             visited_url=cleaned,
             final_url=main_frame_url,
             blocked_ssrf=True,
             risk_points=90,
-            reasons=[f"Chặn chuyển hướng HTTP tới mạng nội bộ (SSRF Guard): {exc}"],
+            reasons=["Đã chặn chuyển hướng tới địa chỉ mạng nội bộ không an toàn."],
         )
-    except Exception as exc:
+    except Exception:
         if blocked_subrequest_reason is not None:
             return SandboxInspection(
                 available=True,
@@ -442,12 +445,12 @@ async def detonate_url_in_sandbox(
                 final_url=main_frame_url,
                 blocked_ssrf=True,
                 risk_points=90,
-                reasons=[f"Chặn kết nối nội bộ trong buồng cô lập: {blocked_subrequest_reason}"],
+                reasons=["Đã chặn kết nối tới địa chỉ mạng nội bộ trong môi trường cách ly."],
             )
         return SandboxInspection(
             available=False,
             visited_url=cleaned,
-            reasons=[f"Buồng cô lập không thể hoàn tất hiển thị ({type(exc).__name__})."],
+            reasons=["Không thể mở xem trước trang web này trong môi trường cách ly."],
         )
     finally:
         await safe_client.aclose()

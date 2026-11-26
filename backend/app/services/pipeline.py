@@ -48,6 +48,13 @@ class UnknownDemoError(KeyError):
 
 _guard_merchant_summary = build_trusted_merchant_summary
 
+_VERDICT_SHORT_VI: dict[str, str] = {
+    "SAFE": "mức rủi ro thấp",
+    "SUSPICIOUS": "cần thận trọng",
+    "HIGH_RISK": "rủi ro cao",
+    "CRITICAL_SCAM": "rủi ro rất cao",
+}
+
 
 class AnalysisPipeline:
     """Coordinates Tier 1 (Security/Forensics/ONNX), Tier 2 (Gemini), and Tier 3 (Copilot/DB)."""
@@ -173,7 +180,7 @@ class AnalysisPipeline:
                     EvidenceItem(
                         source="image_forensics",
                         severity="HIGH" if img_forensics.tamper_score >= 45 else "MEDIUM",
-                        title="Phát hiện bất thường pháp y vật lý ảnh",
+                        title="Phát hiện dấu hiệu bất thường trên hình ảnh",
                         detail=reason,
                     )
                 )
@@ -204,12 +211,12 @@ class AnalysisPipeline:
 
         media_step = TraceStep(
             step_id="media_forensics",
-            title="Pháp y ảnh (ELA/dHash/VietQR) & Chuyển ngữ cục bộ",
+            title="Phân tích tính xác thực của hình ảnh, mã QR và ghi âm",
             status="done" if (image_bytes or audio_bytes) else "skipped",
             detail=(
-                f"Đã quét ảnh ({len(vietqr_list)} mã QR) / âm thanh cục bộ."
+                f"Đã kiểm tra tệp đính kèm ({len(vietqr_list)} mã QR)."
                 if (image_bytes or audio_bytes)
-                else "Không có tệp đa phương thức đính kèm."
+                else "Không có hình ảnh hoặc tệp ghi âm đính kèm."
             ),
             duration_ms=int((time.perf_counter() - t_media) * 1000),
         )
@@ -241,8 +248,11 @@ class AnalysisPipeline:
                 EvidenceItem(
                     source="fraud_ops_radar",
                     severity="CRITICAL",
-                    title="Trùng khớp Danh sách Chặn Khẩn cấp (/radar)",
-                    detail=f"Thực thể {matched_rules[0].masked_value} đang bị khóa bởi Fraud Ops.",
+                    title="Trùng khớp danh sách chặn rủi ro của hệ thống",
+                    detail=(
+                        f"Dấu hiệu {matched_rules[0].masked_value} đang nằm trong danh sách chặn "
+                        "trên toàn hệ thống."
+                    ),
                 )
             )
 
@@ -258,7 +268,7 @@ class AnalysisPipeline:
                     EvidenceItem(
                         source="url_inspector",
                         severity="CRITICAL" if uf.risk_points >= 75 else "HIGH",
-                        title="Phát hiện rủi ro đường dẫn / tên miền",
+                        title="Phát hiện rủi ro từ đường dẫn trang web",
                         detail=reason,
                         snippet=candidate_url[:140],
                     )
@@ -275,7 +285,7 @@ class AnalysisPipeline:
                             EvidenceItem(
                                 source="phishing_sandbox",
                                 severity="CRITICAL" if sandbox_res.risk_points >= 75 else "HIGH",
-                                title="Buồng cô lập trình duyệt bắt quả tang bẫy Phishing",
+                                title="Phát hiện trang web giả mạo trong môi trường cách ly",
                                 detail=s_reason,
                             )
                         )
@@ -287,11 +297,11 @@ class AnalysisPipeline:
         sec_warn = block_hit or has_susp_url or guardrails.prompt_injection_detected
         sec_step = TraceStep(
             step_id="cyber_guardrails",
-            title="Kiểm tra Block Rules, SSRF/Punycode URL & Guardrails",
+            title="Kiểm tra đường dẫn đáng ngờ và danh sách chặn",
             status="warning" if sec_warn else "done",
             detail=(
-                f"Trích xuất {len(iocs.phones)} SĐT, {len(iocs.bank_accounts)} STK, "
-                f"{len(url_findings)} URL."
+                f"Ghi nhận {len(iocs.phones)} số điện thoại, {len(iocs.bank_accounts)} số tài khoản "
+                f"và {len(url_findings)} đường dẫn."
             ),
             duration_ms=int((time.perf_counter() - t_sec) * 1000),
         )
@@ -356,10 +366,10 @@ class AnalysisPipeline:
                             EvidenceItem(
                                 source="fraud_ops_radar",
                                 severity="CRITICAL",
-                                title="Trùng khớp Danh sách Chặn Khẩn cấp trên biên lai (/radar)",
+                                title="Tài khoản trên biên lai trùng danh sách chặn",
                                 detail=(
-                                    f"Tài khoản nhận {rcpt_rules[0].masked_value} trên biên lai "
-                                    "đang bị khóa bởi Fraud Ops."
+                                    f"Số tài khoản nhận {rcpt_rules[0].masked_value} trên biên lai "
+                                    "đang nằm trong danh sách chặn của hệ thống."
                                 ),
                             )
                         )
@@ -368,20 +378,19 @@ class AnalysisPipeline:
                     EvidenceItem(
                         source="receipt_validator",
                         severity="CRITICAL" if receipt_logic.logic_risk_points >= 65 else "HIGH",
-                        title="Bất thường logic nghiệp vụ biên lai",
+                        title="Phát hiện bất thường khi đối chiếu biên lai",
                         detail=r_reason,
                     )
                 )
 
         onnx_step = TraceStep(
             step_id="onnx_and_kb",
-            title="Phân loại Ngữ nghĩa E5 ONNX & Đối chiếu 20 Kịch bản VN",
+            title="Đối chiếu nội dung với các kịch bản lừa đảo phổ biến",
             status="done",
             detail=(
-                f"ONNX: {clf_out.predicted_label} ({clf_out.latency_ms}ms) · "
-                f"Khớp {len(matched_pbs)} kịch bản."
+                f"Đã phân loại ngữ cảnh và ghi nhận {len(matched_pbs)} kịch bản tương tự."
                 if clf_out.available
-                else f"Đối chiếu từ điển ngữ nghĩa ({len(matched_pbs)} kịch bản khớp)."
+                else f"Đã đối chiếu kho kịch bản ({len(matched_pbs)} kịch bản tương tự)."
             ),
             duration_ms=int((time.perf_counter() - t_onnx) * 1000),
         )
@@ -434,7 +443,7 @@ class AnalysisPipeline:
                 EvidenceItem(
                     source="gemini_vision",
                     severity="HIGH",
-                    title="Bất thường thị giác trên chứng từ",
+                    title="Phát hiện điểm bất thường trên hình ảnh biên lai",
                     detail=vis_anom,
                 )
             )
@@ -454,10 +463,10 @@ class AnalysisPipeline:
                         EvidenceItem(
                             source="fraud_ops_radar",
                             severity="CRITICAL",
-                            title="Trùng khớp Danh sách Chặn Khẩn cấp qua lời thoại (/radar)",
+                            title="Thông tin trong cuộc gọi trùng danh sách chặn",
                             detail=(
-                                f"Thực thể {post_rules[0].masked_value} trong cuộc gọi "
-                                "đang bị khóa bởi Fraud Ops."
+                                f"Dấu hiệu {post_rules[0].masked_value} trong cuộc gọi "
+                                "đang nằm trong danh sách chặn của hệ thống."
                             ),
                         )
                     )
@@ -498,16 +507,13 @@ class AnalysisPipeline:
             ),
         )
 
-        llm_badge = (
-            " [Chế độ dự phòng Tầng 1]"
-            if llm_res.degraded_mode
-            else f" [{llm_res.llm_model or self.settings.gemini_model}]"
-        )
+        verdict_vi = _VERDICT_SHORT_VI.get(cal.verdict, "đã đánh giá")
+        fallback_note = " · chế độ phân tích nhanh nội bộ" if llm_res.degraded_mode else ""
         llm_step = TraceStep(
             step_id="multimodal_calibration",
-            title="Thẩm định Đa phương thức & Hiệu chuẩn Điểm Rủi ro",
+            title="Tổng hợp bằng chứng và đánh giá mức độ rủi ro",
             status="warning" if llm_res.degraded_mode else "done",
-            detail=f"Điểm hiệu chuẩn: {cal.final_score}/100 ({cal.verdict}){llm_badge}",
+            detail=f"Mức độ rủi ro: {cal.final_score}/100 ({verdict_vi}){fallback_note}",
             duration_ms=int((time.perf_counter() - t_llm) * 1000),
         )
         trace.append(llm_step)

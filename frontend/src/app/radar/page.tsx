@@ -62,7 +62,7 @@ export default function RadarPage() {
       }
       setBanner({
         kind: "err",
-        text: e instanceof Error ? e.message : "Không thể tải dữ liệu đồ thị Fraud Ops.",
+        text: e instanceof Error ? e.message : "Không thể tải dữ liệu giám sát lúc này.",
       });
       retryTimerRef.current = window.setTimeout(() => {
         if (mountedRef.current && reqId === graphReqIdRef.current) {
@@ -125,13 +125,13 @@ export default function RadarPage() {
       setBanner({
         kind: refreshed ? "ok" : "err",
         text: refreshed
-          ? `Đã kích hoạt lệnh chặn khẩn cấp cho ${rule.masked_value}! Hãy thử bấm kiểm định ở API Playground bên dưới.`
-          : `Đã khóa ${rule.masked_value} trên máy chủ nhưng làm mới đồ thị tạm thời thất bại (tự động thử lại sau 5s).`,
+          ? `Đã bật quy tắc chặn cho ${rule.masked_value}. Bạn có thể kiểm tra ngay hiệu lực ở mục kiểm thử giao dịch bên dưới.`
+          : `Đã chặn ${rule.masked_value} nhưng tạm thời chưa cập nhật được sơ đồ (hệ thống tự thử lại sau 5 giây).`,
       });
     } catch (e) {
       setBanner({
         kind: "err",
-        text: e instanceof Error ? e.message : "Không thể ban hành quy tắc chặn.",
+        text: e instanceof Error ? e.message : "Không thể thêm quy tắc chặn lúc này.",
       });
     } finally {
       setBusyCampaignId(null);
@@ -162,14 +162,14 @@ export default function RadarPage() {
       setBanner({
         kind: refreshed ? "ok" : "err",
         text: refreshed
-          ? `Đã mã hóa SHA-256 & khóa thực thể ${rule.masked_value} (TTL 30 phút).`
-          : `Đã khóa ${rule.masked_value} trên máy chủ nhưng làm mới đồ thị tạm thời thất bại (tự động thử lại sau 5s).`,
+          ? `Đã bật quy tắc chặn cho ${rule.masked_value} (tự động hết hạn sau 30 phút).`
+          : `Đã chặn ${rule.masked_value} nhưng tạm thời chưa cập nhật được sơ đồ (hệ thống tự thử lại sau 5 giây).`,
       });
       return true;
     } catch (e) {
       setBanner({
         kind: "err",
-        text: e instanceof Error ? e.message : "Lệnh chặn bị từ chối.",
+        text: e instanceof Error ? e.message : "Yêu cầu chặn không được chấp nhận.",
       });
       return false;
     } finally {
@@ -192,13 +192,13 @@ export default function RadarPage() {
       setBanner({
         kind: refreshed ? "ok" : "err",
         text: refreshed
-          ? "Đã thu hồi lệnh chặn tạm thời khỏi danh sách kích hoạt."
-          : "Đã thu hồi lệnh chặn trên máy chủ nhưng làm mới đồ thị tạm thời thất bại.",
+          ? "Đã gỡ quy tắc chặn tạm thời khỏi hệ thống."
+          : "Đã gỡ quy tắc chặn nhưng tạm thời chưa cập nhật được sơ đồ.",
       });
     } catch (e) {
       setBanner({
         kind: "err",
-        text: e instanceof Error ? e.message : "Không thể thu hồi quy tắc chặn.",
+        text: e instanceof Error ? e.message : "Không thể gỡ quy tắc chặn lúc này.",
       });
     } finally {
       setIsMutating(false);
@@ -220,13 +220,13 @@ export default function RadarPage() {
       setBanner({
         kind: refreshed ? "ok" : "err",
         text: refreshed
-          ? `Đã khôi phục trạng thái Demo sạch (gỡ ${res.cleared_rules} lệnh chặn tạm thời).`
-          : `Đã gỡ ${res.cleared_rules} lệnh chặn nhưng làm mới đồ thị tạm thời thất bại (tự động thử lại sau 5s).`,
+          ? `Đã đặt lại dữ liệu mẫu (đã gỡ ${res.cleared_rules} quy tắc chặn tạm thời).`
+          : `Đã gỡ ${res.cleared_rules} quy tắc chặn nhưng tạm thời chưa cập nhật được sơ đồ (hệ thống tự thử lại sau 5 giây).`,
       });
     } catch (e) {
       setBanner({
         kind: "err",
-        text: e instanceof Error ? e.message : "Không thể reset danh sách chặn.",
+        text: e instanceof Error ? e.message : "Không thể đặt lại danh sách chặn lúc này.",
       });
     } finally {
       setIsMutating(false);
@@ -239,14 +239,15 @@ export default function RadarPage() {
         <div>
           <div className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-sky-300">
             <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Closed-Loop Fintech Fraud Operations Workspace</span>
+            <span>Quy trình xử lý gian lận toàn diện</span>
           </div>
           <h1 className="mt-1.5 text-lg font-bold text-ink sm:text-xl">
-            Trung tâm Điều hành Chống Gian lận Khép kín (/radar)
+            Trung tâm giám sát gian lận
           </h1>
           <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-secondary">
-            Biến cảnh báo từ người dùng cuối thành lá chắn toàn hệ sinh thái trong 1 cú nhấp chuột —
-            mọi SĐT và STK đều được băm SHA-256 &amp; che dấu PII ngay từ tầng lưu trữ.
+            Theo dõi các nhóm dấu hiệu nghi vấn và bật quy tắc chặn trên toàn hệ thống chỉ với một
+            chạm. Số điện thoại và số tài khoản đều được che giấu, không lưu dữ liệu định danh cá
+            nhân chưa qua xử lý.
           </p>
         </div>
 
@@ -257,14 +258,14 @@ export default function RadarPage() {
             className="inline-flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-xl border border-border-strong bg-surface-subtle px-3.5 py-2 text-xs font-semibold text-ink hover:border-sky-400"
           >
             <RefreshCw className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
-            <span>Làm mới Đồ thị</span>
+            <span>Làm mới dữ liệu</span>
           </button>
           <Link
             href="/"
             className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3.5 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-500/25"
           >
             <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Về Workbench &amp; Ví 30s</span>
+            <span>Về trang kiểm tra</span>
           </Link>
         </div>
       </section>
@@ -272,25 +273,25 @@ export default function RadarPage() {
       {graph && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
-            <p className="text-xs text-ink-muted">Tổng Hồ sơ Đã Thẩm định</p>
+            <p className="text-xs text-ink-muted">Hồ sơ đã kiểm tra</p>
             <p className="tabular-num mt-1 font-mono text-2xl font-bold text-ink">
               {graph.stats.total_cases ?? 0}
             </p>
           </div>
           <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
-            <p className="text-xs text-ink-muted">Chiến dịch Lừa đảo Bùng phát</p>
+            <p className="text-xs text-ink-muted">Nhóm chiến dịch nghi vấn</p>
             <p className="tabular-num mt-1 font-mono text-2xl font-bold text-rose-400">
               {graph.stats.emerging_campaigns ?? graph.campaigns.length}
             </p>
           </div>
           <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
-            <p className="text-xs text-ink-muted">Thực thể IOC Đã Ghi nhận</p>
+            <p className="text-xs text-ink-muted">Dấu hiệu đang theo dõi</p>
             <p className="tabular-num mt-1 font-mono text-2xl font-bold text-sky-300">
               {graph.stats.tracked_iocs ?? graph.nodes.length}
             </p>
           </div>
           <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
-            <p className="text-xs text-ink-muted">Quy tắc Chặn Đang Bật</p>
+            <p className="text-xs text-ink-muted">Quy tắc chặn đang bật</p>
             <p className="tabular-num mt-1 font-mono text-2xl font-bold text-amber-300">
               {graph.active_block_rules.length}
             </p>

@@ -1730,7 +1730,7 @@ def test_delta_r8_newline_date_acct_malformed_row_overlength_ref_and_tlv_vs_crc(
     assert v_dup.kind == "INVALID_CRC_VIETQR"
     assert v_dup.crc_valid is True
     assert v_dup.tlv_valid is False
-    assert any("tlv" in ev.title.lower() for ev in dup_ev)
+    assert any("cấu trúc" in ev.title.lower() and "crc" not in ev.title.lower() for ev in dup_ev)
     assert all("không khớp" not in ev.detail.lower() for ev in dup_ev)
 
 

@@ -7,31 +7,48 @@ const VALID_VERDICTS = new Set<VerdictLevel>([
   "CRITICAL_SCAM",
 ]);
 
+const VALIDATION_FIELD_LABELS: Record<string, string> = {
+  analyst_pin: "mã PIN xác thực",
+  value: "giá trị cần chặn",
+  ioc_type: "loại dấu hiệu",
+  ioc_hash: "mã nhận diện dấu hiệu",
+  reason: "lý do chặn",
+  text: "nội dung cần kiểm tra",
+  url: "đường dẫn",
+  mode: "chế độ kiểm tra",
+  transfer_amount: "số tiền dự kiến chuyển",
+  expected_merchant_account: "số tài khoản cửa hàng",
+};
+
 /**
- * Format FastAPI validation error array without echoing rejected raw user inputs (e.g. PIN or STK).
+ * Format FastAPI validation error array without echoing rejected raw user inputs (e.g. PIN or STK)
+ * or leaking internal field identifiers to end users.
  */
 export function sanitizeValidationErrorDetail(detail: unknown): string {
   if (!Array.isArray(detail) || detail.length === 0) {
-    return "Dữ liệu đầu vào không hợp lệ.";
+    return "Dữ liệu đầu vào chưa đúng định dạng. Vui lòng kiểm tra lại.";
   }
   const first = detail[0] as Record<string, unknown> | null;
   if (!first || typeof first !== "object") {
-    return "Dữ liệu đầu vào không hợp lệ.";
+    return "Dữ liệu đầu vào chưa đúng định dạng. Vui lòng kiểm tra lại.";
   }
   const locArr = Array.isArray(first.loc) ? first.loc : [];
-  const field = String(locArr[locArr.length - 1] ?? "payload").replace(/[^a-zA-Z0-9_.-]/g, "");
-  const msg = typeof first.msg === "string" ? first.msg : "Không đúng định dạng yêu cầu";
-  return `Lỗi trường '${field}': ${msg}.`;
+  const rawField = String(locArr[locArr.length - 1] ?? "").replace(/[^a-zA-Z0-9_.-]/g, "");
+  const fieldLabel = VALIDATION_FIELD_LABELS[rawField];
+  if (fieldLabel) {
+    return `Thông tin ${fieldLabel} chưa đúng định dạng yêu cầu. Vui lòng kiểm tra lại.`;
+  }
+  return "Dữ liệu đầu vào chưa đúng định dạng yêu cầu. Vui lòng kiểm tra lại.";
 }
 
 /**
  * Mask raw phone/account identifiers for UI display while leaving already-masked values intact.
  */
 export function maskDisplayIoc(raw: string | null | undefined): string {
-  if (!raw) return "N/A";
+  if (!raw) return "Chưa có";
   const trimmed = raw.trim();
   if (!trimmed || trimmed.includes("****")) {
-    return trimmed || "N/A";
+    return trimmed || "Chưa có";
   }
   const digits = trimmed.replace(/\D/g, "");
   if (/^0[35789]\d{8}$/.test(digits)) {
@@ -48,7 +65,7 @@ export function maskDisplayIoc(raw: string | null | undefined): string {
 
 export function formatVietQrAmount(amount?: string | null): string {
   if (!amount || !amount.trim()) {
-    return "QR tĩnh / Tự nhập";
+    return "QR tĩnh (tự nhập số tiền)";
   }
   const trimmed = amount.trim();
   const parsed = Number(trimmed);
@@ -70,7 +87,7 @@ export function shouldShowReceiptCard(report: {
 
 export function validateAnalystPinInput(pin: string): string | null {
   if (pin.trim().length < 4) {
-    return "Vui lòng nhập Mã PIN chuyên viên Fraud Ops (tối thiểu 4 ký tự) ở ô PIN trước khi thao tác.";
+    return "Vui lòng nhập mã PIN xác thực (tối thiểu 4 ký tự) trước khi thao tác.";
   }
   return null;
 }

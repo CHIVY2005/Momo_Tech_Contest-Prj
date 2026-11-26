@@ -630,14 +630,20 @@ class CaseRepository:
                         (hash_ioc(prot_type, prot_raw), prot_type),
                     )
 
-            existing = conn.execute("SELECT COUNT(*) AS cnt FROM campaigns").fetchone()
-            if existing and int(existing["cnt"]) > 0:
-                return
-
             seed_file = Path(seed_path)
             if not seed_file.exists():
                 return
             payload = json.loads(seed_file.read_text(encoding="utf-8"))
+
+            existing = conn.execute("SELECT COUNT(*) AS cnt FROM campaigns").fetchone()
+            if existing and int(existing["cnt"]) > 0:
+                for camp in payload.get("campaigns", []):
+                    conn.execute(
+                        "UPDATE campaigns SET title_vi = ?, recommended_action = ? "
+                        "WHERE campaign_id = ?",
+                        (camp["title_vi"], camp["recommended_action"], camp["campaign_id"]),
+                    )
+                return
             for camp in payload.get("campaigns", []):
                 cid: str = camp["campaign_id"]
                 p_type: IocType = camp["primary_ioc_type"]
@@ -1152,7 +1158,8 @@ class CaseRepository:
             ).fetchone()
             if prot is not None:
                 raise ProtectedDemoIocError(
-                    "IOC này thuộc kịch bản Demo an toàn gốc nên được khóa bảo vệ chống ghi đè."
+                    "Tên miền hoặc tài khoản này thuộc danh sách chính thức được bảo vệ, "
+                    "không thể thêm vào danh sách chặn."
                 )
 
             if not has_raw:

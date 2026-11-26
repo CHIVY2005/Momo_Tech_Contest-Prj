@@ -34,13 +34,13 @@ logger = logging.getLogger(__name__)
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _OVERSIZE_REPLY = (
-    "⚠️ Tệp gửi lên vượt quá giới hạn an toàn 10 MB. "
-    "Vui lòng gửi ảnh/ghi âm nhỏ hơn để kiểm tra."
+    "⚠️ Tệp gửi lên vượt quá dung lượng tối đa 10 MB. "
+    "Vui lòng gửi ảnh hoặc tệp ghi âm nhỏ hơn để kiểm tra."
 )
 _EMPTY_GUIDANCE_REPLY = (
-    "🛡 <b>VeriShield AI:</b> Hãy chuyển tiếp (Forward) tin nhắn đáng ngờ, đường link, "
-    "ảnh biên lai/VietQR hoặc tin nhắn thoại vào đây để kiểm tra tức thì! "
-    "(Gõ /demo để thử mẫu 1-chạm hoặc /help để xem hướng dẫn)"
+    "🛡 <b>VeriShield AI:</b> Hãy gửi hoặc chuyển tiếp tin nhắn đáng ngờ, đường dẫn, "
+    "ảnh biên lai, mã VietQR hoặc tin nhắn thoại vào đây để kiểm tra ngay.\n"
+    "(Gõ /demo để thử tình huống mẫu một chạm hoặc /help để xem hướng dẫn)"
 )
 
 __all__ = [
@@ -139,7 +139,7 @@ async def _analyze_telegram_payload(
         if not demo_id:
             return (
                 None,
-                "⚠️ Không tìm thấy kịch bản mẫu. Hãy chọn <code>/demo 1</code> đến "
+                "⚠️ Không tìm thấy tình huống mẫu. Hãy chọn <code>/demo 1</code> đến "
                 "<code>/demo 5</code> hoặc bấm một nút bên dưới:",
                 build_demo_inline_keyboard(pipeline.list_demos()),
             )
@@ -153,8 +153,8 @@ async def _analyze_telegram_payload(
         if not demo_id:
             return (
                 None,
-                "⚠️ Chỉ hỗ trợ <code>/demo 1</code> đến <code>/demo 5</code>. "
-                "Hoặc chọn nhanh kịch bản bên dưới:",
+                "⚠️ Hiện có 5 tình huống mẫu từ <code>/demo 1</code> đến <code>/demo 5</code>. "
+                "Hoặc chọn nhanh bên dưới:",
                 build_demo_inline_keyboard(pipeline.list_demos()),
             )
         async with telegram_typing_scope(token, chat_id):
@@ -224,8 +224,8 @@ async def _analyze_telegram_payload(
         except InvalidMediaError:
             return (
                 None,
-                "⚠️ Tệp hình ảnh/âm thanh bị lỗi định dạng hoặc không đọc được. "
-                "Vui lòng gửi lại ảnh JPG/PNG/WebP hoặc ghi âm WAV/MP3/OGG/M4A hợp lệ.",
+                "⚠️ Tệp hình ảnh hoặc ghi âm bị lỗi định dạng nên không thể đọc được. "
+                "Vui lòng gửi lại ảnh JPG, PNG, WebP hoặc tệp âm thanh WAV, MP3, OGG, M4A hợp lệ.",
                 None,
             )
 
@@ -249,7 +249,7 @@ async def handle_telegram_update(
     token = settings.telegram_bot_token.strip()
     if env.callback_query_id and token:
         await answer_telegram_callback_query(
-            token, env.callback_query_id, "⏳ VeriShield AI đang thẩm định…"
+            token, env.callback_query_id, "⏳ VeriShield AI đang kiểm tra…"
         )
 
     attachment = (

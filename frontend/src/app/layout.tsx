@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 
 import { TopNav } from "@/components/layout/TopNav";
+import { BRAND_COPY } from "@/lib/copy";
 
 import "./globals.css";
 
@@ -20,9 +21,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VeriShield AI v2.0 — Điều tra Lừa đảo Đa phương thức & Phòng vệ Ví",
-  description:
-    "Hệ thống kết hợp Pháp y Chứng từ 4 lớp, Mô hình E5 ONNX nội bộ, Khóa làm nguội 30 giây và Trung tâm Fraud Ops khép kín.",
+  title: BRAND_COPY.pageTitle,
+  description: BRAND_COPY.pageDescription,
 };
 
 export default function RootLayout({
@@ -56,7 +56,7 @@ export default function RootLayout({
                   </span>
                 </div>
                 <p className="hidden text-xs text-ink-muted sm:block">
-                  Pháp y Đa phương thức · Phòng vệ Phút 89 · Fraud Ops Khép kín
+                  {BRAND_COPY.tagline}
                 </p>
               </div>
             </Link>
@@ -74,14 +74,22 @@ export default function RootLayout({
         </main>
 
         <footer className="mt-10 border-t border-border-subtle/80 bg-surface-deep py-5">
-          <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-2 px-4 text-xs text-ink-muted sm:flex-row sm:items-center sm:px-6 lg:px-8">
-            <p>
-              <strong className="font-semibold text-ink-secondary">VeriShield AI v2.0</strong> — Kiến
-              trúc 3 Tầng (Deterministic Forensics + Pruned E5 INT8 ONNX + Gemini 2.5 Flash).
-            </p>
-            <p className="font-mono text-[11px] text-ink-muted">
-              100% Dữ liệu Tổng hợp · Ẩn danh hóa IOC · Không lưu PII thô
-            </p>
+          <div className="mx-auto max-w-7xl space-y-2.5 px-4 text-xs text-ink-muted sm:px-6 lg:px-8">
+            <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
+              <p>
+                <strong className="font-semibold text-ink-secondary">{BRAND_COPY.name}</strong> —{" "}
+                {BRAND_COPY.footerNotice}
+              </p>
+              <p className="text-[11px] text-ink-muted">{BRAND_COPY.privacySummary}</p>
+            </div>
+            <details className="text-[11px] text-ink-muted">
+              <summary className="inline-flex cursor-pointer items-center font-medium text-ink-secondary hover:text-ink">
+                Thông tin kỹ thuật hệ thống
+              </summary>
+              <p className="mt-1.5 leading-relaxed text-ink-muted">
+                {BRAND_COPY.technicalArchitectureSummary}
+              </p>
+            </details>
           </div>
         </footer>
       </body>

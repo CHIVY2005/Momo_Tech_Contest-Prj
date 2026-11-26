@@ -5,7 +5,7 @@ import { consumeUtf8SseStream, type ParsedSseEvent, parseSseChunks } from "../ss
 
 test("parseSseChunks reconstructs Vietnamese JSON events split across arbitrary chunk boundaries", () => {
   const fullStream =
-    'event: trace\ndata: {"step_id":"media_forensics","title":"Pháp y ảnh & VietQR","status":"done","detail":"Đã quét 1 mã QR","duration_ms":18}\n\n' +
+    'event: trace\ndata: {"step_id":"media_forensics","title":"Xác thực ảnh VietQR","status":"done","detail":"Đã quét 1 mã QR","duration_ms":18}\n\n' +
     'event: result\r\ndata: {"case_id":"vs_demo01","verdict":"CRITICAL_SCAM","summary_vi":"Cảnh báo giả danh Công an thúc ép chuyển khoản"}\r\n\r\n' +
     'event: trace\ndata: {"step_id":"incomplete"';
 
@@ -22,7 +22,7 @@ test("parseSseChunks reconstructs Vietnamese JSON events split across arbitrary 
   assert.equal(second.events[0]?.event, "trace");
   assert.deepEqual(second.events[0]?.data, {
     step_id: "media_forensics",
-    title: "Pháp y ảnh & VietQR",
+    title: "Xác thực ảnh VietQR",
     status: "done",
     detail: "Đã quét 1 mã QR",
     duration_ms: 18,

@@ -13,11 +13,11 @@ import urllib.request
 from pathlib import Path
 
 BOT_COMMANDS = [
-    {"command": "start", "description": "Giới thiệu & chọn thử nhanh 5 kịch bản 1-chạm"},
-    {"command": "demo", "description": "Chạy thử 5 kịch bản lừa đảo mẫu (Fake Bill, VietQR, Công an)"},
-    {"command": "bill", "description": "Chế độ Chủ shop: gửi ảnh biên lai kèm /bill <STK shop>"},
-    {"command": "call", "description": "Chế độ Đang nghe điện thoại thúc ép (Khóa làm nguội 30s)"},
-    {"command": "help", "description": "Hướng dẫn định dạng tin nhắn, ảnh, ghi âm (≤ 10 MB)"},
+    {"command": "start", "description": "Giới thiệu và thử nhanh 5 tình huống mẫu một chạm"},
+    {"command": "demo", "description": "Thử 5 tình huống lừa đảo mẫu (biên lai giả, VietQR, giả công an)"},
+    {"command": "bill", "description": "Người bán kiểm tra ảnh biên lai: /bill <số tài khoản>"},
+    {"command": "call", "description": "Kiểm tra khi đang nghe điện thoại lạ (tạm dừng 30 giây)"},
+    {"command": "help", "description": "Hướng dẫn gửi tin nhắn, ảnh và tệp ghi âm (tối đa 10 MB)"},
 ]
 
 

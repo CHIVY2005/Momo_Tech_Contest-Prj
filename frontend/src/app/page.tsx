@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, Cpu, Radar, Send } from "lucide-react";
+import { AlertCircle, CheckCircle2, Radar, Send } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -141,7 +141,11 @@ export default function HomePage() {
       }
     } catch (err) {
       if ((err as Error).name !== "AbortError" && abortRef.current === controller) {
-        setErrorMsg(err instanceof Error ? err.message : "Đã xảy ra lỗi khi kết nối máy chủ.");
+        setErrorMsg(
+          err instanceof Error
+            ? err.message
+            : "Không thể kết nối tới máy chủ lúc này. Vui lòng thử lại sau.",
+        );
         setIsFormCollapsed(false);
       }
     } finally {
@@ -186,17 +190,16 @@ export default function HomePage() {
         <div className="min-w-0">
           {!canCollapseForm && (
             <div className="mb-1 inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-300">
-              <span>Bảo vệ từ Phút 01 (Tin nhắn / QR / Bill giả) tới Phút 89 (Trước Chuyển Tiền)</span>
+              <span>Kiểm tra tin nhắn, mã QR, biên lai và ngăn chặn lừa đảo trước khi chuyển tiền</span>
             </div>
           )}
           <h1 className="text-base font-bold tracking-tight text-ink sm:text-lg">
-            Không gian Điều tra Lừa đảo Đa phương thức &amp; Phòng vệ Giao dịch Số
+            Phân tích bằng chứng số và bảo vệ tài sản trước khi chuyển tiền
           </h1>
           {!canCollapseForm && (
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-secondary">
-              Giải mã EMVCo VietQR, pháp y ảnh ELA 4 lớp, phân loại ngữ nghĩa{" "}
-              <code className="font-mono text-sky-300">multilingual-e5-small INT8 ONNX</code> và suy
-              luận đa phương thức cô lập an toàn.
+              Kiểm tra nhanh tin nhắn nghi ngờ, đường dẫn lạ, mã VietQR, tính xác thực của hình ảnh
+              biên lai và tệp ghi âm cuộc gọi để phát hiện sớm dấu hiệu bất thường.
             </p>
           )}
         </div>
@@ -206,11 +209,7 @@ export default function HomePage() {
             <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
               <span className="tabular-num inline-flex items-center gap-1 rounded-md border border-emerald-500/35 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
                 <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>API Sẵn sàng ({health.playbooks_count} kịch bản VN)</span>
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-md border border-border-strong bg-surface-subtle px-2 py-0.5 font-mono text-ink-secondary">
-                <Cpu className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
-                <span>{health.onnx_classifier_loaded ? "ONNX Active" : "Hybrid KB Mode"}</span>
+                <span>Hệ thống sẵn sàng ({health.playbooks_count} kịch bản lừa đảo phổ biến)</span>
               </span>
             </div>
           )}
@@ -223,14 +222,14 @@ export default function HomePage() {
                 rel="noopener noreferrer"
                 className="font-semibold text-sky-300 underline hover:text-sky-200"
               >
-                Mở Bot Telegram 1-Chạm
+                Kiểm tra qua Telegram
               </a>
             ) : (
-              <span>Hỗ trợ Bot Telegram 1-Chạm</span>
+              <span>Hỗ trợ kiểm tra qua Telegram</span>
             )}
-            <span>&amp;</span>
+            <span>·</span>
             <Link href="/radar" className="font-semibold text-sky-300 underline hover:text-sky-200">
-              Khóa IOC Khép kín (/radar)
+              Trung tâm giám sát gian lận
             </Link>
           </div>
         </div>
@@ -300,10 +299,11 @@ export default function HomePage() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold text-sky-200">
-                        Đã ghi nhận Thực thể Đáng ngờ vào Đồ thị Chiến dịch
+                        Đã ghi nhận dấu hiệu đáng ngờ vào hệ thống giám sát
                       </p>
                       <p className="mt-0.5 text-[11px] text-ink-muted">
-                        Chuyên viên Fraud Ops có thể khóa khẩn cấp IOC (ẩn danh hóa PII) trên toàn hệ thống.
+                        Đội ngũ vận hành có thể chặn nhanh dấu hiệu này trên toàn hệ thống mà không
+                        lưu dữ liệu định danh cá nhân chưa qua xử lý.
                       </p>
                     </div>
                     <Link
@@ -311,7 +311,7 @@ export default function HomePage() {
                       className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-sky-400/50 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-500/25"
                     >
                       <Radar className="h-4 w-4" aria-hidden="true" />
-                      <span>Mở /radar</span>
+                      <span>Mở trung tâm giám sát</span>
                     </Link>
                   </div>
                 </div>

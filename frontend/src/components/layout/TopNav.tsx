@@ -24,7 +24,7 @@ export function TopNav() {
           className={`h-4 w-4 shrink-0 ${isHome ? "text-amber-300" : "text-amber-400/80"}`}
           aria-hidden="true"
         />
-        <span>Workbench &amp; Ví 30s</span>
+        <span>Kiểm tra &amp; bảo vệ</span>
       </Link>
       <Link
         href="/radar"
@@ -39,7 +39,7 @@ export function TopNav() {
           className={`h-4 w-4 shrink-0 ${isRadar ? "text-sky-300" : "text-sky-400"}`}
           aria-hidden="true"
         />
-        <span>Fraud Ops Radar</span>
+        <span>Trung tâm giám sát gian lận</span>
       </Link>
     </nav>
   );

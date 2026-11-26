@@ -184,7 +184,7 @@ async def test_telegram_demo_callback_and_call_command_run_full_pipeline(tmp_pat
         )
         assert call_res["delivered"] is True
         assert call_res["risk_score"] >= 55
-        assert "Khóa làm nguội 30s" in call_res["reply_text"]
+        assert "Tạm dừng để kiểm tra 30 giây" in call_res["reply_text"]
         assert "<script>" not in call_res["reply_text"]
 
 

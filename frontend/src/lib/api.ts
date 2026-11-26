@@ -43,12 +43,12 @@ async function extractErrorMessage(res: Response): Promise<string> {
     // Ignore non-JSON error bodies
   }
   if (res.status === 413) {
-    return "Tệp tải lên vượt quá giới hạn an toàn 10 MB.";
+    return "Tệp tải lên vượt quá dung lượng tối đa 10 MB.";
   }
   if (res.status === 429) {
-    return "Quá giới hạn số lượt yêu cầu mỗi phút. Vui lòng thử lại sau ít giây.";
+    return "Bạn thao tác quá nhanh. Vui lòng thử lại sau ít giây.";
   }
-  return `Yêu cầu thất bại (HTTP ${res.status}).`;
+  return "Không thể hoàn thành yêu cầu lúc này. Vui lòng thử lại sau.";
 }
 
 export async function fetchHealth(signal?: AbortSignal): Promise<SystemHealthResponse> {
@@ -81,7 +81,7 @@ export async function analyzeSync(
   }
   const parsed: unknown = await res.json();
   if (!isValidAnalysisReport(parsed)) {
-    throw new Error("Phản hồi phân tích từ máy chủ không đúng định dạng chuẩn.");
+    throw new Error("Hệ thống chưa nhận được dữ liệu phản hồi hợp lệ. Vui lòng thử lại.");
   }
   return parsed;
 }
@@ -114,7 +114,7 @@ export async function analyzeStream(
       }
     } else if (ev.event === "result") {
       if (!isValidAnalysisReport(ev.data)) {
-        throw new Error("Khung kết quả SSE không hợp lệ.");
+        throw new Error("Dữ liệu kết quả nhận về chưa hợp lệ. Vui lòng thử lại.");
       }
       finalReport = ev.data;
       handlers.onResult?.(finalReport);
@@ -122,7 +122,7 @@ export async function analyzeStream(
   });
 
   if (!finalReport) {
-    throw new Error("Luồng phân tích kết thúc nhưng chưa nhận được kết quả cuối cùng.");
+    throw new Error("Quá trình kiểm tra đã dừng nhưng chưa nhận được kết quả cuối cùng. Vui lòng thử lại.");
   }
   return finalReport;
 }

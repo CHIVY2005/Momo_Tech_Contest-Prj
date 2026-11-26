@@ -4,6 +4,7 @@ import { FileCheck2, GlobeLock, Image as ImageIcon, ListChecks, QrCode } from "l
 import { type KeyboardEvent, useRef, useState } from "react";
 
 import { shouldShowReceiptCard } from "@/lib/api";
+import { formatEvidenceSource, SEVERITY_COPY } from "@/lib/copy";
 import type { AnalysisReport, SeverityLevel } from "@/lib/types";
 
 import { ElaCompareView } from "./ElaCompareView";
@@ -40,31 +41,31 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
   }> = [
     {
       id: "all",
-      label: "Bằng chứng Tổng hợp",
+      label: "Tổng hợp bằng chứng",
       count: report.evidence.length,
       Icon: ListChecks,
     },
     {
       id: "ela",
-      label: "Pháp y Ảnh & ELA",
+      label: "Tính xác thực hình ảnh",
       count: report.image_forensics ? 1 : 0,
       Icon: ImageIcon,
     },
     {
       id: "receipt",
-      label: "Nghiệp vụ Biên lai",
+      label: "Đối chiếu biên lai",
       count: showReceiptCard ? 1 : 0,
       Icon: FileCheck2,
     },
     {
       id: "vietqr",
-      label: "Giải mã VietQR",
+      label: "Kiểm tra mã VietQR",
       count: report.vietqr_findings.length,
       Icon: QrCode,
     },
     {
       id: "url",
-      label: "URL & Sandbox",
+      label: "Kiểm tra đường dẫn",
       count: report.url_findings.length + (report.sandbox ? 1 : 0),
       Icon: GlobeLock,
     },
@@ -93,12 +94,12 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
 
   return (
     <section
-      aria-label="Hồ sơ bằng chứng pháp y chi tiết"
+      aria-label="Chi tiết bằng chứng kiểm tra"
       className="rounded-2xl border border-border-subtle bg-surface/95 p-5 shadow-lg"
     >
       <div
         role="tablist"
-        aria-label="Các lớp bằng chứng kỹ thuật"
+        aria-label="Các mục bằng chứng kiểm tra"
         className="mb-4 flex flex-wrap gap-2 border-b border-border-subtle pb-3"
       >
         {tabs.map(({ id, label, count, Icon }, idx) => {
@@ -138,7 +139,7 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
           <div className="space-y-2.5">
             {report.evidence.length === 0 ? (
               <p className="text-xs text-ink-muted">
-                Không ghi nhận chỉ báo rủi ro kỹ thuật nào trên nội dung vừa kiểm tra.
+                Chưa ghi nhận dấu hiệu bất thường nào từ dữ liệu bạn cung cấp.
               </p>
             ) : (
               report.evidence.map((ev, idx) => (
@@ -149,13 +150,15 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-ink">{ev.title}</span>
                     <div className="flex items-center gap-1.5">
-                      <span className="font-mono text-[10px] text-ink-muted">{ev.source}</span>
+                      <span className="text-[11px] text-ink-muted">
+                        {formatEvidenceSource(ev.source)}
+                      </span>
                       <span
-                        className={`rounded border px-2 py-0.5 font-mono text-[10px] font-bold ${
+                        className={`rounded border px-2 py-0.5 text-[10px] font-bold ${
                           SEVERITY_STYLES[ev.severity]
                         }`}
                       >
-                        {ev.severity}
+                        {SEVERITY_COPY[ev.severity]}
                       </span>
                     </div>
                   </div>
@@ -179,7 +182,7 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
             />
           ) : (
             <p className="text-xs text-ink-muted">
-              Chưa có tệp hình ảnh nào được tải lên trong phiên phân tích này.
+              Chưa có hình ảnh nào được tải lên trong lượt kiểm tra này.
             </p>
           ))}
 
@@ -193,7 +196,7 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
             />
           ) : (
             <p className="text-xs text-ink-muted">
-              Nội dung hiện tại không phải ảnh chụp biên lai chuyển khoản ngân hàng.
+              Nội dung này không phải ảnh chụp biên lai chuyển khoản ngân hàng.
             </p>
           ))}
 

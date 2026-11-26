@@ -14,9 +14,9 @@ from app.schemas import (
 from app.services.ai_orchestrator import LLMReasoningResult
 
 MERCHANT_HONESTY_BANNER: Final[str] = (
-    "LƯU Ý BẮT BUỘC CHO TIỂU THƯƠNG: Ảnh chụp màn hình biên lai KHÔNG phải bằng chứng tiền đã vào "
-    "tài khoản. Chỉ giao hàng sau khi trực tiếp kiểm tra ứng dụng ngân hàng hoặc Loa thông báo "
-    "ghi nhận biến động số dư."
+    "Lưu ý bắt buộc cho người bán: Ảnh chụp màn hình biên lai không phải bằng chứng tiền đã vào "
+    "tài khoản. Chỉ giao hàng sau khi kiểm tra trực tiếp biến động số dư trên ứng dụng ngân hàng "
+    "hoặc loa thông báo nhận tiền."
 )
 
 
@@ -37,20 +37,28 @@ def build_action_bundle(
     should_hold = hold_for_block or hold_for_score or hold_for_call
 
     if hold_for_block:
-        headline = "CHẶN KHẨN CẤP — TÀI KHOẢN / TÊN MIỀN ĐANG NẰM TRONG DANH SÁCH ĐEN FRAUD OPS"
+        headline = (
+            "Giao dịch bị chặn — số tài khoản hoặc tên miền đang nằm trong danh sách chặn rủi ro "
+            "của hệ thống"
+        )
     elif hold_for_call:
-        headline = "TẠM KHÓA LÀM NGUỘI 30 GIÂY — BẠN ĐANG TRONG CUỘC GỌI CÓ DẤU HIỆU THAO TÚNG"
+        headline = (
+            "Tạm dừng để kiểm tra 30 giây — bạn đang nghe điện thoại và có dấu hiệu bị thúc ép "
+            "chuyển tiền"
+        )
     elif hold_for_score:
-        headline = "TẠM KHÓA LÀM NGUỘI 30 GIÂY — PHÁT HIỆN NGUY CƠ LỪA ĐẢO CAO ('KIỂM TRƯỚC TIN SAU')"
+        headline = (
+            "Tạm dừng để kiểm tra 30 giây — phát hiện dấu hiệu rủi ro cao trước khi chuyển tiền"
+        )
     else:
         headline = ""
 
     questions: list[str] = []
     if should_hold:
         questions = [
-            "Người yêu cầu chuyển tiền có đang giục gấp hoặc bắt bạn giữ bí mật cuộc gọi không?",
-            "Bạn đã gọi lại bằng số di động thông thường (ngoài Zalo/Messenger) để xác nhận chưa?",
-            "Họ có tự xưng Công an, Ngân hàng, NAPAS hoặc hứa trả hoa hồng nhiệm vụ không?",
+            "Người yêu cầu chuyển tiền có đang giục gấp hoặc yêu cầu bạn giữ bí mật cuộc gọi không?",
+            "Bạn đã gọi lại bằng số di động thông thường (ngoài Zalo hoặc Messenger) để xác nhận chưa?",
+            "Họ có tự xưng công an, ngân hàng, NAPAS hoặc hứa trả hoa hồng khi làm nhiệm vụ không?",
         ]
 
     replies: list[str] = list(llm_result.counter_replies)
@@ -71,12 +79,15 @@ def build_action_bundle(
     if not urgent_steps:
         if verdict in ("HIGH_RISK", "CRITICAL_SCAM"):
             urgent_steps = [
-                "Dừng ngay thao tác chuyển tiền và không cung cấp mã OTP / sinh trắc học.",
-                "Tải xuống Hồ sơ Tố giác PDF bên dưới để lưu bằng chứng trình báo cơ quan chức năng.",
+                "Dừng ngay thao tác chuyển tiền và không cung cấp mã OTP hoặc xác thực sinh trắc học.",
+                (
+                    "Tải báo cáo bằng chứng PDF bên dưới để lưu lại thông tin khi cần trình báo "
+                    "cơ quan công an."
+                ),
             ]
         else:
             urgent_steps = [
-                "Luôn thực hành nguyên tắc 'Kiểm trước tin sau' trước mọi yêu cầu chuyển khoản."
+                "Luôn tự xác minh thông tin người nhận qua kênh chính thức trước khi chuyển tiền."
             ]
 
     family_msg = (llm_result.family_alert or "").strip()
@@ -87,8 +98,8 @@ def build_action_bundle(
             else "thủ đoạn lừa đảo trực tuyến mới"
         )
         family_msg = (
-            f"[Cảnh báo Gia đình - VeriShield AI] Cả nhà cảnh giác với {pb_title} "
-            f"(mức rủi ro {risk_score}/100). Tuyệt đối không chuyển tiền gấp khi đang nghe điện thoại lạ!"
+            f"[Cảnh báo từ VeriShield AI] Cả nhà cẩn thận với {pb_title} "
+            f"(mức rủi ro {risk_score}/100). Không chuyển tiền gấp khi đang nghe điện thoại lạ."
         )
 
     merchant_warning: str | None = None

@@ -126,7 +126,7 @@ def _compute_ela_and_tamper_score(rgb_img: Image.Image) -> tuple[int, str, list[
         if ratio >= 6.5 and p98 >= 12.0:
             tamper_score = min(65, int(25 + (ratio - 6.5) * 8))
             reasons.append(
-                f"Bản đồ nhiệt ELA phát hiện vùng nén lệch chuẩn cục bộ (tỷ lệ {ratio:.1f}x)."
+                "Phát hiện vùng ảnh có mức nén bất thường so với phần còn lại, gợi ý dấu hiệu chỉnh sửa."
             )
 
     scaled = np.clip(gray_err * 14.0, 0, 255).astype(np.uint8)
@@ -159,7 +159,7 @@ def analyze_image_forensics(
         tamper_score = max(tamper_score + 45, 55)
         reasons.insert(
             0,
-            f"Phát hiện chữ ký phần mềm chỉnh sửa ảnh trong metadata ({software_tag}).",
+            f"Phát hiện dấu vết phần mềm chỉnh sửa ảnh trong thông tin tệp ({software_tag}).",
         )
 
     qr_list = decode_qr_codes(image_bytes)

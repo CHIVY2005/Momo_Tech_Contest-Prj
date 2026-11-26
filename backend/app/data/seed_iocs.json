@@ -11,11 +11,11 @@
         {"ioc_type": "phone", "raw_synthetic": "0909000111"},
         {"ioc_type": "bank_account", "raw_synthetic": "888800001111"}
       ],
-      "recommended_action": "Chặn tên miền phishing & tài khoản nhận trên toàn hệ sinh thái"
+      "recommended_action": "Chặn tên miền giả mạo và số tài khoản nghi vấn trên toàn hệ thống"
     },
     {
       "campaign_id": "camp_vneid_apk_1126",
-      "title_vi": "Đường dây mạo danh Công an / Cập nhật VNeID (.apk)",
+      "title_vi": "Nhóm giả mạo công an yêu cầu cập nhật VNeID qua tệp .apk",
       "playbook_id": "scam_police_vneid_apk",
       "case_count": 5,
       "primary_ioc_type": "bank_account",
@@ -24,11 +24,11 @@
         {"ioc_type": "domain", "raw_synthetic": "vneid-capnhat-muc2.vip"},
         {"ioc_type": "phone", "raw_synthetic": "0939000222"}
       ],
-      "recommended_action": "Đóng băng tạm thời tài khoản trung gian (Mule Account) & khóa link .apk"
+      "recommended_action": "Chặn tạm thời số tài khoản nghi vấn và đường dẫn tải tệp .apk"
     },
     {
       "campaign_id": "camp_vietqr_refund_1126",
-      "title_vi": "Nhóm lừa quét mã VietQR để 'nhận tiền hoàn đơn hàng'",
+      "title_vi": "Nhóm lừa quét mã VietQR để nhận tiền hoàn đơn hàng",
       "playbook_id": "scam_vietqr_receive_refund",
       "case_count": 4,
       "primary_ioc_type": "bank_account",
@@ -36,7 +36,7 @@
       "co_iocs": [
         {"ioc_type": "phone", "raw_synthetic": "0979000333"}
       ],
-      "recommended_action": "Cảnh báo đỏ tài khoản thụ hưởng khi khách quét VietQR"
+      "recommended_action": "Bật cảnh báo rủi ro rất cao cho tài khoản này khi phát sinh giao dịch quét mã VietQR"
     }
   ]
 }

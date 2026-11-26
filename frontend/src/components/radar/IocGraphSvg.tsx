@@ -3,6 +3,7 @@
 import { Network, Table2 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 
+import { RADAR_KIND_COPY, VERDICT_COPY } from "@/lib/copy";
 import { computeRadarLayout } from "@/lib/radarLayout";
 import type { RadarEdge, RadarNode } from "@/lib/types";
 
@@ -28,33 +29,33 @@ const KIND_META: Record<
     fill: "#f59e0b",
     stroke: "#fde68a",
     textFill: "#090e1a",
-    labelVi: "Chiến dịch Lừa đảo",
-    shortVi: "Chiến dịch",
-    shapeLabel: "Lục giác",
+    labelVi: RADAR_KIND_COPY.campaign.label,
+    shortVi: RADAR_KIND_COPY.campaign.shortLabel,
+    shapeLabel: RADAR_KIND_COPY.campaign.shapeLabel,
   },
   bank_account: {
     fill: "#0ea5e9",
     stroke: "#bae6fd",
     textFill: "#090e1a",
-    labelVi: "Tài khoản Nhận (Ẩn danh)",
-    shortVi: "Tài khoản",
-    shapeLabel: "Hình tròn",
+    labelVi: RADAR_KIND_COPY.bank_account.label,
+    shortVi: RADAR_KIND_COPY.bank_account.shortLabel,
+    shapeLabel: RADAR_KIND_COPY.bank_account.shapeLabel,
   },
   domain: {
     fill: "#f97316",
     stroke: "#fed7aa",
     textFill: "#090e1a",
-    labelVi: "Tên miền Giả mạo",
-    shortVi: "Tên miền",
-    shapeLabel: "Hình thoi",
+    labelVi: RADAR_KIND_COPY.domain.label,
+    shortVi: RADAR_KIND_COPY.domain.shortLabel,
+    shapeLabel: RADAR_KIND_COPY.domain.shapeLabel,
   },
   phone: {
     fill: "#9333ea",
     stroke: "#e9d5ff",
     textFill: "#ffffff",
-    labelVi: "Số điện thoại Mồi",
-    shortVi: "SĐT",
-    shapeLabel: "Hình vuông",
+    labelVi: RADAR_KIND_COPY.phone.label,
+    shortVi: RADAR_KIND_COPY.phone.shortLabel,
+    shapeLabel: RADAR_KIND_COPY.phone.shapeLabel,
   },
 };
 
@@ -131,17 +132,17 @@ export function IocGraphSvg({ nodes, edges }: IocGraphSvgProps) {
           <Network className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" aria-hidden="true" />
           <div>
             <h2 id="ioc-graph-heading" className="text-sm font-bold text-ink">
-              Đồ thị Liên kết Chiến dịch &amp; Cụm IOC Ẩn danh (Zero Raw PII)
+              Sơ đồ liên kết chiến dịch và dấu hiệu nghi vấn
             </h2>
             <p className="text-xs text-ink-muted">
-              Nhấp hoặc nhấn Enter vào từng nút để soi cụm liên kết. Khối bị khóa hiển thị vòng đỏ.
+              Chọn từng mục để xem các liên kết liên quan. Mục đang bị chặn hiển thị vòng đỏ.
             </p>
           </div>
         </div>
 
         <div
           role="group"
-          aria-label="Chế độ hiển thị đồ thị IOC"
+          aria-label="Chế độ hiển thị sơ đồ dấu hiệu nghi vấn"
           className="inline-flex shrink-0 rounded-lg border border-border-strong bg-surface-deep p-0.5 text-[11px]"
         >
           <button
@@ -155,7 +156,7 @@ export function IocGraphSvg({ nodes, edges }: IocGraphSvgProps) {
             }`}
           >
             <Network className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Đồ thị</span>
+            <span>Sơ đồ</span>
           </button>
           <button
             type="button"
@@ -168,7 +169,7 @@ export function IocGraphSvg({ nodes, edges }: IocGraphSvgProps) {
             }`}
           >
             <Table2 className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Bảng liên kết</span>
+            <span>Bảng chi tiết</span>
           </button>
         </div>
       </div>
@@ -233,21 +234,21 @@ export function IocGraphSvg({ nodes, edges }: IocGraphSvgProps) {
       {viewMode === "graph" ? (
         <div className="overflow-hidden rounded-xl border border-border-subtle bg-surface-deep">
           <div className="flex items-center justify-between border-b border-border-subtle/70 bg-surface-subtle/60 px-3 py-1.5 text-[11px] text-ink-muted sm:hidden">
-            <span>Màn hình nhỏ: chạm &ldquo;Bảng liên kết&rdquo; để xem rõ từng thực thể.</span>
+            <span>Trên màn hình nhỏ, chọn &ldquo;Bảng chi tiết&rdquo; để xem rõ từng mục.</span>
           </div>
 
           {positioned.length === 0 ? (
             <div className="flex h-56 items-center justify-center p-6 text-center text-xs text-ink-muted">
-              Chưa có cụm chiến dịch hoặc thực thể IOC nào được ghi nhận trên đồ thị Fraud Ops.
+              Chưa có chiến dịch hoặc dấu hiệu nghi vấn nào được ghi nhận.
             </div>
           ) : (
             <svg
               viewBox="0 0 760 420"
               role="group"
-              aria-label="Sơ đồ mạng lưới chiến dịch lừa đảo và thực thể IOC đã che dấu PII"
+              aria-label="Sơ đồ liên kết chiến dịch và dấu hiệu nghi vấn đã che giấu thông tin cá nhân"
               className="h-auto w-full"
             >
-              <title>Đồ thị liên kết chiến dịch lừa đảo và IOC ẩn danh VeriShield AI</title>
+              <title>Sơ đồ liên kết chiến dịch và dấu hiệu nghi vấn VeriShield AI</title>
 
               {edges.map((edge, idx) => {
                 const src = nodeMap.get(edge.source);
@@ -380,18 +381,18 @@ export function IocGraphSvg({ nodes, edges }: IocGraphSvgProps) {
         <div className="overflow-x-auto rounded-xl border border-border-subtle bg-surface-deep">
           <table className="w-full min-w-[520px] border-collapse text-left text-xs">
             <caption className="sr-only">
-              Bảng liên kết chiến dịch lừa đảo và thực thể IOC ẩn danh
+              Bảng chi tiết chiến dịch và dấu hiệu nghi vấn đã che giấu thông tin cá nhân
             </caption>
             <thead>
               <tr className="border-b border-border-subtle bg-surface-subtle text-[11px] font-semibold text-ink-secondary">
                 <th scope="col" className="px-3 py-2.5">
-                  Thực thể (Ẩn danh PII)
+                  Dấu hiệu (đã che giấu)
                 </th>
                 <th scope="col" className="px-3 py-2.5">
                   Phân loại
                 </th>
                 <th scope="col" className="px-3 py-2.5 text-right">
-                  Lượt ghi nhận
+                  Số lượt ghi nhận
                 </th>
                 <th scope="col" className="px-3 py-2.5">
                   Liên kết trực tiếp
@@ -405,7 +406,7 @@ export function IocGraphSvg({ nodes, edges }: IocGraphSvgProps) {
               {filteredTableNodes.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-3 py-6 text-center text-ink-muted">
-                    Không có thực thể nào khớp bộ lọc hiện tại.
+                    Không có mục nào khớp với bộ lọc hiện tại.
                   </td>
                 </tr>
               ) : (
@@ -446,13 +447,13 @@ export function IocGraphSvg({ nodes, edges }: IocGraphSvgProps) {
                       </td>
                       <td className="px-3 py-2.5">
                         <span
-                          className={`rounded px-2 py-0.5 font-mono text-[10px] font-bold ${
+                          className={`rounded px-2 py-0.5 text-[10px] font-bold ${
                             node.blocked
                               ? "bg-rose-500/20 text-rose-200"
                               : "bg-amber-500/15 text-amber-200"
                           }`}
                         >
-                          {node.blocked ? "ĐÃ KHÓA" : node.risk_level}
+                          {node.blocked ? "Đã chặn" : VERDICT_COPY[node.risk_level].shortLabel}
                         </span>
                       </td>
                     </tr>
@@ -474,13 +475,15 @@ export function IocGraphSvg({ nodes, edges }: IocGraphSvgProps) {
             </span>
           </div>
           <span
-            className={`rounded px-2 py-0.5 font-mono text-[11px] font-bold ${
+            className={`rounded px-2 py-0.5 text-[11px] font-bold ${
               selectedNode.blocked
                 ? "bg-rose-500/20 text-rose-200"
                 : "bg-amber-500/15 text-amber-200"
             }`}
           >
-            {selectedNode.blocked ? "ĐÃ KHÓA HỆ SINH THÁI" : selectedNode.risk_level}
+            {selectedNode.blocked
+              ? "Đang chặn toàn hệ thống"
+              : VERDICT_COPY[selectedNode.risk_level].shortLabel}
           </span>
         </div>
       )}

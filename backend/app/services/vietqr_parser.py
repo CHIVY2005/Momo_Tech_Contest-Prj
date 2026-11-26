@@ -129,8 +129,8 @@ def parse_qr_payload(
             EvidenceItem(
                 source="vietqr_parser",
                 severity="HIGH",
-                title="Mã VietQR sai cấu trúc EMVCo",
-                detail="Chuỗi bắt đầu bằng 000201 nhưng thiếu trường kiểm tra toàn vẹn 6304.",
+                title="Mã VietQR không đúng cấu trúc chuẩn",
+                detail="Mã QR có phần đầu giống VietQR nhưng thiếu mã kiểm tra tính toàn vẹn.",
                 snippet=frame_tag,
             )
         )
@@ -151,11 +151,8 @@ def parse_qr_payload(
             EvidenceItem(
                 source="vietqr_parser",
                 severity="HIGH",
-                title="Mã kiểm tra CRC-16 VietQR không hợp lệ",
-                detail=(
-                    f"Chữ ký CRC-16 trong mã ({declared_crc} vs {computed_crc}) không khớp "
-                    "— dấu hiệu chuỗi QR bị chỉnh sửa thủ công."
-                ),
+                title="Mã kiểm tra toàn vẹn của mã VietQR không hợp lệ",
+                detail="Mã kiểm tra tính toàn vẹn không khớp — có dấu hiệu chuỗi QR đã bị chỉnh sửa.",
                 snippet=frame_tag,
             )
         )
@@ -174,10 +171,10 @@ def parse_qr_payload(
             EvidenceItem(
                 source="vietqr_parser",
                 severity="HIGH",
-                title="Cấu trúc TLV của mã VietQR không hợp lệ",
+                title="Cấu trúc dữ liệu của mã VietQR không hợp lệ",
                 detail=(
-                    "Chữ ký CRC-16 hợp lệ nhưng khung EMVCo TLV bị trùng thẻ, sai độ dài hoặc "
-                    "thiếu trường 63 kết thúc — dấu hiệu mã QR bị giả mạo cấu trúc."
+                    "Các trường dữ liệu trong mã VietQR bị trùng lặp hoặc sai độ dài "
+                    "— có dấu hiệu mã QR bị chỉnh sửa cấu trúc."
                 ),
                 snippet=frame_tag,
             )
@@ -201,8 +198,8 @@ def parse_qr_payload(
             EvidenceItem(
                 source="vietqr_parser",
                 severity="HIGH",
-                title="Trường định danh tài khoản NAPAS (Tag 38) bị hỏng",
-                detail="Cấu trúc TLV bên trong Tag 38 không hợp lệ dù chữ ký CRC-16 hợp lệ.",
+                title="Thông tin ngân hàng trong mã VietQR bị lỗi",
+                detail="Cấu trúc thông tin tài khoản bên trong mã VietQR không hợp lệ.",
                 snippet=frame_tag,
             )
         )
@@ -221,10 +218,10 @@ def parse_qr_payload(
             EvidenceItem(
                 source="vietqr_parser",
                 severity="HIGH",
-                title="Trường tài khoản thụ hưởng NAPAS (Tag 38.01) bị hỏng hoặc trùng thẻ",
+                title="Thông tin tài khoản nhận trong mã VietQR bị lỗi hoặc trùng lặp",
                 detail=(
-                    "Cấu trúc TLV bên trong Tag 38.01 không hợp lệ dù chữ ký CRC-16 hợp lệ "
-                    "— dấu hiệu chèn trùng tài khoản thụ hưởng."
+                    "Cấu trúc tài khoản nhận bên trong mã VietQR không hợp lệ "
+                    "— có dấu hiệu chèn trùng thông tin người nhận."
                 ),
                 snippet=frame_tag,
             )
@@ -260,10 +257,10 @@ def parse_qr_payload(
             EvidenceItem(
                 source="vietqr_parser",
                 severity="HIGH",
-                title="Trường số tiền VietQR (Tag 54) sai định dạng chuẩn EMVCo",
+                title="Trường số tiền trong mã VietQR không đúng định dạng",
                 detail=(
-                    "Trường số tiền (Tag 54) không tuân thủ định dạng số EMVCo chuẩn "
-                    "— dấu hiệu mã QR bị chỉnh sửa cấu trúc."
+                    "Giá trị số tiền trong mã VietQR không đúng quy chuẩn "
+                    "— có dấu hiệu mã QR bị chỉnh sửa cấu trúc."
                 ),
                 snippet=frame_tag,
             )
@@ -291,11 +288,11 @@ def parse_qr_payload(
             EvidenceItem(
                 source="vietqr_parser",
                 severity="CRITICAL",
-                title="Bẫy lừa quét mã VietQR để 'nhận tiền'",
+                title="Bẫy lừa quét mã VietQR để nhận tiền",
                 detail=(
-                    f"Mã QR là lệnh CHUYỂN TIỀN ĐI ({service_code})"
-                    f"{f' số tiền {amount} {currency_label}' if amount else ''} tới {bank_name} "
-                    "nhưng tin nhắn lại dụ quét mã để nhận tiền hoàn/nhận thưởng."
+                    f"Mã QR này thực chất là lệnh chuyển tiền đi"
+                    f"{f' số tiền {amount} {currency_label}' if amount else ''} tới {bank_name}, "
+                    "nhưng tin nhắn lại hướng dẫn quét mã để nhận tiền hoàn hoặc nhận thưởng."
                 ),
             )
         )
@@ -310,10 +307,10 @@ def parse_qr_payload(
                 EvidenceItem(
                     source="vietqr_parser",
                     severity="CRITICAL",
-                    title="Mã VietQR trỏ sai tài khoản thụ hưởng của cửa hàng",
+                    title="Mã VietQR không khớp với tài khoản nhận của cửa hàng",
                     detail=(
-                        "Tài khoản giải mã bên trong mã VietQR không khớp với số tài khoản "
-                        "đăng ký của cửa hàng — nghi vấn bị dán đè hoặc tráo mã QR."
+                        "Số tài khoản bên trong mã VietQR không khớp với tài khoản đăng ký của "
+                        "cửa hàng — cần kiểm tra nguy cơ bị dán đè hoặc tráo mã QR."
                     ),
                 )
             )

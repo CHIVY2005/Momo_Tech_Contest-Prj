@@ -18,7 +18,7 @@ async def get_case(case_id: str, request: Request) -> AnalysisReport:
     repo: CaseRepository = request.app.state.repo
     report = repo.get_report(case_id)
     if report is None:
-        raise HTTPException(status_code=404, detail="Case not found.")
+        raise HTTPException(status_code=404, detail="Không tìm thấy hồ sơ kiểm tra này.")
     return report
 
 
@@ -27,7 +27,7 @@ async def get_case_pdf(case_id: str, request: Request) -> Response:
     repo: CaseRepository = request.app.state.repo
     report = repo.get_report(case_id)
     if report is None:
-        raise HTTPException(status_code=404, detail="Case not found.")
+        raise HTTPException(status_code=404, detail="Không tìm thấy hồ sơ kiểm tra này.")
     pdf_bytes = await asyncio.to_thread(generate_incident_pdf, report)
     safe_filename = "".join(ch for ch in case_id if ch.isalnum() or ch in ("_", "-")) or "report"
     return Response(

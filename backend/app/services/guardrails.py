@@ -226,10 +226,10 @@ def evaluate_guardrails(text: str, has_suspicious_url: bool = False) -> Guardrai
             EvidenceItem(
                 source="guardrails",
                 severity="CRITICAL",
-                title="Phát hiện tấn công Adversarial Prompt Injection",
+                title="Phát hiện nội dung tìm cách thao túng kết quả kiểm tra",
                 detail=(
-                    "Nội dung chứa chỉ thị giả mạo nhằm ghi đè quy tắc hệ thống AI hoặc che giấu "
-                    f"bằng ký tự ẩn ({', '.join(inj_patterns)})."
+                    "Nội dung chứa chỉ thị bất thường nhằm thay đổi đánh giá của hệ thống hoặc "
+                    "chèn ký tự ẩn gây nhiễu."
                 ),
                 snippet=normalized[:180],
             )
@@ -253,10 +253,11 @@ def evaluate_guardrails(text: str, has_suspicious_url: bool = False) -> Guardrai
             EvidenceItem(
                 source="guardrails",
                 severity="INFO",
-                title="Nhận diện khuyến cáo an toàn chính thống",
+                title="Nhận diện thông báo khuyến cáo an toàn thông thường",
                 detail=(
-                    "Văn bản mang cấu trúc thông báo phòng chống lừa đảo (nhắc không chia sẻ OTP / "
-                    "không cài .apk lạ) và không chứa yêu cầu chuyển tiền hay liên kết đáng ngờ."
+                    "Nội dung mang đặc điểm thông báo nhắc nhở phòng tránh lừa đảo (nhắc không "
+                    "chia sẻ mã OTP hoặc không cài tệp .apk lạ) và không chứa yêu cầu chuyển tiền "
+                    "hay đường dẫn đáng ngờ."
                 ),
             )
         )

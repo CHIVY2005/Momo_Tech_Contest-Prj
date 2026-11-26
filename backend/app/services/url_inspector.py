@@ -89,7 +89,7 @@ def _score_single_url(target_url: str) -> tuple[str, str, str | None, bool, int,
         parsed = urlsplit(target_url)
         raw_host = (parsed.hostname or "").strip().rstrip(".").lower()
     except ValueError:
-        return "", "", None, False, 90, ["URL sai định dạng cú pháp máy chủ."]
+        return "", "", None, False, 90, ["Đường dẫn không đúng định dạng địa chỉ trang web."]
 
     try:
         ascii_host = raw_host.encode("idna").decode("ascii") if raw_host else ""
@@ -123,8 +123,8 @@ def _score_single_url(target_url: str) -> tuple[str, str, str | None, bool, int,
                     is_homoglyph = True
                 spoofed_brand = brand_name
                 reasons.append(
-                    f"Tên miền '{unicode_host}' mạo danh thương hiệu '{brand_name}' "
-                    f"(không thuộc tên miền chính thức {', '.join(entry['official_domains'])})."
+                    f"Tên miền '{unicode_host}' có dấu hiệu giả mạo thương hiệu '{brand_name}' "
+                    f"(khác với tên miền chính thức {', '.join(entry['official_domains'])})."
                 )
                 break
         if spoofed_brand:
@@ -132,7 +132,7 @@ def _score_single_url(target_url: str) -> tuple[str, str, str | None, bool, int,
 
     if is_homoglyph and not spoofed_brand:
         reasons.append(
-            f"Tên miền chứa mã hóa IDN Punycode / ký tự đồng hình đáng ngờ ({ascii_host})."
+            "Tên miền sử dụng ký tự đặc biệt gần giống chữ thông thường để gây nhầm lẫn."
         )
 
     risk = 0
@@ -144,14 +144,16 @@ def _score_single_url(target_url: str) -> tuple[str, str, str | None, bool, int,
     tld = ascii_host.rsplit(".", 1)[-1] if "." in ascii_host else ""
     if tld in _RISKY_TLDS:
         risk += 15
-        reasons.append(f"Sử dụng đuôi tên miền rủi ro cao '.{tld}' phổ biến trong chiến dịch phishing.")
+        reasons.append(
+            f"Tên miền sử dụng đuôi '.{tld}' thường xuất hiện trong các trang web giả mạo."
+        )
 
     if re.search(r"\.apk(?:$|\?)", path_and_query, re.IGNORECASE):
         risk = max(risk + 25, 85)
-        reasons.append("Đường dẫn trỏ trực tiếp tới tệp cài đặt Android (.apk) ngoài chợ ứng dụng.")
+        reasons.append("Đường dẫn trỏ trực tiếp tới tệp cài đặt Android (.apk) ngoài kho ứng dụng.")
     elif _PHISHING_PATH_RE.search(path_and_query) and (spoofed_brand or tld in _RISKY_TLDS):
         risk += 10
-        reasons.append("Đường dẫn chứa từ khóa thu thập thông tin xác thực / OTP.")
+        reasons.append("Đường dẫn có dấu hiệu yêu cầu đăng nhập hoặc xác thực mã OTP đáng ngờ.")
 
     return raw_host, ascii_host, spoofed_brand, is_homoglyph, min(100, risk), reasons
 
@@ -180,7 +182,7 @@ async def inspect_url(
                 normalized_ascii_domain=ascii_host,
                 is_blocked_ssrf=True,
                 risk_points=90,
-                reasons=[f"Chặn truy cập mục tiêu không an toàn (SSRF Guard): {block_reason}"],
+                reasons=["Đã chặn truy cập vì đường dẫn trỏ tới địa chỉ mạng nội bộ không an toàn."],
             )
 
     final_url: str | None = None
@@ -205,7 +207,7 @@ async def inspect_url(
                     if status_code in (301, 302, 303, 307, 308) and loc:
                         try:
                             next_url = urljoin(current_url, loc)
-                        except ValueError as exc:
+                        except ValueError:
                             return UrlFinding(
                                 url=cleaned,
                                 domain=raw_host,
@@ -218,7 +220,7 @@ async def inspect_url(
                                 risk_points=90,
                                 reasons=[
                                     *all_reasons,
-                                    f"Chặn chuyển hướng HTTP có authority dị dạng: {exc}",
+                                    "Đã chặn chuyển hướng vì địa chỉ đích không hợp lệ.",
                                 ],
                             )
                         hop_ok, hop_reason, _ = await async_validate_url_target(
@@ -242,13 +244,10 @@ async def inspect_url(
                                     risk_points=90,
                                     reasons=[
                                         *all_reasons,
-                                        (
-                                            "Chặn chuyển hướng HTTP tới đích nội bộ "
-                                            f"(SSRF Redirect): {hop_reason}"
-                                        ),
+                                        "Đã chặn chuyển hướng tới địa chỉ mạng nội bộ không an toàn.",
                                     ],
                                 )
-                            all_reasons.append("Đích chuyển hướng không thể phân giải tên miền DNS.")
+                            all_reasons.append("Không tìm thấy địa chỉ máy chủ của đường dẫn chuyển hướng.")
                             final_url = next_url
                             hops += 1
                             break
@@ -270,7 +269,7 @@ async def inspect_url(
                     else:
                         final_url = current_url
                         break
-        except SsrfBlockedError as exc:
+        except SsrfBlockedError:
             return UrlFinding(
                 url=cleaned,
                 domain=raw_host,
@@ -281,7 +280,10 @@ async def inspect_url(
                 is_idn_homoglyph=is_homoglyph,
                 spoofed_brand=spoofed_brand,
                 risk_points=90,
-                reasons=[*all_reasons, f"Chặn kết nối DNS Rebinding / SSRF tại tầng socket: {exc}"],
+                reasons=[
+                    *all_reasons,
+                    "Đã chặn kết nối vì tên miền trỏ tới địa chỉ mạng nội bộ không an toàn.",
+                ],
             )
         except httpx.RemoteProtocolError as exc:
             if "location header" in str(exc).lower() or "invalid url" in str(exc).lower():
@@ -297,12 +299,12 @@ async def inspect_url(
                     risk_points=90,
                     reasons=[
                         *all_reasons,
-                        f"Chặn chuyển hướng HTTP có header Location dị dạng: {exc}",
+                        "Đã chặn chuyển hướng vì địa chỉ đích trả về không hợp lệ.",
                     ],
                 )
-            all_reasons.append("Máy chủ đích trả về giao thức HTTP không hợp lệ.")
+            all_reasons.append("Trang web trả về phản hồi không hợp lệ.")
         except (TimeoutError, httpx.HTTPError):
-            all_reasons.append("Máy chủ đích không phản hồi hoặc quá thời gian kiểm tra.")
+            all_reasons.append("Trang web không phản hồi hoặc quá thời gian kiểm tra.")
         finally:
             if owns_client:
                 await http_client.aclose()

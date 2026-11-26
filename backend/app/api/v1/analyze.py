@@ -22,9 +22,7 @@ async def _read_bounded_upload(upload: UploadFile | None, max_bytes: int) -> byt
     # Read at most max_bytes + 1 so chunked uploads without Content-Length cannot OOM RAM
     data = await upload.read(max_bytes + 1)
     if len(data) > max_bytes:
-        raise UploadTooLargeError(
-            f"Uploaded file '{upload.filename}' exceeds limit of {max_bytes} bytes."
-        )
+        raise UploadTooLargeError("Tệp tải lên vượt quá dung lượng tối đa 10 MB.")
     return data
 
 
@@ -46,7 +44,7 @@ async def _prepare_inputs(
     has_demo = bool(demo_id and demo_id.strip())
     valid_demos = {d.demo_id for d in pipeline.list_demos()}
     if has_demo and demo_id is not None and demo_id.strip() not in valid_demos:
-        raise HTTPException(status_code=404, detail=f"Unknown demo_id: {demo_id}")
+        raise HTTPException(status_code=404, detail="Không tìm thấy tình huống mẫu được yêu cầu.")
 
     try:
         img_bytes = await _read_bounded_upload(image, max_bytes)
@@ -71,8 +69,8 @@ async def _prepare_inputs(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Vui lòng cung cấp ít nhất một nội dung cần kiểm tra "
-                "(tin nhắn, URL, ảnh hoặc âm thanh)."
+                "Vui lòng nhập nội dung tin nhắn, đường dẫn hoặc tải lên ít nhất một hình ảnh hay "
+                "tệp ghi âm để kiểm tra."
             ),
         )
 

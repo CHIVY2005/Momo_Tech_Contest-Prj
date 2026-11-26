@@ -127,7 +127,7 @@ class SecurityAndLimitsMiddleware:
                     status_code=429,
                     headers={"Retry-After": str(retry_after)},
                     content={
-                        "detail": "Quá giới hạn số lượt yêu cầu mỗi phút. Vui lòng thử lại sau ít giây."
+                        "detail": "Bạn thao tác quá nhanh. Vui lòng thử lại sau ít giây."
                     },
                 )
                 await rate_resp(scope, receive, send_with_headers)

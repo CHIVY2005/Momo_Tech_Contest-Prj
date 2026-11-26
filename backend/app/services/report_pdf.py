@@ -9,6 +9,42 @@ from fpdf import FPDF
 from app.db.repository import redact_report_pii
 from app.schemas import AnalysisReport
 
+_VERDICT_VI: dict[str, str] = {
+    "SAFE": "Chưa phát hiện dấu hiệu bất thường",
+    "SUSPICIOUS": "Cần thận trọng — nên xác minh thêm",
+    "HIGH_RISK": "Cảnh báo rủi ro cao — tạm dừng giao dịch",
+    "CRITICAL_SCAM": "Cảnh báo rủi ro rất cao — có nhiều dấu hiệu lừa đảo",
+}
+_MODE_VI: dict[str, str] = {
+    "personal": "Cá nhân",
+    "merchant": "Người bán / Cửa hàng",
+    "wallet_transfer": "Trước khi chuyển tiền",
+}
+_RECEIPT_STATUS_VI: dict[str, str] = {
+    "UNVERIFIED_SCREENSHOT": "Chưa thể xác nhận tiền đã vào tài khoản từ ảnh chụp",
+    "BENEFICIARY_MISMATCH": "Thông tin người nhận không khớp",
+    "TAMPER_OR_LOGIC_ANOMALY": "Ảnh biên lai có dấu hiệu chỉnh sửa hoặc sai lệch thông tin",
+    "REPLAYED_RECEIPT": "Ảnh biên lai đã từng xuất hiện trước đó",
+}
+_SEVERITY_VI: dict[str, str] = {
+    "CRITICAL": "Rất nghiêm trọng",
+    "HIGH": "Nghiêm trọng",
+    "MEDIUM": "Cần lưu ý",
+    "LOW": "Thấp",
+    "INFO": "Thông tin bổ sung",
+}
+_SOURCE_VI: dict[str, str] = {
+    "image_forensics": "Phân tích tính xác thực của hình ảnh",
+    "vietqr_parser": "Kiểm tra mã QR chuyển khoản",
+    "url_inspector": "Kiểm tra đường dẫn trang web",
+    "phishing_sandbox": "Kiểm tra trang web trong môi trường cách ly",
+    "receipt_validator": "Đối chiếu biên lai chuyển khoản",
+    "fraud_ops_radar": "Danh sách chặn rủi ro hệ thống",
+    "guardrails": "Kiểm tra an toàn nội dung",
+    "gemini_vision": "Phân tích ngữ cảnh AI",
+    "pipeline": "Hệ thống tổng hợp",
+}
+
 
 def _font_path() -> Path:
     return Path(__file__).resolve().parent.parent / "data" / "fonts" / "DejaVuSans.ttf"
@@ -24,7 +60,7 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
 
     ttf = _font_path()
     pdf.add_font("DejaVu", style="", fname=str(ttf))
-    pdf.set_font("DejaVu", size=15)
+    pdf.set_font("DejaVu", size=14)
 
     # Header
     pdf.set_fill_color(15, 23, 42)
@@ -32,7 +68,7 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
     pdf.cell(
         w=0,
         h=12,
-        text="  VERISHIELD AI — HỒ SƠ GHI NHẬN & TỐ GIÁC DẤU HIỆU LỪA ĐẢO SỐ",
+        text="  VeriShield AI — Báo cáo bằng chứng và hỗ trợ trình báo dấu hiệu lừa đảo",
         new_x="LMARGIN",
         new_y="NEXT",
         fill=True,
@@ -41,18 +77,24 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
 
     pdf.set_text_color(15, 23, 42)
     pdf.set_font("DejaVu", size=10)
-    call_label = "CÓ" if safe.in_active_call else "KHÔNG"
+    call_label = "Có" if safe.in_active_call else "Không"
     conf_pct = round(safe.confidence * 100)
+    mode_label = _MODE_VI.get(safe.mode, safe.mode)
+    verdict_label = _VERDICT_VI.get(safe.verdict, safe.verdict)
     meta_lines = [
-        f"Mã hồ sơ (Case ID): {safe.case_id}   |   Thời điểm lập: {safe.created_at}",
-        f"Chế độ kiểm tra: {safe.mode}   |   Trạng thái cuộc gọi (in_active_call): {call_label}",
+        f"Mã hồ sơ: {safe.case_id}   |   Thời điểm lập: {safe.created_at}",
+        f"Chế độ kiểm tra: {mode_label}   |   Đang nghe điện thoại khi chuyển tiền: {call_label}",
         (
-            f"Mức phán quyết: {safe.verdict}   |   Điểm rủi ro hiệu chuẩn: "
-            f"{safe.risk_score}/100 (Độ tin cậy: {conf_pct}%)"
+            f"Đánh giá rủi ro: {verdict_label}   |   Mức độ rủi ro: "
+            f"{safe.risk_score}/100 (Mức độ chắc chắn: {conf_pct}%)"
         ),
     ]
     if safe.receipt_verification_status != "NOT_APPLICABLE":
-        meta_lines.append(f"Trạng thái kiểm chứng biên lai: {safe.receipt_verification_status}")
+        rcpt_label = _RECEIPT_STATUS_VI.get(
+            safe.receipt_verification_status,
+            safe.receipt_verification_status,
+        )
+        meta_lines.append(f"Trạng thái kiểm tra biên lai: {rcpt_label}")
 
     for line in meta_lines:
         pdf.multi_cell(w=0, h=6, text=line, new_x="LMARGIN", new_y="NEXT")
@@ -60,7 +102,7 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
 
     # Section 1: Summary
     pdf.set_font("DejaVu", size=12)
-    pdf.cell(w=0, h=8, text="1. Tóm tắt Kết luận Điều tra", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(w=0, h=8, text="1. Tóm tắt kết quả kiểm tra", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("DejaVu", size=10)
     pdf.multi_cell(w=0, h=6, text=safe.summary_vi, new_x="LMARGIN", new_y="NEXT")
     if safe.actions.merchant_balance_warning:
@@ -79,13 +121,17 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
     pdf.cell(
         w=0,
         h=8,
-        text="2. Kịch bản Nhận diện & Thực thể Liên quan (Đã Ẩn danh PII)",
+        text="2. Kịch bản tương tự và thông tin liên quan (đã che giấu thông tin cá nhân)",
         new_x="LMARGIN",
         new_y="NEXT",
     )
     pdf.set_font("DejaVu", size=10)
-    pbs = ", ".join(safe.matched_playbooks) if safe.matched_playbooks else "Chưa khớp mẫu cố định"
-    pdf.multi_cell(w=0, h=6, text=f"• Kịch bản: {pbs}", new_x="LMARGIN", new_y="NEXT")
+    pbs = (
+        ", ".join(safe.matched_playbooks)
+        if safe.matched_playbooks
+        else "Chưa trùng khớp kịch bản cụ thể"
+    )
+    pdf.multi_cell(w=0, h=6, text=f"• Kịch bản tương tự: {pbs}", new_x="LMARGIN", new_y="NEXT")
     if safe.iocs.phones:
         pdf.multi_cell(
             w=0,
@@ -98,7 +144,7 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
         pdf.multi_cell(
             w=0,
             h=6,
-            text=f"• Tài khoản nhận nghi vấn: {', '.join(safe.iocs.bank_accounts)}",
+            text=f"• Số tài khoản nhận nghi vấn: {', '.join(safe.iocs.bank_accounts)}",
             new_x="LMARGIN",
             new_y="NEXT",
         )
@@ -112,16 +158,18 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
         )
     pdf.ln(3)
 
-    # Section 3: Technical Evidence
+    # Section 3: Digital Evidence
     pdf.set_font("DejaVu", size=12)
-    pdf.cell(w=0, h=8, text="3. Bằng chứng Kỹ thuật & Pháp y Số", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(w=0, h=8, text="3. Chi tiết phân tích bằng chứng số", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("DejaVu", size=10)
     if safe.evidence:
         for ev in safe.evidence[:8]:
+            sev_label = _SEVERITY_VI.get(ev.severity, ev.severity)
+            src_label = _SOURCE_VI.get(ev.source, "Hệ thống kiểm tra")
             pdf.multi_cell(
                 w=0,
                 h=6,
-                text=f"• [{ev.severity} | {ev.source}] {ev.title}: {ev.detail}",
+                text=f"• [{sev_label} | {src_label}] {ev.title}: {ev.detail}",
                 new_x="LMARGIN",
                 new_y="NEXT",
             )
@@ -129,7 +177,7 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
         pdf.multi_cell(
             w=0,
             h=6,
-            text="• Không ghi nhận cảnh báo kỹ thuật nghiêm trọng.",
+            text="• Chưa ghi nhận dấu hiệu bất thường nghiêm trọng.",
             new_x="LMARGIN",
             new_y="NEXT",
         )
@@ -140,7 +188,7 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
     pdf.cell(
         w=0,
         h=8,
-        text="4. Hướng dẫn Xử lý Khẩn cấp & Trình báo",
+        text="4. Hướng dẫn xử lý và trình báo",
         new_x="LMARGIN",
         new_y="NEXT",
     )
@@ -155,8 +203,9 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
         w=0,
         h=5,
         text=(
-            "Tài liệu được trích xuất tự động bởi hệ thống VeriShield AI phục vụ lưu trữ bằng chứng "
-            "và hỗ trợ trình báo cơ quan Công an gần nhất hoặc qua ứng dụng VNeID."
+            "Tài liệu được tạo tự động bởi hệ thống VeriShield AI nhằm hỗ trợ lưu trữ bằng chứng "
+            "và trình báo cơ quan Công an gần nhất hoặc qua ứng dụng VNeID. Kết quả chỉ mang tính "
+            "tham khảo, không thay thế việc xác minh chính thức từ ngân hàng hoặc cơ quan chức năng."
         ),
         new_x="LMARGIN",
         new_y="NEXT",

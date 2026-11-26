@@ -3,6 +3,7 @@
 import { KeyRound, Lock, PlusCircle, RotateCcw, ShieldAlert, Trash2 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 
+import { IOC_TYPE_COPY } from "@/lib/copy";
 import { formatRemainingTtl } from "@/lib/radarLayout";
 import type { BlockRule, IocType } from "@/lib/types";
 
@@ -39,7 +40,7 @@ export function BlockRuleManager({
 }: BlockRuleManagerProps) {
   const [iocType, setIocType] = useState<IocType>("bank_account");
   const [rawValue, setRawValue] = useState("");
-  const [reason, setReason] = useState("Tài khoản trung gian nhận tiền lừa đảo (Fraud Ops xác minh)");
+  const [reason, setReason] = useState("Tài khoản nghi vấn nhận tiền liên quan đến lừa đảo");
   const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -66,7 +67,7 @@ export function BlockRuleManager({
         <div className="flex items-center gap-2">
           <Lock className="h-5 w-5 text-rose-400" aria-hidden="true" />
           <h2 id="block-manager-heading" className="text-sm font-bold text-ink">
-            Quản lý Danh sách Chặn Tức thì &amp; Cách ly Đa Giám khảo (TTL 30m)
+            Quản lý quy tắc chặn tạm thời
           </h2>
         </div>
 
@@ -77,7 +78,7 @@ export function BlockRuleManager({
           className="inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-lg border border-border-strong bg-surface-subtle px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <RotateCcw className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
-          <span>Khôi phục Demo (Reset)</span>
+          <span>Đặt lại dữ liệu mẫu</span>
         </button>
       </div>
 
@@ -87,7 +88,7 @@ export function BlockRuleManager({
           className="flex items-center gap-1.5 text-xs font-semibold text-amber-200"
         >
           <KeyRound className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
-          <span>Mã PIN Xác thực Chuyên viên Fraud Ops (Chế độ Trải nghiệm Giám khảo)</span>
+          <span>Mã PIN xác thực quản trị viên</span>
         </label>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <input
@@ -96,11 +97,11 @@ export function BlockRuleManager({
             autoComplete="off"
             value={analystPin}
             onChange={(e) => onPinChange(e.target.value)}
-            placeholder="Nhập PIN..."
+            placeholder="Nhập mã PIN..."
             className="tabular-num w-36 rounded-lg border border-amber-500/45 bg-surface-subtle px-3 py-2 font-mono text-xs font-bold text-amber-200 placeholder:text-ink-muted"
           />
           <span className="text-[11px] text-ink-secondary">
-            Thử đổi sai PIN (&rarr; HTTP 403) hoặc khóa{" "}
+            Bạn có thể thử nhập sai mã PIN hoặc thử chặn tên miền chính thức{" "}
             <button
               type="button"
               onClick={() => {
@@ -111,7 +112,7 @@ export function BlockRuleManager({
             >
               vietcombank.com.vn
             </button>{" "}
-            (&rarr; HTTP 409 chống phá hoại IOC sạch).
+            để kiểm tra cơ chế chống chặn nhầm.
           </span>
         </div>
       </div>
@@ -120,11 +121,11 @@ export function BlockRuleManager({
         onSubmit={(ev) => void handleSubmit(ev)}
         className="space-y-2.5 rounded-xl border border-border-subtle bg-surface-subtle p-3.5"
       >
-        <p className="text-xs font-semibold text-ink">Ban hành Quy tắc Chặn Thủ công:</p>
+        <p className="text-xs font-semibold text-ink">Thêm quy tắc chặn thủ công:</p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <div>
             <label htmlFor="manual-ioc-type" className="sr-only">
-              Loại IOC
+              Loại dấu hiệu cần chặn
             </label>
             <select
               id="manual-ioc-type"
@@ -132,21 +133,21 @@ export function BlockRuleManager({
               onChange={(e) => setIocType(e.target.value as IocType)}
               className="w-full rounded-lg border border-border-strong bg-surface-elevated px-2.5 py-2 text-xs text-ink"
             >
-              <option value="bank_account">Số tài khoản (STK)</option>
-              <option value="domain">Tên miền (Domain)</option>
-              <option value="phone">Số điện thoại</option>
+              <option value="bank_account">{IOC_TYPE_COPY.bank_account}</option>
+              <option value="domain">{IOC_TYPE_COPY.domain}</option>
+              <option value="phone">{IOC_TYPE_COPY.phone}</option>
             </select>
           </div>
           <div className="sm:col-span-2">
             <label htmlFor="manual-ioc-value" className="sr-only">
-              Giá trị thực thể cần chặn
+              Giá trị cần chặn
             </label>
             <input
               id="manual-ioc-value"
               type="text"
               value={rawValue}
               onChange={(e) => setRawValue(e.target.value)}
-              placeholder="Nhập STK, tên miền hoặc SĐT (sẽ băm SHA-256 & che PII tự động)"
+              placeholder="Nhập số tài khoản, tên miền hoặc số điện thoại (hệ thống tự che giấu thông tin)"
               className="w-full rounded-lg border border-border-strong bg-surface-elevated px-3 py-2 font-mono text-xs text-ink placeholder:text-ink-muted"
             />
           </div>
@@ -168,18 +169,19 @@ export function BlockRuleManager({
             className="inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-lg bg-amber-500 px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <PlusCircle className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Thêm Lệnh Chặn</span>
+            <span>Thêm quy tắc chặn</span>
           </button>
         </div>
       </form>
 
       <div className="space-y-2">
         <p className="tabular-num text-xs font-semibold text-ink-secondary">
-          Quy tắc đang kích hoạt ({rules.length}):
+          Quy tắc chặn đang hoạt động ({rules.length}):
         </p>
         {rules.length === 0 ? (
           <p className="rounded-xl border border-border-subtle bg-surface-subtle p-3 text-xs text-ink-muted">
-            Chưa có lệnh chặn khẩn cấp nào đang bật. Hãy bấm &ldquo;1-Click Khóa Khẩn cấp&rdquo; ở Hàng đợi Chiến dịch phía trên để kiểm chứng vòng lặp khép kín!
+            Chưa có quy tắc chặn tạm thời nào. Bạn có thể bấm &ldquo;Chặn một chạm&rdquo; ở danh
+            sách chiến dịch phía trên để thử nghiệm.
           </p>
         ) : (
           rules.map((rule) => {
@@ -198,8 +200,8 @@ export function BlockRuleManager({
                       <span className="tabular-num font-mono font-bold text-rose-200">
                         {rule.masked_value}
                       </span>
-                      <span className="ml-2 rounded bg-surface-elevated px-1.5 py-0.5 font-mono text-[10px] text-ink-secondary">
-                        {rule.ioc_type}
+                      <span className="ml-2 rounded bg-surface-elevated px-1.5 py-0.5 text-[10px] text-ink-secondary">
+                        {IOC_TYPE_COPY[rule.ioc_type]}
                       </span>
                       <p className="text-[11px] text-ink-secondary">{rule.reason}</p>
                     </div>

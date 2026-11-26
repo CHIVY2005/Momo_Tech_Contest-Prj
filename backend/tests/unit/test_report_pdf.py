@@ -18,7 +18,9 @@ def test_pdf_generator_embeds_readable_vietnamese_unicode_and_redacts_raw_pii(
     extracted = "\n".join(page.extract_text() or "" for page in reader.pages)
 
     assert "VeriShield AI" in extracted
-    assert "CRITICAL_SCAM" in extracted
+    assert "Cảnh báo rủi ro rất cao" in extracted
+    assert "CRITICAL_SCAM" not in extracted
+    assert "in_active_call" not in extracted
     assert "Công an" in extracted
     # Raw phone/account from unredacted caller must still be masked inside exported PDF
     assert "0912345678" not in extracted

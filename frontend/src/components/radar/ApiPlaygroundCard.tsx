@@ -4,22 +4,23 @@ import { Ban, CheckCircle2, Code2, Loader2, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { analyzeSync } from "@/lib/api";
+import { VERDICT_COPY } from "@/lib/copy";
 import type { AnalysisReport } from "@/lib/types";
 
 const PRESET_PAYLOADS = [
   {
-    label: "Ví chuyển 15tr vào STK 999888777666 (Mạo danh Công an)",
+    label: "Chuyển 15 triệu vào STK 999888777666 (giả mạo công an)",
     text: "Cán bộ điều tra yêu cầu chuyển gấp 15.000.000 VND vào STK 999888777666 để xác minh tài sản trong sạch",
     inActiveCall: true,
   },
   {
-    label: "Ví mở link SMS đổi điểm napas-diemthuong-247.top",
+    label: "Mở đường dẫn đổi điểm napas-diemthuong-247.top",
     text: "Thông báo đổi điểm thưởng hết hạn tại https://napas-diemthuong-247.top",
     inActiveCall: false,
   },
   {
-    label: "Quét QR hoàn tiền tới STK 777666555444",
-    text: "Shop gửi mã quét nhận tiền hoàn đơn lỗi vào STK 777666555444",
+    label: "Quét mã QR hoàn tiền tới STK 777666555444",
+    text: "Cửa hàng gửi mã quét nhận tiền hoàn đơn lỗi vào STK 777666555444",
     inActiveCall: false,
   },
 ];
@@ -72,7 +73,7 @@ export function ApiPlaygroundCard() {
       }
     } catch (e) {
       if ((e as Error).name !== "AbortError" && abortRef.current === controller) {
-        setErr(e instanceof Error ? e.message : "Lỗi gọi API kiểm định.");
+        setErr(e instanceof Error ? e.message : "Không thể kiểm tra giao dịch mẫu lúc này.");
       }
     } finally {
       if (abortRef.current === controller) {
@@ -93,12 +94,11 @@ export function ApiPlaygroundCard() {
           <Code2 className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" aria-hidden="true" />
           <div>
             <h2 id="api-playground-heading" className="text-sm font-bold text-ink">
-              Fintech Pre-Transfer REST API Playground (
-              <code className="font-mono text-sky-300">POST /api/v1/analyze</code>)
+              Kiểm thử hiệu lực quy tắc chặn
             </h2>
             <p className="text-xs text-ink-muted">
-              Kiểm chứng ngay lập tức: Khi Fraud Ops bấm Khóa 1-Click ở trên, lệnh chuyển tiền của
-              Ví bị chặn cứng (&ge;96 điểm) trong tích tắc!
+              Gửi thử một giao dịch mẫu sau khi bật chặn một chạm ở trên để thấy hệ thống tự động
+              ngăn chặn ngay lập tức.
             </p>
           </div>
         </div>
@@ -127,7 +127,7 @@ export function ApiPlaygroundCard() {
             htmlFor="playground-payload"
             className="mb-1 block text-xs font-semibold text-ink-secondary"
           >
-            Payload giao dịch gửi từ Ứng dụng Ví Điện Tử:
+            Nội dung giao dịch mẫu cần kiểm tra:
           </label>
           <textarea
             id="playground-payload"
@@ -137,7 +137,7 @@ export function ApiPlaygroundCard() {
               invalidatePending();
               setSampleText(e.target.value);
             }}
-            className="w-full rounded-xl border border-border-strong bg-surface-subtle px-3 py-2 font-mono text-xs text-ink"
+            className="w-full rounded-xl border border-border-strong bg-surface-subtle px-3 py-2 text-xs text-ink"
           />
         </div>
 
@@ -152,10 +152,7 @@ export function ApiPlaygroundCard() {
               }}
               className="h-4 w-4 cursor-pointer accent-amber-500"
             />
-            <span>
-              <code className="font-mono text-amber-300">in_active_call = true</code> (Đang trong
-              cuộc gọi thoại)
-            </span>
+            <span>Giả lập người dùng đang nghe điện thoại khi chuyển tiền</span>
           </label>
 
           <button
@@ -169,7 +166,7 @@ export function ApiPlaygroundCard() {
             ) : (
               <Play className="h-4 w-4" aria-hidden="true" />
             )}
-            <span>Gửi Yêu cầu API Kiểm định Ví</span>
+            <span>Kiểm tra giao dịch mẫu</span>
           </button>
         </div>
 
@@ -189,38 +186,42 @@ export function ApiPlaygroundCard() {
                 {result.active_block_rule_hit ? (
                   <span className="tabular-num inline-flex items-center gap-1.5 rounded bg-rose-500/20 px-2.5 py-1 text-rose-200">
                     <Ban className="h-4 w-4" aria-hidden="true" />
-                    <span>BỊ CHẶN BỞI FRAUD OPS RULE ({result.risk_score}/100)</span>
+                    <span>Đã bị chặn bởi quy tắc hệ thống ({result.risk_score}/100)</span>
                   </span>
                 ) : (
                   <span className="tabular-num inline-flex items-center gap-1.5 rounded bg-amber-500/20 px-2.5 py-1 text-amber-200">
                     <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                     <span>
-                      {result.verdict} ({result.risk_score}/100) · Khóa làm nguội:{" "}
-                      {result.actions.pre_transfer.cooling_off_seconds}s
+                      {VERDICT_COPY[result.verdict].shortLabel} ({result.risk_score}/100) · Tạm
+                      dừng để kiểm tra: {result.actions.pre_transfer.cooling_off_seconds} giây
                     </span>
                   </span>
                 )}
               </div>
-              <span className="tabular-num font-mono text-[11px] text-ink-muted">
-                case_id: {result.case_id}
-              </span>
             </div>
 
-            <pre className="max-h-48 overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-[11px] leading-relaxed text-sky-200">
-              {JSON.stringify(
-                {
-                  evaluated_payload: evaluated.payload,
-                  in_active_call: evaluated.inActiveCall,
-                  case_id: result.case_id,
-                  risk_score: result.risk_score,
-                  verdict: result.verdict,
-                  active_block_rule_hit: result.active_block_rule_hit,
-                  pre_transfer: result.actions.pre_transfer,
-                },
-                null,
-                2,
-              )}
-            </pre>
+            <p className="text-xs leading-relaxed text-ink-secondary">{result.summary_vi}</p>
+
+            <details className="rounded-lg border border-border-subtle/80 bg-surface-subtle/60 px-3 py-2 text-[11px]">
+              <summary className="cursor-pointer font-medium text-ink-secondary hover:text-ink">
+                Thông tin kỹ thuật API (POST /api/v1/analyze)
+              </summary>
+              <pre className="mt-2 max-h-48 overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-[11px] leading-relaxed text-sky-200">
+                {JSON.stringify(
+                  {
+                    evaluated_payload: evaluated.payload,
+                    in_active_call: evaluated.inActiveCall,
+                    case_id: result.case_id,
+                    risk_score: result.risk_score,
+                    verdict: result.verdict,
+                    active_block_rule_hit: result.active_block_rule_hit,
+                    pre_transfer: result.actions.pre_transfer,
+                  },
+                  null,
+                  2,
+                )}
+              </pre>
+            </details>
           </div>
         )}
       </div>

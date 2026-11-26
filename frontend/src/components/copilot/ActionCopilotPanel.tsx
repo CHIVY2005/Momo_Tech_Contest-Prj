@@ -35,7 +35,7 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
         <div className="flex items-center gap-2">
           <Shield className="h-5 w-5 text-amber-400" aria-hidden="true" />
           <h3 id="action-copilot-heading" className="text-sm font-bold text-ink">
-            Trợ lý Ứng phó Tức thì (Action Copilot)
+            Hướng dẫn xử lý nhanh
           </h3>
         </div>
 
@@ -46,15 +46,13 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
           className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-amber-500/45 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 transition-colors hover:bg-amber-500/25"
         >
           <FileDown className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>Tải Hồ sơ Tố giác PDF</span>
+          <span>Tải báo cáo bằng chứng (PDF)</span>
         </a>
       </div>
 
       {actions.urgent_steps.length > 0 && (
         <div className="rounded-xl border border-border-subtle bg-surface-subtle p-3.5">
-          <p className="mb-2 text-xs font-semibold text-ink">
-            Các bước hành động bảo vệ ngay lập tức:
-          </p>
+          <p className="mb-2 text-xs font-semibold text-ink">Việc cần làm ngay:</p>
           <ol className="list-inside list-decimal space-y-1.5 text-xs leading-relaxed text-ink-secondary">
             {actions.urgent_steps.map((step) => (
               <li key={step}>{step}</li>
@@ -67,7 +65,7 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-ink">
             <MessageSquareReply className="h-4 w-4 text-sky-400" aria-hidden="true" />
-            <span>Mẫu câu phản hồi an toàn để cắt đuôi kẻ gian (1-Click Copy):</span>
+            <span>Gợi ý câu trả lời an toàn (sao chép một chạm):</span>
           </div>
           {actions.counter_replies.map((reply, idx) => {
             const key = `reply-${idx}`;
@@ -81,13 +79,13 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
                 <button
                   type="button"
                   onClick={() => void copyText(key, reply)}
-                  aria-label={`Sao chép mẫu câu phản hồi số ${idx + 1}`}
+                  aria-label={`Sao chép gợi ý câu trả lời số ${idx + 1}`}
                   className="inline-flex min-h-[34px] shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border-strong bg-surface-elevated px-2.5 py-1 text-[11px] font-medium text-ink hover:border-amber-400"
                 >
                   {isCopied ? (
                     <>
                       <Check className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
-                      <span>Đã chép</span>
+                      <span>Đã sao chép</span>
                     </>
                   ) : (
                     <>
@@ -107,7 +105,7 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-200">
               <HeartHandshake className="h-4 w-4 text-sky-400" aria-hidden="true" />
-              <span>Lá chắn Gia đình (Gửi cảnh báo vào nhóm Zalo người thân)</span>
+              <span>Gửi cảnh báo nhanh cho người thân</span>
             </div>
             <button
               type="button"
@@ -117,12 +115,12 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
               {copiedKey === "family" ? (
                 <>
                   <Check className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
-                  <span>Đã chép</span>
+                  <span>Đã sao chép</span>
                 </>
               ) : (
                 <>
                   <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Chép tin nhắn</span>
+                  <span>Sao chép tin nhắn</span>
                 </>
               )}
             </button>

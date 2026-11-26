@@ -2,6 +2,7 @@
 
 import { FileAudio, Image as ImageIcon, QrCode, ShieldAlert, Sparkles } from "lucide-react";
 
+import { MODE_COPY } from "@/lib/copy";
 import type { DemoScenario } from "@/lib/types";
 
 interface DemoScenarioBarProps {
@@ -10,12 +11,6 @@ interface DemoScenarioBarProps {
   isAnalyzing: boolean;
   onSelectDemo: (demo: DemoScenario) => void;
 }
-
-const MODE_LABELS: Record<DemoScenario["mode"], string> = {
-  personal: "Cá nhân",
-  merchant: "Chủ shop",
-  wallet_transfer: "Ví 30s",
-};
 
 function pickScenarioIcon(demo: DemoScenario) {
   if (demo.audio_filename) {
@@ -51,14 +46,14 @@ export function DemoScenarioBar({
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
           <h2 id="demo-scenarios-heading" className="text-xs font-bold text-ink sm:text-sm">
-            5 Kịch bản Thực chiến 1-Click (Dành cho Hội đồng Giám khảo)
+            5 tình huống mẫu để kiểm tra một chạm
           </h2>
           <p className="hidden text-[11px] text-ink-muted xl:block">
-            Chọn tình huống để nạp mẫu tổng hợp và chạy điều tra thời gian thực.
+            Chọn một tình huống mẫu để xem cách hệ thống phân tích và cảnh báo.
           </p>
         </div>
-        <span className="tabular-num rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-amber-300">
-          Zero-Login · SSE Live
+        <span className="tabular-num rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-300">
+          Không cần đăng nhập · Dữ liệu mẫu
         </span>
       </div>
 
@@ -93,8 +88,8 @@ export function DemoScenarioBar({
                     <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
                     <span>{demo.category_badge}</span>
                   </span>
-                  <span className="rounded bg-surface-elevated px-1.5 py-0.5 font-mono text-[10px] text-ink-secondary">
-                    {MODE_LABELS[demo.mode]}
+                  <span className="shrink-0 whitespace-nowrap rounded bg-surface-elevated px-1.5 py-0.5 text-[10px] text-ink-secondary">
+                    {MODE_COPY[demo.mode].shortLabel}
                   </span>
                 </div>
                 <p className="line-clamp-2 text-xs font-semibold leading-snug text-ink group-hover:text-amber-200">
