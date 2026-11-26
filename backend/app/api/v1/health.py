@@ -19,6 +19,8 @@ async def get_health(request: Request) -> dict[str, Any]:
     settings = request.app.state.settings
     repo: CaseRepository = request.app.state.repo
     stt_ready = is_local_stt_ready(settings.enable_local_stt)
+    raw_tg_url = settings.telegram_bot_url.strip()
+    safe_tg_url = raw_tg_url if raw_tg_url.startswith("https://t.me/") else None
     return {
         "status": "ok",
         "service": settings.app_name,
@@ -34,6 +36,8 @@ async def get_health(request: Request) -> dict[str, Any]:
         "llm_provider": settings.resolved_llm_provider,
         "llm_model": settings.gemini_model,
         "llm_base_url_configured": bool(settings.gemini_base_url.strip()),
+        "telegram_bot_configured": bool(settings.telegram_bot_token.strip()),
+        "telegram_bot_url": safe_tg_url,
         "playbooks_count": len(pipeline.kb.playbooks),
     }
 

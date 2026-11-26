@@ -264,5 +264,7 @@ export interface SystemHealthResponse {
   llm_provider?: string;
   llm_model?: string;
   llm_base_url_configured?: boolean;
+  telegram_bot_configured?: boolean;
+  telegram_bot_url?: string | null;
   playbooks_count: number;
 }

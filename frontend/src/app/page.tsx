@@ -216,7 +216,19 @@ export default function HomePage() {
           )}
           <div className="flex items-center gap-1.5 text-[11px] text-ink-muted">
             <Send className="h-3 w-3 text-sky-400" aria-hidden="true" />
-            <span>Hỗ trợ Bot Telegram 1-Chạm &amp;</span>
+            {health?.telegram_bot_url ? (
+              <a
+                href={health.telegram_bot_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-sky-300 underline hover:text-sky-200"
+              >
+                Mở Bot Telegram 1-Chạm
+              </a>
+            ) : (
+              <span>Hỗ trợ Bot Telegram 1-Chạm</span>
+            )}
+            <span>&amp;</span>
             <Link href="/radar" className="font-semibold text-sky-300 underline hover:text-sky-200">
               Khóa IOC Khép kín (/radar)
             </Link>

@@ -1,4 +1,4 @@
-"""Telegram 1-Tap Forward Bot webhook handler with verified Bot API delivery & idempotency."""
+"""Telegram 1-Tap Multimodal Bot webhook handler with verified delivery & idempotency."""
 
 from __future__ import annotations
 
@@ -8,11 +8,43 @@ import uuid
 from typing import Any
 
 from app.config import Settings
-from app.core.security import build_ssrf_pinned_http_client
+from app.core.security import InvalidMediaError, build_ssrf_pinned_http_client
 from app.schemas import AnalysisReport
 from app.services.pipeline import AnalysisPipeline
+from app.services.telegram_formatting import (
+    build_verdict_inline_keyboard,
+    format_telegram_verdict_reply,
+    parse_telegram_command,
+    truncate_telegram_text,
+    validate_telegram_update_envelope,
+)
+from app.services.telegram_media import (
+    TelegramAttachment,
+    TelegramMediaFetchError,
+    TelegramMediaTooLargeError,
+    download_telegram_file,
+    extract_telegram_attachment,
+    send_telegram_typing_action,
+)
 
 logger = logging.getLogger(__name__)
+
+_OVERSIZE_REPLY = (
+    "⚠️ Tệp gửi lên vượt quá giới hạn an toàn 10 MB. "
+    "Vui lòng gửi ảnh/ghi âm nhỏ hơn để kiểm tra."
+)
+_EMPTY_GUIDANCE_REPLY = (
+    "🛡 VeriShield AI: Hãy chuyển tiếp (Forward) tin nhắn đáng ngờ, đường link, "
+    "ảnh biên lai/VietQR hoặc tin nhắn thoại vào đây để kiểm tra tức thì! "
+    "(Gõ /help để xem hướng dẫn)"
+)
+
+__all__ = [
+    "InvalidTelegramPayloadError",
+    "TelegramDeliveryError",
+    "format_telegram_verdict_reply",
+    "handle_telegram_update",
+]
 
 
 class TelegramDeliveryError(RuntimeError):
@@ -23,38 +55,20 @@ class InvalidTelegramPayloadError(ValueError):
     """Raised when an authenticated Telegram webhook body violates expected object structure."""
 
 
-def format_telegram_verdict_reply(report: AnalysisReport) -> str:
-    """Format concise Vietnamese safety verdict & counter-reply for Telegram chat."""
-    badge_map = {
-        "SAFE": "🟢 ÍT RỦI RO",
-        "SUSPICIOUS": "🟡 NGHI VẤN — CẦN KIỂM CHỨNG",
-        "HIGH_RISK": "🟠 RỦI RO CAO — TẠM DỪNG GIAO DỊCH",
-        "CRITICAL_SCAM": "🔴 CẢNH BÁO ĐỎ — DẤU HIỆU LỪA ĐẢO RÕ RỆT",
-    }
-    lines = [
-        f"🛡 VeriShield AI | {badge_map[report.verdict]} ({report.risk_score}/100)",
-        f"📌 Tóm tắt: {report.summary_vi}",
-    ]
-    if report.matched_playbooks:
-        lines.append(f"🎯 Kịch bản khớp: {', '.join(report.matched_playbooks[:2])}")
-    if report.actions.merchant_balance_warning:
-        lines.append(f"⚠️ {report.actions.merchant_balance_warning}")
-    if report.actions.counter_replies:
-        lines.append(f"💬 Gợi ý phản hồi: \"{report.actions.counter_replies[0]}\"")
-    if report.actions.urgent_steps:
-        lines.append(f"✅ Việc cần làm ngay: {report.actions.urgent_steps[0]}")
-    lines.append(f"🆔 Mã hồ sơ: {report.case_id}")
-    return "\n\n".join(lines)
-
-
-async def _deliver_telegram_message(bot_token: str, chat_id: int | str, text: str) -> None:
+async def _deliver_telegram_message(
+    bot_token: str,
+    chat_id: int | str,
+    text: str,
+    reply_markup: dict[str, Any] | None = None,
+) -> None:
     api_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    client = build_ssrf_pinned_http_client(timeout_sec=4.0)
+    body: dict[str, Any] = {"chat_id": chat_id, "text": truncate_telegram_text(text)}
+    if reply_markup is not None:
+        body["reply_markup"] = reply_markup
+
+    client = build_ssrf_pinned_http_client(timeout_sec=10.0)
     try:
-        resp = await client.post(
-            api_url,
-            json={"chat_id": chat_id, "text": text},
-        )
+        resp = await client.post(api_url, json=body)
     except Exception as exc:
         logger.warning("Telegram sendMessage transport failure (%s).", type(exc).__name__)
         raise TelegramDeliveryError("Telegram Bot API transport failure.") from exc
@@ -74,54 +88,110 @@ async def _deliver_telegram_message(bot_token: str, chat_id: int | str, text: st
         raise TelegramDeliveryError("Telegram Bot API reported ok=false.")
 
 
+async def _analyze_telegram_payload(
+    *,
+    pipeline: AnalysisPipeline,
+    settings: Settings,
+    token: str,
+    chat_id: int | str | None,
+    raw_text: str,
+    attachment: TelegramAttachment | None,
+    cached_case_id: str | None,
+) -> tuple[AnalysisReport | None, str]:
+    direct_reply, mode, expected_stk, analysis_text = parse_telegram_command(
+        raw_text, has_attachment=attachment is not None
+    )
+    if direct_reply is not None:
+        return None, direct_reply
+
+    if not analysis_text and (attachment is None or not token):
+        return None, _EMPTY_GUIDANCE_REPLY
+
+    if chat_id is not None and token:
+        await send_telegram_typing_action(token, chat_id)
+
+    image_bytes: bytes | None = None
+    image_filename = "telegram_photo.jpg"
+    image_mime = "image/jpeg"
+    audio_bytes: bytes | None = None
+    audio_filename = "telegram_voice.ogg"
+    audio_mime = "audio/ogg"
+    media_note = ""
+
+    if attachment is not None and token:
+        if attachment.file_size is not None and attachment.file_size > settings.max_upload_bytes:
+            return None, _OVERSIZE_REPLY
+        try:
+            media_bytes, resolved_name = await download_telegram_file(
+                token, attachment.file_id, settings.max_upload_bytes
+            )
+            if attachment.kind == "image":
+                image_bytes = media_bytes
+                image_filename = attachment.filename or resolved_name
+                image_mime = attachment.mime_type
+            else:
+                audio_bytes = media_bytes
+                audio_filename = attachment.filename or resolved_name
+                audio_mime = attachment.mime_type
+        except TelegramMediaTooLargeError:
+            return None, _OVERSIZE_REPLY
+        except TelegramMediaFetchError:
+            if not analysis_text:
+                return (
+                    None,
+                    "⚠️ Không thể tải tệp đính kèm từ Telegram lúc này. "
+                    "Vui lòng gửi lại ảnh/ghi âm hoặc dán nội dung tin nhắn.",
+                )
+            media_note = (
+                "ℹ️ Không tải được tệp đính kèm từ Telegram — "
+                "kết quả bên dưới chỉ dựa trên phần văn bản.\n\n"
+            )
+
+    try:
+        report = await pipeline.run(
+            mode=mode,
+            text=analysis_text,
+            image_bytes=image_bytes,
+            image_filename=image_filename,
+            image_mime=image_mime,
+            audio_bytes=audio_bytes,
+            audio_filename=audio_filename,
+            audio_mime=audio_mime,
+            expected_merchant_account=expected_stk,
+            case_id_override=cached_case_id,
+        )
+    except InvalidMediaError:
+        return (
+            None,
+            "⚠️ Tệp hình ảnh/âm thanh bị lỗi định dạng hoặc không đọc được. "
+            "Vui lòng gửi lại ảnh JPG/PNG/WebP hoặc ghi âm WAV/MP3/OGG/M4A hợp lệ.",
+        )
+
+    return report, truncate_telegram_text(media_note + format_telegram_verdict_reply(report))
+
+
 async def handle_telegram_update(
     update: dict[str, Any],
     pipeline: AnalysisPipeline,
     settings: Settings,
 ) -> dict[str, Any]:
-    """Process incoming Telegram message/forwarded message with strict schema & update_id idempotency."""
-    if not isinstance(update, dict):
-        raise InvalidTelegramPayloadError("Telegram update must be a JSON object.")
+    """Process incoming Telegram message/media with strict schema & update_id idempotency."""
+    try:
+        update_id, msg, chat_id, raw_text = validate_telegram_update_envelope(update)
+    except ValueError as exc:
+        raise InvalidTelegramPayloadError(str(exc)) from exc
 
-    raw_update_id = update.get("update_id")
-    if raw_update_id is not None and (
-        isinstance(raw_update_id, bool)
-        or not isinstance(raw_update_id, int)
-        or raw_update_id < 0
-        or raw_update_id > 9_223_372_036_854_775_807
-    ):
-        raise InvalidTelegramPayloadError("Telegram update_id must be a valid 64-bit non-negative integer.")
-    update_id: int | None = raw_update_id
-
-    for field_name in ("message", "edited_message"):
-        if (
-            field_name in update
-            and update[field_name] is not None
-            and not isinstance(update[field_name], dict)
-        ):
-            raise InvalidTelegramPayloadError(f"Telegram field '{field_name}' must be a JSON object.")
-
-    msg = update.get("message") or update.get("edited_message")
     if msg is None:
         return {"ok": True, "delivered": False, "ignored": True}
 
-    chat = msg.get("chat")
-    if chat is not None and not isinstance(chat, dict):
-        raise InvalidTelegramPayloadError("Telegram message.chat must be a JSON object.")
-    chat_id = chat.get("id") if isinstance(chat, dict) else None
-    if chat_id is not None and (isinstance(chat_id, bool) or not isinstance(chat_id, (int, str))):
-        raise InvalidTelegramPayloadError("Telegram chat.id must be an integer or string.")
-
-    raw_text_field = msg.get("text") if msg.get("text") is not None else msg.get("caption")
-    if raw_text_field is not None and not isinstance(raw_text_field, str):
-        raise InvalidTelegramPayloadError("Telegram text/caption must be a string.")
-    raw_text = (raw_text_field or "").strip()
+    attachment = extract_telegram_attachment(msg, max_bytes=settings.max_upload_bytes)
 
     report: AnalysisReport | None = None
     claim_state = "untracked"
     cached_case_id: str | None = None
     reply_text = ""
     owner_id = uuid.uuid4().hex
+    token = settings.telegram_bot_token.strip()
 
     if update_id is not None:
         claim_state, cached_case_id, cached_reply = pipeline.repo.claim_telegram_update(
@@ -152,32 +222,22 @@ async def handle_telegram_update(
 
             renew_task = asyncio.create_task(_heartbeat())
         try:
-            if not raw_text:
-                reply_text = (
-                    "🛡 VeriShield AI: Hãy chuyển tiếp (Forward) tin nhắn đáng ngờ, đường link "
-                    "hoặc mô tả giao dịch vào đây để kiểm tra tức thì!"
+            report, reply_text = await _analyze_telegram_payload(
+                pipeline=pipeline,
+                settings=settings,
+                token=token,
+                chat_id=chat_id,
+                raw_text=raw_text,
+                attachment=attachment,
+                cached_case_id=cached_case_id,
+            )
+            if update_id is not None:
+                pipeline.repo.save_telegram_update_cache(
+                    update_id,
+                    report.case_id if report is not None else None,
+                    reply_text,
+                    owner_id=owner_id,
                 )
-                if update_id is not None:
-                    pipeline.repo.save_telegram_update_cache(
-                        update_id,
-                        None,
-                        reply_text,
-                        owner_id=owner_id,
-                    )
-            else:
-                report = await pipeline.run(
-                    mode="personal",
-                    text=raw_text,
-                    case_id_override=cached_case_id,
-                )
-                reply_text = format_telegram_verdict_reply(report)
-                if update_id is not None:
-                    pipeline.repo.save_telegram_update_cache(
-                        update_id,
-                        report.case_id,
-                        reply_text,
-                        owner_id=owner_id,
-                    )
         except Exception:
             if update_id is not None:
                 pipeline.repo.release_telegram_update_claim(update_id, owner_id=owner_id)
@@ -186,10 +246,18 @@ async def handle_telegram_update(
             if renew_task is not None:
                 renew_task.cancel()
 
-    token = settings.telegram_bot_token.strip()
+    reply_markup = (
+        build_verdict_inline_keyboard(report.case_id, settings.public_base_url)
+        if report is not None
+        else None
+    )
+
     delivered = False
     if chat_id is not None and token:
-        await _deliver_telegram_message(token, chat_id, reply_text)
+        if reply_markup is not None:
+            await _deliver_telegram_message(token, chat_id, reply_text, reply_markup=reply_markup)
+        else:
+            await _deliver_telegram_message(token, chat_id, reply_text)
         delivered = True
 
     response: dict[str, Any] = {
@@ -201,6 +269,8 @@ async def handle_telegram_update(
     if chat_id is not None and not token:
         response["method"] = "sendMessage"
         response["text"] = reply_text
+        if reply_markup is not None:
+            response["reply_markup"] = reply_markup
 
     if report is not None:
         response["case_id"] = report.case_id

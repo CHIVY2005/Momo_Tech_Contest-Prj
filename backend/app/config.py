@@ -42,6 +42,8 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
+    telegram_bot_url: str = ""
+    public_base_url: str = "https://verishield.joiboi.app"
 
     analyst_pin: str = ""
     block_rule_ttl_minutes: int = Field(default=30, ge=1, le=1440)
