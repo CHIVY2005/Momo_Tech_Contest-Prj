@@ -31,8 +31,8 @@ export function CampaignQueue({
               Danh sách chiến dịch cần xử lý nhanh
             </h2>
             <p className="text-xs text-ink-muted">
-              Chặn dấu hiệu nghi vấn trên toàn hệ thống chỉ với một chạm mà không làm lộ dữ liệu
-              định danh cá nhân chưa qua xử lý.
+              Chặn nhanh dấu hiệu nghi vấn trên toàn hệ thống mà không làm lộ dữ liệu định danh cá
+              nhân chưa qua xử lý.
             </p>
           </div>
         </div>
@@ -82,7 +82,7 @@ export function CampaignQueue({
                       ) : (
                         <Ban className="h-3.5 w-3.5" aria-hidden="true" />
                       )}
-                      <span>Chặn một chạm</span>
+                      <span>Chặn ngay</span>
                     </button>
                   )}
                 </div>

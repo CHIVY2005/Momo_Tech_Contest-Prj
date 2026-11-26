@@ -97,7 +97,7 @@ export function ApiPlaygroundCard() {
               Kiểm thử hiệu lực quy tắc chặn
             </h2>
             <p className="text-xs text-ink-muted">
-              Gửi thử một giao dịch mẫu sau khi bật chặn một chạm ở trên để thấy hệ thống tự động
+              Gửi thử một giao dịch mẫu sau khi bật quy tắc chặn ở trên để thấy hệ thống tự động
               ngăn chặn ngay lập tức.
             </p>
           </div>

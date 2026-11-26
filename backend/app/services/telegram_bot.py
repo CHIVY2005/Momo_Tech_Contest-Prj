@@ -40,7 +40,7 @@ _OVERSIZE_REPLY = (
 _EMPTY_GUIDANCE_REPLY = (
     "🛡 <b>VeriShield AI:</b> Hãy gửi hoặc chuyển tiếp tin nhắn đáng ngờ, đường dẫn, "
     "ảnh biên lai, mã VietQR hoặc tin nhắn thoại vào đây để kiểm tra ngay.\n"
-    "(Gõ /demo để thử tình huống mẫu một chạm hoặc /help để xem hướng dẫn)"
+    "(Gõ /demo để thử tình huống mẫu hoặc /help để xem hướng dẫn)"
 )
 
 __all__ = [

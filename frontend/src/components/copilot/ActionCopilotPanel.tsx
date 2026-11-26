@@ -65,7 +65,7 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-ink">
             <MessageSquareReply className="h-4 w-4 text-sky-400" aria-hidden="true" />
-            <span>Gợi ý câu trả lời an toàn (sao chép một chạm):</span>
+            <span>Gợi ý câu trả lời an toàn:</span>
           </div>
           {actions.counter_replies.map((reply, idx) => {
             const key = `reply-${idx}`;

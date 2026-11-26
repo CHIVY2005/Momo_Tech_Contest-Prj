@@ -13,7 +13,7 @@ import urllib.request
 from pathlib import Path
 
 BOT_COMMANDS = [
-    {"command": "start", "description": "Giới thiệu và thử nhanh 5 tình huống mẫu một chạm"},
+    {"command": "start", "description": "Giới thiệu và thử nhanh 5 tình huống mẫu"},
     {"command": "demo", "description": "Thử 5 tình huống lừa đảo mẫu (biên lai giả, VietQR, giả công an)"},
     {"command": "bill", "description": "Người bán kiểm tra ảnh biên lai: /bill <số tài khoản>"},
     {"command": "call", "description": "Kiểm tra khi đang nghe điện thoại lạ (tạm dừng 30 giây)"},

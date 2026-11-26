@@ -20,13 +20,13 @@ _MERCHANT_HINT_RE = re.compile(
 )
 
 TELEGRAM_WELCOME_TEXT: Final[str] = (
-    "🛡 <b>Chào mừng đến với VeriShield AI — Trợ lý kiểm tra lừa đảo một chạm</b>\n\n"
+    "🛡 <b>Chào mừng đến với VeriShield AI — Trợ lý phòng chống lừa đảo trực tuyến</b>\n\n"
     "Bạn có thể gửi hoặc chuyển tiếp trực tiếp vào đây:\n"
     "• <b>Tin nhắn hoặc đường dẫn:</b> Tin nhắn SMS, Zalo, đường dẫn nghi giả mạo\n"
     "• <b>Ảnh biên lai hoặc mã VietQR:</b> Phân tích tính xác thực của hình ảnh và kiểm tra mã QR\n"
     "• <b>Ghi âm cuộc gọi:</b> Chuyển lời thoại sang văn bản và phát hiện dấu hiệu giả mạo\n\n"
     "⚡ <b>Lệnh nhanh:</b>\n"
-    "• /demo — Thử ngay 5 tình huống mẫu chỉ với một chạm\n"
+    "• /demo — Thử ngay 5 tình huống mẫu\n"
     "• /bill <code>190311112222</code> — Gửi kèm ảnh biên lai để đối chiếu số tài khoản cửa hàng\n"
     "• /call <i>nội dung</i> — Bật cảnh báo khi đang nghe điện thoại (tạm dừng để kiểm tra 30 giây)\n"
     "• /help — Xem hướng dẫn gửi tin nhắn, ảnh và tệp ghi âm (tối đa 10 MB)\n\n"
@@ -230,7 +230,7 @@ def parse_telegram_command(raw_text: str, has_attachment: bool) -> ParsedTelegra
     if cmd == "demo":
         if not arg_text:
             return ParsedTelegramCommand(
-                "🧪 <b>5 tình huống mẫu kiểm tra một chạm</b>\n\n"
+                "🧪 <b>Thử nghiệm với 5 tình huống mẫu</b>\n\n"
                 "Chọn trực tiếp một nút bên dưới (hoặc gõ <code>/demo 1</code> đến <code>/demo 5</code>) "
                 "để xem cách hệ thống phân tích và cảnh báo ngay trên Telegram:",
                 "personal",

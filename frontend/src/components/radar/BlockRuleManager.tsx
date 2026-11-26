@@ -180,8 +180,8 @@ export function BlockRuleManager({
         </p>
         {rules.length === 0 ? (
           <p className="rounded-xl border border-border-subtle bg-surface-subtle p-3 text-xs text-ink-muted">
-            Chưa có quy tắc chặn tạm thời nào. Bạn có thể bấm &ldquo;Chặn một chạm&rdquo; ở danh
-            sách chiến dịch phía trên để thử nghiệm.
+            Chưa có quy tắc chặn tạm thời nào. Bạn có thể bấm &ldquo;Chặn ngay&rdquo; ở danh sách
+            chiến dịch phía trên để thử nghiệm.
           </p>
         ) : (
           rules.map((rule) => {

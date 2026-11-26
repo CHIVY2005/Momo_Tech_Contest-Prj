@@ -33,7 +33,7 @@ Tài liệu này quy định giọng văn, cách viết hoa, bảng chuyển đ�
 | Bàn điều tra đa phương thức | Công cụ kiểm tra lừa đảo | Khu vực nhập dữ liệu trên trang chính |
 | Cộng hưởng rủi ro | Tăng mức cảnh báo rủi ro | Khi người dùng đang nghe cuộc gọi lạ |
 | Khóa làm nguội | Tạm dừng để kiểm tra | Bộ đếm 30 giây giúp người dùng bình tĩnh xác minh |
-| 1-Chạm | Một chạm | Viết `một chạm` khi đứng giữa câu |
+| 1-Chạm / một chạm | *(bỏ cụm từ dư thừa; dùng động từ trực tiếp như `Sao chép`, `Chặn ngay`, `Thử nhanh`)* | Tránh lặp lại cụm từ quảng cáo không cần thiết trên giao diện |
 | Mở Bot Telegram | Kiểm tra qua Telegram | Nút điều hướng sang bot `@verishieldvnbot` |
 | Phân tích & Kiểm chứng Ngay | Kiểm tra ngay | Nút gửi phân tích chính |
 | PII thô | Dữ liệu định danh cá nhân chưa qua xử lý | Chính sách quyền riêng tư, giải thích che giấu thông tin |
@@ -49,7 +49,7 @@ Tài liệu này quy định giọng văn, cách viết hoa, bảng chuyển đ�
 | Luồng điều tra thời gian thực (SSE Pipeline Trace) | Tiến trình kiểm tra | Khối hiển thị tiến độ phân tích |
 | Trợ lý Ứng phó Tức thì (Action Copilot) | Hướng dẫn xử lý nhanh | Khối gợi ý bước xử lý và mẫu phản hồi |
 | Điểm Rủi ro Hiệu chuẩn | Mức độ rủi ro | Thẻ kết quả phân tích |
-| 1-Click / 1-Click Copy / 1-Click Ecosystem Block | Một chạm / Sao chép nhanh / Chặn trên toàn hệ thống | Nút thao tác |
+| 1-Click / 1-Click Copy / 1-Click Ecosystem Block | Thao tác nhanh / Sao chép / Chặn ngay trên toàn hệ thống | Nút thao tác |
 | Zero-Login | Không cần đăng nhập | Thẻ giới thiệu thao tác nhanh |
 | Zero Raw PII | Không lưu dữ liệu định danh cá nhân chưa qua xử lý | Huy hiệu bảo mật quyền riêng tư |
 | Playground / API Playground | Kiểm thử kết nối API | Khu vực mở rộng dành cho kỹ thuật trên `/radar` |

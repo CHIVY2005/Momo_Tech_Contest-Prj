@@ -245,9 +245,9 @@ export default function RadarPage() {
             Trung tâm giám sát gian lận
           </h1>
           <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-secondary">
-            Theo dõi các nhóm dấu hiệu nghi vấn và bật quy tắc chặn trên toàn hệ thống chỉ với một
-            chạm. Số điện thoại và số tài khoản đều được che giấu, không lưu dữ liệu định danh cá
-            nhân chưa qua xử lý.
+            Theo dõi các nhóm dấu hiệu nghi vấn và bật nhanh quy tắc chặn trên toàn hệ thống. Số
+            điện thoại và số tài khoản đều được che giấu, không lưu dữ liệu định danh cá nhân chưa
+            qua xử lý.
           </p>
         </div>
 
