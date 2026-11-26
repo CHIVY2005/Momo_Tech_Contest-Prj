@@ -1,15 +1,13 @@
-"""Gemini 2.5 Flash async multimodal orchestrator with prompt isolation & degraded fallback."""
+"""Multimodal AI orchestrator with prompt isolation, CPA/Gemini transport, & Tier-1 fallback."""
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
+import time
 from collections.abc import Awaitable, Callable
-from typing import Any, Final
+from typing import Any
 
-from google import genai
-from google.genai import types
 from pydantic import BaseModel, Field
 
 from app.config import Settings
@@ -24,26 +22,20 @@ from app.schemas import (
     VietQRInfo,
 )
 from app.services.guardrails import GuardrailResult
+from app.services.llm_client import GeminiStructuredSchema, execute_llm_call
 
-GEMINI_TIMEOUT_SEC: Final[float] = 12.0
 logger = logging.getLogger(__name__)
 
-
-class GeminiStructuredSchema(BaseModel):
-    """Strict JSON schema requested from Gemini 2.5 Flash."""
-
-    ai_risk_score: int = Field(ge=0, le=100)
-    summary_vi: str
-    transcript: str | None = None
-    manipulation_tactics: list[str] = Field(default_factory=list)
-    highlighted_phrases: list[str] = Field(default_factory=list)
-    counter_replies: list[str] = Field(default_factory=list)
-    family_alert: str | None = None
-    bill_visual_anomalies: list[str] = Field(default_factory=list)
+__all__ = [
+    "GeminiStructuredSchema",
+    "LLMReasoningResult",
+    "build_isolated_prompt",
+    "run_gemini_reasoning",
+]
 
 
 class LLMReasoningResult(BaseModel):
-    """Normalized Tier-2 reasoning output with graceful degraded_mode support."""
+    """Normalized Tier-2 reasoning output with live telemetry & graceful degraded_mode support."""
 
     degraded_mode: bool
     ai_score: int | None = None
@@ -54,6 +46,10 @@ class LLMReasoningResult(BaseModel):
     counter_replies: list[str] = Field(default_factory=list)
     family_alert: str | None = None
     bill_visual_anomalies: list[str] = Field(default_factory=list)
+    llm_provider: str = "none"
+    llm_model: str | None = None
+    llm_latency_ms: int | None = None
+    llm_error: str | None = None
 
 
 def _sanitize_untrusted_text(raw: str) -> str:
@@ -116,7 +112,9 @@ def build_isolated_prompt(
 ) -> str:
     """Build grounded Vietnamese security-analyst prompt with strict untrusted data isolation."""
     safe_body = _sanitize_untrusted_text(user_text[:6000])
-    sanitized_notes = [_sanitize_untrusted_text(note[:300]) for note in tier1_notes[:8] if note.strip()]
+    sanitized_notes = [
+        _sanitize_untrusted_text(note[:300]) for note in tier1_notes[:8] if note.strip()
+    ]
     untrusted_payload = safe_body
     if sanitized_notes:
         notes_block = "\n".join(f"- {n}" for n in sanitized_notes)
@@ -158,13 +156,18 @@ def _synthesize_fallback_result(
     matched_playbooks: list[dict[str, Any]],
     local_transcript: str | None,
     active_block_rule_hit: bool = False,
+    llm_provider: str = "none",
+    llm_latency_ms: int | None = None,
+    llm_error: str | None = None,
 ) -> LLMReasoningResult:
     reasons: list[str] = []
     tactics: list[str] = []
     replies: list[str] = []
 
     if active_block_rule_hit:
-        reasons.append("thực thể nhận tiền/tên miền đang nằm trong danh sách chặn khẩn cấp của Fraud Ops")
+        reasons.append(
+            "thực thể nhận tiền/tên miền đang nằm trong danh sách chặn khẩn cấp của Fraud Ops"
+        )
     if guardrails.prompt_injection_detected:
         reasons.append("phát hiện kỹ thuật tiêm lệnh điều khiển AI (Prompt Injection)")
     for u in url_findings:
@@ -186,7 +189,9 @@ def _synthesize_fallback_result(
         or receipt_logic.beneficiary_mismatch
         or receipt_logic.logic_risk_points > 0
     ):
-        reasons.append("biên lai chuyển khoản có bất thường về nghiệp vụ, tái sử dụng hoặc sai người nhận")
+        reasons.append(
+            "biên lai chuyển khoản có bất thường về nghiệp vụ, tái sử dụng hoặc sai người nhận"
+        )
 
     if guardrails.safety_advisory_detected and not reasons:
         return LLMReasoningResult(
@@ -197,6 +202,9 @@ def _synthesize_fallback_result(
                 "(không chứa đường link độc hại hay bằng chứng gian lận đính kèm)."
             ),
             transcript=local_transcript,
+            llm_provider=llm_provider,
+            llm_latency_ms=llm_latency_ms,
+            llm_error=llm_error,
         )
 
     for pb in matched_playbooks[:2]:
@@ -233,54 +241,10 @@ def _synthesize_fallback_result(
         transcript=local_transcript,
         manipulation_tactics=list(dict.fromkeys(tactics)),
         counter_replies=list(dict.fromkeys(replies)),
+        llm_provider=llm_provider,
+        llm_latency_ms=llm_latency_ms,
+        llm_error=llm_error,
     )
-
-
-async def _call_gemini_once(
-    api_key: str,
-    model_name: str,
-    prompt: str,
-    media_parts: list[types.Part],
-) -> GeminiStructuredSchema | None:
-    client = genai.Client(api_key=api_key)
-    try:
-        safety = [
-            types.SafetySetting(
-                category=cat,
-                threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
-            )
-            for cat in (
-                types.HarmCategory.HARM_CATEGORY_HARASSMENT,
-                types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-            )
-        ]
-        contents: list[Any] = [*media_parts, prompt]
-        config = types.GenerateContentConfig(
-            temperature=0.1,
-            response_mime_type="application/json",
-            response_schema=GeminiStructuredSchema,
-            safety_settings=safety,
-        )
-        resp = await asyncio.wait_for(
-            client.aio.models.generate_content(
-                model=model_name,
-                contents=contents,
-                config=config,
-            ),
-            timeout=GEMINI_TIMEOUT_SEC,
-        )
-        parsed = resp.parsed
-        if isinstance(parsed, GeminiStructuredSchema):
-            return parsed
-        if isinstance(parsed, dict):
-            return GeminiStructuredSchema.model_validate(parsed)
-        return None
-    finally:
-        aclose_fn = getattr(client.aio, "aclose", None)
-        if callable(aclose_fn):
-            await aclose_fn()
 
 
 async def run_gemini_reasoning(
@@ -305,7 +269,7 @@ async def run_gemini_reasoning(
     force_fail_llm: bool = False,
     _generate_override: Callable[[str, str, list[Any]], Awaitable[Any]] | None = None,
 ) -> LLMReasoningResult:
-    """Execute Gemini 2.5 Flash reasoning with automatic backup-key retry & Tier-1 fallback."""
+    """Execute Tier-2 reasoning via CPA OpenAI-compatible API or Google GenAI with Tier-1 fallback."""
     tier1_notes: list[str] = []
     if iocs.brands:
         tier1_notes.append(f"Thương hiệu nhắc tới: {', '.join(iocs.brands)}")
@@ -334,6 +298,7 @@ async def run_gemini_reasoning(
         trusted_signals=trusted_signals,
     )
 
+    provider = settings.resolved_llm_provider
     keys = [k.strip() for k in (settings.gemini_api_key, settings.gemini_backup_api_key) if k.strip()]
     if force_fail_llm or not keys:
         return _synthesize_fallback_result(
@@ -347,18 +312,15 @@ async def run_gemini_reasoning(
             matched_playbooks=matched_playbooks,
             local_transcript=local_transcript,
             active_block_rule_hit=active_block_rule_hit,
+            llm_provider=provider,
+            llm_error="FORCED_FAIL" if force_fail_llm else "NO_API_KEY",
         )
 
-    media_parts: list[types.Part] = []
-    if image_bytes:
-        media_parts.append(types.Part.from_bytes(data=image_bytes, mime_type=image_mime))
-    if audio_bytes:
-        media_parts.append(types.Part.from_bytes(data=audio_bytes, mime_type=audio_mime))
-
-    for key in keys:
-        try:
-            if _generate_override is not None:
-                raw_out = await _generate_override(key, prompt, media_parts)
+    if _generate_override is not None:
+        t0 = time.perf_counter()
+        for key in keys:
+            try:
+                raw_out = await _generate_override(key, prompt, [])
                 parsed = (
                     raw_out
                     if isinstance(raw_out, GeminiStructuredSchema)
@@ -368,26 +330,63 @@ async def run_gemini_reasoning(
                         else None
                     )
                 )
-            else:
-                parsed = await _call_gemini_once(key, settings.gemini_model, prompt, media_parts)
+                if parsed is not None:
+                    return LLMReasoningResult(
+                        degraded_mode=False,
+                        ai_score=parsed.ai_risk_score,
+                        summary_vi=parsed.summary_vi.strip(),
+                        transcript=(parsed.transcript or local_transcript),
+                        manipulation_tactics=parsed.manipulation_tactics,
+                        highlighted_phrases=parsed.highlighted_phrases,
+                        counter_replies=parsed.counter_replies,
+                        family_alert=parsed.family_alert,
+                        bill_visual_anomalies=parsed.bill_visual_anomalies,
+                        llm_provider=provider,
+                        llm_model=settings.gemini_model,
+                        llm_latency_ms=int((time.perf_counter() - t0) * 1000),
+                    )
+            except Exception as exc:
+                logger.warning("Override LLM call failed (%s).", type(exc).__name__)
+        return _synthesize_fallback_result(
+            guardrails=guardrails,
+            classifier=classifier,
+            url_findings=url_findings,
+            vietqr_findings=vietqr_findings,
+            sandbox=sandbox,
+            image_forensics=image_forensics,
+            receipt_logic=receipt_logic,
+            matched_playbooks=matched_playbooks,
+            local_transcript=local_transcript,
+            active_block_rule_hit=active_block_rule_hit,
+            llm_provider=provider,
+            llm_latency_ms=int((time.perf_counter() - t0) * 1000),
+            llm_error="SAFETY_OR_OVERRIDE_NULL",
+        )
 
-            if parsed is not None:
-                return LLMReasoningResult(
-                    degraded_mode=False,
-                    ai_score=parsed.ai_risk_score,
-                    summary_vi=parsed.summary_vi.strip(),
-                    transcript=(parsed.transcript or local_transcript),
-                    manipulation_tactics=parsed.manipulation_tactics,
-                    highlighted_phrases=parsed.highlighted_phrases,
-                    counter_replies=parsed.counter_replies,
-                    family_alert=parsed.family_alert,
-                    bill_visual_anomalies=parsed.bill_visual_anomalies,
-                )
-        except Exception as exc:
-            logger.warning(
-                "Gemini reasoning attempt failed (%s); trying next fallback.",
-                type(exc).__name__,
-            )
+    outcome = await execute_llm_call(
+        settings=settings,
+        prompt=prompt,
+        image_bytes=image_bytes,
+        image_mime=image_mime,
+        audio_bytes=audio_bytes,
+        audio_mime=audio_mime,
+    )
+    if outcome.parsed is not None:
+        p = outcome.parsed
+        return LLMReasoningResult(
+            degraded_mode=False,
+            ai_score=p.ai_risk_score,
+            summary_vi=p.summary_vi.strip(),
+            transcript=(p.transcript or local_transcript),
+            manipulation_tactics=p.manipulation_tactics,
+            highlighted_phrases=p.highlighted_phrases,
+            counter_replies=p.counter_replies,
+            family_alert=p.family_alert,
+            bill_visual_anomalies=p.bill_visual_anomalies,
+            llm_provider=outcome.provider,
+            llm_model=outcome.actual_model or settings.gemini_model,
+            llm_latency_ms=outcome.latency_ms,
+        )
 
     return _synthesize_fallback_result(
         guardrails=guardrails,
@@ -400,4 +399,7 @@ async def run_gemini_reasoning(
         matched_playbooks=matched_playbooks,
         local_transcript=local_transcript,
         active_block_rule_hit=active_block_rule_hit,
+        llm_provider=outcome.provider,
+        llm_latency_ms=outcome.latency_ms,
+        llm_error=outcome.error_code,
     )

@@ -153,6 +153,13 @@ export function VerdictDashboard({ report }: VerdictDashboardProps) {
           </span>
         )}
 
+        {!report.degraded_mode && report.llm_model && (
+          <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 font-[family-name:var(--font-mono)] text-emerald-200">
+            LLM: {report.llm_model}
+            {typeof report.llm_latency_ms === "number" ? ` (${report.llm_latency_ms}ms)` : ""}
+          </span>
+        )}
+
         {report.degraded_mode && (
           <span className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-amber-200">
             Chế độ dự phòng cục bộ Tầng 1 (Không phụ thuộc Cloud LLM)

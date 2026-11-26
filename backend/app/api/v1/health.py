@@ -23,6 +23,9 @@ async def get_health(request: Request) -> dict[str, Any]:
         "gemini_configured": bool(
             settings.gemini_api_key.strip() or settings.gemini_backup_api_key.strip()
         ),
+        "llm_provider": settings.resolved_llm_provider,
+        "llm_model": settings.gemini_model,
+        "llm_base_url_configured": bool(settings.gemini_base_url.strip()),
         "playbooks_count": len(pipeline.kb.playbooks),
     }
 

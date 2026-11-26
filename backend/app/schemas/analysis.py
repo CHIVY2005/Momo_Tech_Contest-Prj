@@ -102,6 +102,10 @@ class AnalysisReport(BaseModel):
     actions: ActionBundle
     trace: list[TraceStep] = Field(default_factory=list)
     community_hits: int = Field(default=0, ge=0)
+    llm_provider: str = "none"
+    llm_model: str | None = None
+    llm_latency_ms: int | None = Field(default=None, ge=0)
+    llm_error: str | None = None
 
     @model_validator(mode="after")
     def _enforce_report_invariants(self) -> "AnalysisReport":

@@ -405,14 +405,16 @@ class AnalysisPipeline:
             llm_result=llm_res,
         )
 
+        llm_badge = (
+            " [Chế độ dự phòng Tầng 1]"
+            if llm_res.degraded_mode
+            else f" [{llm_res.llm_model or self.settings.gemini_model}]"
+        )
         llm_step = TraceStep(
             step_id="multimodal_calibration",
             title="Thẩm định Đa phương thức & Hiệu chuẩn Điểm Rủi ro",
             status="warning" if llm_res.degraded_mode else "done",
-            detail=(
-                f"Điểm hiệu chuẩn: {cal.final_score}/100 ({cal.verdict})"
-                + (" [Chế độ dự phòng Tầng 1]" if llm_res.degraded_mode else " [Gemini 2.5 Flash]")
-            ),
+            detail=f"Điểm hiệu chuẩn: {cal.final_score}/100 ({cal.verdict}){llm_badge}",
             duration_ms=int((time.perf_counter() - t_llm) * 1000),
         )
         trace.append(llm_step)
@@ -449,6 +451,10 @@ class AnalysisPipeline:
             actions=actions,
             trace=trace,
             community_hits=comm_hits,
+            llm_provider=llm_res.llm_provider,
+            llm_model=llm_res.llm_model,
+            llm_latency_ms=llm_res.llm_latency_ms,
+            llm_error=llm_res.llm_error,
         )
         saved_report = self.repo.save_report(
             raw_report,
