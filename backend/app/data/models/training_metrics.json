@@ -1,16 +1,32 @@
 {
   "backbone": "intfloat/multilingual-e5-small",
   "license": "MIT",
+  "architecture": "frozen_e5_semantic_encoder_plus_mean_pool_mlp_head",
+  "split_strategy": "disjoint_template_families_train_val_test",
   "vocab_fit_scope": "train_plus_kb_only",
   "pruned_vocab_size": 36000,
-  "onnx_size_mb": 34.25,
-  "pytorch_fp32_test_macro_f1": 1.0,
-  "onnx_int8_test_macro_f1": 1.0,
-  "test_macro_f1": 1.0,
+  "onnx_size_mb": 34.3,
+  "best_val_epoch": 15,
+  "pytorch_fp32_val_macro_f1": 0.9836,
+  "onnx_int8_val_macro_f1": 0.9225,
+  "pytorch_fp32_test_macro_f1": 0.9472,
+  "onnx_int8_test_macro_f1": 0.9314,
+  "test_macro_f1": 0.9314,
+  "playbook_embedding_off_diag_cos_p90": 0.8637,
+  "playbook_embedding_off_diag_cos_max": 0.8911,
   "confusion_matrix": [
     [
-      52,
+      47,
       0,
+      5,
+      0,
+      0,
+      0,
+      0
+    ],
+    [
+      1,
+      51,
       0,
       0,
       0,
@@ -19,15 +35,6 @@
     ],
     [
       0,
-      52,
-      0,
-      0,
-      0,
-      0,
-      0
-    ],
-    [
-      0,
       0,
       52,
       0,
@@ -38,18 +45,18 @@
     [
       0,
       0,
-      0,
-      52,
+      5,
+      47,
       0,
       0,
       0
     ],
     [
       0,
-      0,
-      0,
-      0,
-      52,
+      8,
+      4,
+      1,
+      39,
       0,
       0
     ],
@@ -64,43 +71,43 @@
     ],
     [
       0,
+      1,
       0,
       0,
       0,
       0,
-      0,
-      52
+      51
     ]
   ],
   "classification_report": {
     "SAFE_NORMAL": {
-      "precision": 1.0,
-      "recall": 1.0,
-      "f1-score": 1.0,
+      "precision": 0.9791666666666666,
+      "recall": 0.9038461538461539,
+      "f1-score": 0.94,
       "support": 52.0
     },
     "SAFE_ADVISORY": {
-      "precision": 1.0,
-      "recall": 1.0,
-      "f1-score": 1.0,
+      "precision": 0.85,
+      "recall": 0.9807692307692307,
+      "f1-score": 0.9107142857142857,
       "support": 52.0
     },
     "SCAM_IMPERSONATION": {
-      "precision": 1.0,
+      "precision": 0.7878787878787878,
       "recall": 1.0,
-      "f1-score": 1.0,
+      "f1-score": 0.8813559322033898,
       "support": 52.0
     },
     "SCAM_TASK_INVEST_LOAN": {
-      "precision": 1.0,
-      "recall": 1.0,
-      "f1-score": 1.0,
+      "precision": 0.9791666666666666,
+      "recall": 0.9038461538461539,
+      "f1-score": 0.94,
       "support": 52.0
     },
     "SCAM_PHISHING_APK_OTP": {
       "precision": 1.0,
-      "recall": 1.0,
-      "f1-score": 1.0,
+      "recall": 0.75,
+      "f1-score": 0.8571428571428571,
       "support": 52.0
     },
     "SCAM_URGENT_BORROW": {
@@ -111,21 +118,21 @@
     },
     "PROMPT_INJECTION": {
       "precision": 1.0,
-      "recall": 1.0,
-      "f1-score": 1.0,
+      "recall": 0.9807692307692307,
+      "f1-score": 0.9902912621359223,
       "support": 52.0
     },
-    "accuracy": 1.0,
+    "accuracy": 0.9313186813186813,
     "macro avg": {
-      "precision": 1.0,
-      "recall": 1.0,
-      "f1-score": 1.0,
+      "precision": 0.9423160173160172,
+      "recall": 0.9313186813186813,
+      "f1-score": 0.9313577624566365,
       "support": 364.0
     },
     "weighted avg": {
-      "precision": 1.0,
-      "recall": 1.0,
-      "f1-score": 1.0,
+      "precision": 0.9423160173160173,
+      "recall": 0.9313186813186813,
+      "f1-score": 0.9313577624566364,
       "support": 364.0
     }
   }

@@ -35,8 +35,9 @@ def _has_hard_threat(
     sandbox: SandboxInspection | None,
     image_forensics: ImageForensicsResult | None,
     receipt_logic: ReceiptLogicResult | None,
+    has_visual_bill_anomaly: bool = False,
 ) -> bool:
-    if guardrails.prompt_injection_detected:
+    if guardrails.prompt_injection_detected or has_visual_bill_anomaly:
         return True
     if any(
         u.is_blocked_ssrf or u.spoofed_brand or u.is_idn_homoglyph or u.risk_points >= 40
@@ -100,6 +101,7 @@ def calibrate_risk(
         sandbox=sandbox,
         image_forensics=image_forensics,
         receipt_logic=receipt_logic,
+        has_visual_bill_anomaly=has_visual_bill_anomaly,
     )
 
     is_neural_advisory = bool(
@@ -111,15 +113,28 @@ def calibrate_risk(
         and (ai_score is None or llm_val < 45)
     )
 
+    advisory_overridden_by_signals = bool(
+        in_active_call
+        or (onnx_avail and classifier is not None and classifier.scam_probability >= 0.75)
+        or (
+            onnx_avail
+            and classifier is not None
+            and classifier.scam_probability >= 0.50
+            and llm_avail
+            and llm_val >= 75
+        )
+    )
+
     # 1. Active Fraud Ops Block Rule always overrides (>= 95)
     if active_block_rule_hit:
         fused = max(fused, 96)
         confidence = 0.99
-    # 2. Official Safety Advisory Cap (<= 20) when free of any threat indicators and not vetoed
+    # 2. Official Safety Advisory Cap (<= 20) when free of threat/scam indicators and not vetoed
     elif (
         (guardrails.safety_advisory_detected or is_neural_advisory)
         and not guardrails.advisory_vetoed
         and not hard_threat
+        and not advisory_overridden_by_signals
     ):
         fused = min(fused, 16)
         confidence = max(confidence, 0.92)

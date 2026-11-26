@@ -40,7 +40,7 @@ def test_wal_pii_redaction_ttl_protected_demo_and_hash_blocking(
         ttl_minutes=30,
         now=t0,
     )
-    assert rule.masked_value == "1903****6201"
+    assert rule.masked_value == "19****01"
 
     probe_iocs = ExtractedIOCs(
         phones=["0912345678"],

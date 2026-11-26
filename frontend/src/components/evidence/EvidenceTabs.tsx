@@ -3,6 +3,7 @@
 import { FileCheck2, GlobeLock, Image as ImageIcon, ListChecks, QrCode } from "lucide-react";
 import { type KeyboardEvent, useRef, useState } from "react";
 
+import { shouldShowReceiptCard } from "@/lib/api";
 import type { AnalysisReport, SeverityLevel } from "@/lib/types";
 
 import { ElaCompareView } from "./ElaCompareView";
@@ -29,6 +30,8 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
   const [activeTab, setActiveTab] = useState<EvidenceTabKey>("all");
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
+  const showReceiptCard = shouldShowReceiptCard(report);
+
   const tabs: Array<{
     id: EvidenceTabKey;
     label: string;
@@ -50,7 +53,7 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
     {
       id: "receipt",
       label: "Nghiệp vụ Biên lai",
-      count: report.receipt_logic?.is_receipt_candidate ? 1 : 0,
+      count: showReceiptCard ? 1 : 0,
       Icon: FileCheck2,
     },
     {
@@ -179,8 +182,13 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
           ))}
 
         {activeTab === "receipt" &&
-          (report.receipt_logic?.is_receipt_candidate ? (
-            <ReceiptCheckCard receipt={report.receipt_logic} />
+          (showReceiptCard ? (
+            <ReceiptCheckCard
+              receipt={report.receipt_logic}
+              verificationStatus={report.receipt_verification_status}
+              merchantBalanceWarning={report.actions.merchant_balance_warning}
+              imageForensics={report.image_forensics}
+            />
           ) : (
             <p className="text-xs text-slate-400">
               Nội dung hiện tại không phải ảnh chụp biên lai chuyển khoản ngân hàng.

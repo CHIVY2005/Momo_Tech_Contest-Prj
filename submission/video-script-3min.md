@@ -7,7 +7,7 @@
 ## Phân cảnh 1 (`0:00 – 0:25`) — Mở đầu Vấn đề & Toàn cảnh Giải pháp
 - **Hình ảnh trên màn hình:** Mở trang chủ `https://verishield.joiboi.app`, lướt nhẹ qua thanh **5 Kịch bản Thực chiến 1-Click** và 3 tab chế độ (*Cá nhân*, *Chủ cửa hàng*, *Ví Trước Chuyển Tiền*).
 - **Lời bình:**
-  > *"Tại Việt Nam, kẻ gian thao túng nạn nhân suốt Phút 01 đến Phút 88 qua tin nhắn giả mạo ngân hàng, ảnh biên lai chỉnh sửa trên Zalo hay cuộc gọi giả danh Công an; tới Phút 89 khi mở ví bấm chuyển tiền, cảnh báo chữ đơn thuần không còn đủ sức ngăn chặn. VeriShield AI v2.0 giải quyết trọn vẹn chu trình này bằng kiến trúc 3 tầng kết hợp mô hình ngữ nghĩa tiếng Việt INT8 ONNX 11 mili-giây, pháp y chứng từ 4 lớp và trung tâm vận hành Fraud Ops khép kín."*
+  > *"Tại Việt Nam, kẻ gian thao túng nạn nhân suốt Phút 01 đến Phút 88 qua tin nhắn giả mạo ngân hàng, ảnh biên lai chỉnh sửa trên Zalo hay cuộc gọi giả danh Công an; tới Phút 89 khi mở ví bấm chuyển tiền, cảnh báo chữ đơn thuần không còn đủ sức ngăn chặn. VeriShield AI v2.0 giải quyết trọn vẹn chu trình này bằng kiến trúc 3 tầng kết hợp mô hình ngữ nghĩa tiếng Việt INT8 ONNX 10 mili-giây, pháp y chứng từ 4 lớp và trung tâm vận hành Fraud Ops khép kín."*
 
 ---
 
@@ -33,7 +33,7 @@
 
 ## Phân cảnh 4 (`2:00 – 2:50`) — Vòng Lặp Khép Kín Trên Trung Tâm Fraud Ops (`/radar`) & Kết Luận
 - **Hình ảnh trên màn hình:**
-  1. Chuyển sang `/radar`: nhấp vào nút trên **Đồ thị Liên kết Chiến dịch & Cụm IOC Ẩn danh** (`9998****7666`).
+  1. Chuyển sang `/radar`: nhấp vào nút trên **Đồ thị Liên kết Chiến dịch & Cụm IOC Ẩn danh** (`99****66`).
   2. Nhấn nút đỏ **1-Click Khóa Khẩn cấp** trên chiến dịch mạo danh Công an (PIN `2026` điền sẵn).
   3. Kéo xuống **Fintech Pre-Transfer REST API Playground**, nhấn **Gửi Yêu cầu API Kiểm định Ví** cho giao dịch tới `STK 999888777666` → màn hình hiện ngay **`BỊ CHẶN BỞI FRAUD OPS RULE (96/100)`** (`blocked_by_ops_rule: true`).
   4. Nhấn **Khôi phục Demo (Reset)** và kết thúc với thẻ tổng kết (`F1 = 1.0000`, `0%` báo động giả trên tin khuyến cáo, `https://verishield.joiboi.app`).

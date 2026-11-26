@@ -34,6 +34,19 @@ class LocalOcrResult(BaseModel):
 @lru_cache(maxsize=1)
 def _get_rapid_ocr() -> Any:
     from rapidocr_onnxruntime import RapidOCR
+    from rapidocr_onnxruntime.utils.infer_engine import OrtInferSession
+
+    if not getattr(OrtInferSession, "_verishield_mem_pattern_patched", False):
+        orig_init_opts = OrtInferSession._init_sess_opts  # noqa: SLF001
+
+        def _safe_init_sess_opts(config: dict[str, Any]) -> Any:
+            sess_opt = orig_init_opts(config)
+            sess_opt.enable_cpu_mem_arena = False
+            sess_opt.enable_mem_pattern = False
+            return sess_opt
+
+        OrtInferSession._init_sess_opts = staticmethod(_safe_init_sess_opts)  # noqa: SLF001
+        OrtInferSession._verishield_mem_pattern_patched = True  # noqa: SLF001
 
     return RapidOCR(intra_op_num_threads=2, inter_op_num_threads=1)
 

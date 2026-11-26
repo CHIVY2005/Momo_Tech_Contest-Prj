@@ -445,6 +445,24 @@ def _is_google_safety_blocked(resp: Any) -> bool:
     return False
 
 
+def _extract_google_api_error_info(exc: Exception) -> tuple[int | None, str | None]:
+    """Extract HTTP status code and optional Retry-After header from google-genai APIError."""
+    raw_code = getattr(exc, "code", None)
+    if raw_code is None:
+        raw_code = getattr(exc, "status_code", None)
+    status_code: int | None = None
+    if isinstance(raw_code, int) and 100 <= raw_code <= 599:
+        status_code = raw_code
+    retry_after: str | None = None
+    resp = getattr(exc, "response", None)
+    headers = getattr(resp, "headers", None)
+    if headers is not None and hasattr(headers, "get"):
+        hdr = headers.get("Retry-After") or headers.get("retry-after")
+        if isinstance(hdr, str):
+            retry_after = hdr
+    return status_code, retry_after
+
+
 async def _call_google_genai_key(
     api_key: str,
     model_name: str,
@@ -455,6 +473,7 @@ async def _call_google_genai_key(
     image_mime: str,
     audio_bytes: bytes | None,
     audio_mime: str,
+    failover_cooldown_out: list[float] | None = None,
 ) -> tuple[GeminiStructuredSchema | None, str | None, int, str | None]:
     media_parts: list[types.Part] = []
     if image_bytes:
@@ -472,6 +491,7 @@ async def _call_google_genai_key(
         )
     ]
     config = types.GenerateContentConfig(
+        system_instruction=STRUCTURED_SYSTEM_INSTRUCTION,
         temperature=0.1,
         response_mime_type="application/json",
         response_schema=GeminiStructuredSchema,
@@ -489,6 +509,7 @@ async def _call_google_genai_key(
     try:
         for retry_idx in range(max_retries + 1):
             attempts += 1
+            retry_after_hdr: str | None = None
             try:
                 resp = await asyncio.wait_for(
                     client.aio.models.generate_content(
@@ -507,17 +528,35 @@ async def _call_google_genai_key(
                     return GeminiStructuredSchema.model_validate(resp.parsed), actual_model, attempts, None
                 if getattr(resp, "text", None):
                     return parse_structured_llm_json(resp.text), actual_model, attempts, None
-                return None, actual_model, attempts, "SAFETY_BLOCKED"
+                last_err = "EMPTY_COMPLETION_CONTENT"
             except TimeoutError:
                 last_err = "TIMEOUT"
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                last_err = type(exc).__name__.upper()
+                status_code, retry_after_hdr = _extract_google_api_error_info(exc)
+                if status_code is not None:
+                    last_err = f"HTTP_{status_code}"
+                    if status_code not in RETRYABLE_HTTP_STATUSES:
+                        return None, None, attempts, last_err
+                    ra_sec = _parse_retry_after_sec(retry_after_hdr)
+                    if ra_sec is not None and ra_sec > MAX_INTERACTIVE_RETRY_WAIT_SEC:
+                        return None, None, attempts, f"{last_err}_RETRY_AFTER_EXCEEDED"
+                    if (
+                        retry_idx >= max_retries
+                        and ra_sec is not None
+                        and ra_sec > 0
+                        and failover_cooldown_out is not None
+                    ):
+                        failover_cooldown_out.append(ra_sec)
+                else:
+                    last_err = type(exc).__name__.upper()
             if retry_idx < max_retries:
-                delay = _compute_backoff_sec(retry_idx, None)
+                delay = _compute_backoff_sec(retry_idx, retry_after_hdr)
                 if delay is not None:
                     await asyncio.sleep(delay)
+                else:
+                    return None, None, attempts, f"{last_err}_RETRY_AFTER_EXCEEDED"
         return None, None, attempts, last_err
     finally:
         aclose_fn = getattr(client.aio, "aclose", None)
@@ -601,7 +640,14 @@ async def execute_llm_call(
                 ):
                     break
     else:
+        pending_google_cooldown: list[float] = []
         for key_idx, key in enumerate(keys):
+            if key_idx > 0 and pending_google_cooldown:
+                wait_sec = pending_google_cooldown.pop()
+                pending_google_cooldown.clear()
+                if wait_sec > MAX_INTERACTIVE_RETRY_WAIT_SEC:
+                    break
+                await asyncio.sleep(wait_sec)
             parsed, actual_model, used_attempts, err = await _call_google_genai_key(
                 api_key=key,
                 model_name=settings.gemini_model,
@@ -612,6 +658,7 @@ async def execute_llm_call(
                 image_mime=image_mime,
                 audio_bytes=audio_bytes,
                 audio_mime=audio_mime,
+                failover_cooldown_out=pending_google_cooldown,
             )
             total_attempts += used_attempts
             if parsed is not None:
@@ -626,7 +673,7 @@ async def execute_llm_call(
                 )
             if err:
                 last_error = err
-                if err == "SAFETY_BLOCKED":
+                if err == "SAFETY_BLOCKED" or err.endswith("_RETRY_AFTER_EXCEEDED"):
                     break
 
     return LLMCallOutcome(

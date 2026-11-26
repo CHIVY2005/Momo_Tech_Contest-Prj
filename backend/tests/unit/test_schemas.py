@@ -90,7 +90,7 @@ def test_radar_mutations_require_explicit_pin_and_no_raw_ioc_in_campaign() -> No
     by_hash = CreateBlockRuleRequest(
         ioc_type="bank_account",
         ioc_hash="a" * 64,
-        masked_value="1903****6201",
+        masked_value="19****01",
         reason="Confirmed mule campaign",
         analyst_pin="2026",
     )

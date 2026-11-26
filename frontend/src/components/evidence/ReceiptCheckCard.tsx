@@ -1,11 +1,19 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, MinusCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, MinusCircle, ShieldAlert } from "lucide-react";
 
-import type { ReceiptLogicResult } from "@/lib/types";
+import { maskDisplayIoc } from "@/lib/api";
+import type {
+  ImageForensicsResult,
+  ReceiptLogicResult,
+  ReceiptVerificationStatus,
+} from "@/lib/types";
 
 interface ReceiptCheckCardProps {
-  receipt: ReceiptLogicResult;
+  receipt?: ReceiptLogicResult | null;
+  verificationStatus: ReceiptVerificationStatus;
+  merchantBalanceWarning?: string | null;
+  imageForensics?: ImageForensicsResult | null;
 }
 
 type CheckState = "pass" | "fail" | "unchecked";
@@ -49,56 +57,124 @@ function StatusRow({
   );
 }
 
-export function ReceiptCheckCard({ receipt }: ReceiptCheckCardProps) {
-  const refState: CheckState = !receipt.reference_valid
-    ? "fail"
-    : receipt.reference_code
-      ? "pass"
-      : "unchecked";
-  const timestampState: CheckState = receipt.timestamp_anomaly
-    ? "fail"
-    : receipt.timestamp_checked
-      ? "pass"
-      : "unchecked";
-  const amountState: CheckState = receipt.amount_format_anomaly
-    ? "fail"
-    : receipt.amount_checked
-      ? "pass"
-      : "unchecked";
-  const geometryState: CheckState = receipt.geometry_anomaly
-    ? "fail"
-    : receipt.geometry_checked
-      ? "pass"
-      : "unchecked";
-  const beneficiaryState: CheckState = receipt.beneficiary_mismatch
-    ? "fail"
-    : receipt.beneficiary_checked
-      ? "pass"
-      : "unchecked";
-  const replayState: CheckState = receipt.is_replayed
-    ? "fail"
-    : receipt.replay_checked
-      ? "pass"
-      : "unchecked";
+export function ReceiptCheckCard({
+  receipt,
+  verificationStatus,
+  merchantBalanceWarning,
+  imageForensics,
+}: ReceiptCheckCardProps) {
+  const refState: CheckState = !receipt
+    ? "unchecked"
+    : !receipt.reference_valid
+      ? "fail"
+      : receipt.reference_code
+        ? "pass"
+        : "unchecked";
+  const timestampState: CheckState = !receipt
+    ? "unchecked"
+    : receipt.timestamp_anomaly
+      ? "fail"
+      : receipt.timestamp_checked
+        ? "pass"
+        : "unchecked";
+  const amountState: CheckState = !receipt
+    ? "unchecked"
+    : receipt.amount_format_anomaly
+      ? "fail"
+      : receipt.amount_checked
+        ? "pass"
+        : "unchecked";
+  const geometryState: CheckState = !receipt
+    ? "unchecked"
+    : receipt.geometry_anomaly
+      ? "fail"
+      : receipt.geometry_checked
+        ? "pass"
+        : "unchecked";
+  const beneficiaryState: CheckState = !receipt
+    ? verificationStatus === "BENEFICIARY_MISMATCH"
+      ? "fail"
+      : "unchecked"
+    : receipt.beneficiary_mismatch || verificationStatus === "BENEFICIARY_MISMATCH"
+      ? "fail"
+      : receipt.beneficiary_checked
+        ? "pass"
+        : "unchecked";
+  const replayState: CheckState = !receipt
+    ? "unchecked"
+    : receipt.is_replayed
+      ? "fail"
+      : receipt.replay_checked
+        ? "pass"
+        : "unchecked";
+  const elaExifState: CheckState = !imageForensics
+    ? "unchecked"
+    : imageForensics.tamper_score >= 35 || imageForensics.editing_software_detected
+      ? "fail"
+      : "pass";
+
+  const isAlertStatus =
+    verificationStatus === "TAMPER_OR_LOGIC_ANOMALY" ||
+    verificationStatus === "BENEFICIARY_MISMATCH" ||
+    verificationStatus === "REPLAYED_RECEIPT";
+  const riskPoints = receipt?.logic_risk_points ?? 0;
 
   return (
     <div className="space-y-3">
+      {(merchantBalanceWarning || verificationStatus !== "NOT_APPLICABLE") && (
+        <div
+          role="alert"
+          className="flex items-start gap-2.5 rounded-xl border border-amber-500/50 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-100"
+        >
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />
+          <p className="leading-relaxed">
+            <strong className="text-amber-200">Rào chắn Trung thực Tiểu thương: </strong>
+            {merchantBalanceWarning ??
+              "Ảnh chụp biên lai không chứng minh tiền đã vào tài khoản. Luôn kiểm tra số dư ngân hàng thực tế hoặc Loa thông báo trước khi giao hàng."}
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-[#0b1120] px-3.5 py-2.5">
-        <div className="text-xs">
-          <span className="text-slate-400">Ngân hàng nhận diện: </span>
-          <strong className="text-slate-100">{receipt.bank_detected ?? "Chưa xác định"}</strong>
-          {receipt.reference_code && (
-            <span className="ml-3 font-[family-name:var(--font-mono)] text-sky-300">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+          <span>
+            <span className="text-slate-400">Ngân hàng nhận diện: </span>
+            <strong className="text-slate-100">{receipt?.bank_detected ?? "Chưa xác định"}</strong>
+          </span>
+          {receipt?.reference_code && (
+            <span className="font-[family-name:var(--font-mono)] text-sky-300">
               Mã GD: {receipt.reference_code}
             </span>
           )}
+          {receipt?.extracted_recipient_account && (
+            <span className="font-[family-name:var(--font-mono)] text-amber-300">
+              STK nhận: {maskDisplayIoc(receipt.extracted_recipient_account)}
+            </span>
+          )}
         </div>
-        <span className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 font-[family-name:var(--font-mono)] text-[11px] text-amber-200">
-          Trạng thái: {receipt.verification_status} ({receipt.logic_risk_points} đ)
+        <span
+          className={`rounded border px-2 py-0.5 font-[family-name:var(--font-mono)] text-[11px] font-semibold ${
+            isAlertStatus
+              ? "border-rose-500/50 bg-rose-500/15 text-rose-200"
+              : "border-amber-500/40 bg-amber-500/10 text-amber-200"
+          }`}
+        >
+          Trạng thái: {verificationStatus} ({riskPoints} đ)
         </span>
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <StatusRow
+          state={elaExifState}
+          label="Pháp y Vật lý Ảnh (ELA &amp; EXIF)"
+          detail={
+            imageForensics
+              ? `Điểm ELA/EXIF: ${imageForensics.tamper_score}/100${
+                  imageForensics.exif_software ? ` · Phần mềm: ${imageForensics.exif_software}` : ""
+                }`
+              : "Chưa có dữ liệu pháp y ảnh đính kèm"
+          }
+        />
         <StatusRow
           state={refState}
           label="Cấu trúc Mã Giao dịch Ngân hàng"
@@ -122,7 +198,7 @@ export function ReceiptCheckCard({ receipt }: ReceiptCheckCardProps) {
         <StatusRow
           state={beneficiaryState}
           label="Khớp Tài khoản Thụ hưởng Cửa hàng"
-          detail="Chỉ xác nhận khi có STK chuẩn của chủ shop và đọc được STK nhận trên biên lai"
+          detail="Chỉ xác nhận khi có STK chuẩn của chủ shop và đọc được STK nhận trên biên lai/QR"
         />
         <StatusRow
           state={replayState}
@@ -130,6 +206,17 @@ export function ReceiptCheckCard({ receipt }: ReceiptCheckCardProps) {
           detail="Tra cứu dHash &amp; mã tham chiếu trên sổ cái khi có dấu vân tay biên lai"
         />
       </div>
+
+      {receipt && receipt.reasons.length > 0 && (
+        <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-100">
+          <p className="font-semibold text-rose-200">Lý do phát hiện bất thường biên lai:</p>
+          <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[11px] leading-relaxed">
+            {receipt.reasons.map((reason, idx) => (
+              <li key={`rc-reason-${idx}`}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

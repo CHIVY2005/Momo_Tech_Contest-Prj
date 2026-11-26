@@ -15,10 +15,13 @@ import type {
 } from "./types";
 
 export {
+  formatVietQrAmount,
   isValidAnalysisReport,
   isValidTraceStep,
   maskDisplayIoc,
   sanitizeValidationErrorDetail,
+  shouldShowReceiptCard,
+  validateAnalystPinInput,
 } from "./formatters.ts";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/+$/, "");
@@ -146,6 +149,24 @@ export async function createBlockRule(payload: CreateBlockRuleRequest): Promise<
     throw new Error(await extractErrorMessage(res));
   }
   return (await res.json()) as BlockRule;
+}
+
+export async function revokeBlockRule(
+  ruleId: string,
+  analystPin: string,
+): Promise<{ ok: boolean; revoked: boolean }> {
+  const res = await fetch(
+    apiUrl(`/api/v1/radar/block-rules/${encodeURIComponent(ruleId)}/revoke`),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ analyst_pin: analystPin }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(await extractErrorMessage(res));
+  }
+  return (await res.json()) as { ok: boolean; revoked: boolean };
 }
 
 export async function resetBlockRules(

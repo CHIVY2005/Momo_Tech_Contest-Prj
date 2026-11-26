@@ -36,10 +36,10 @@ Phần lớn các vụ lừa đảo tài chính tại Việt Nam diễn ra ở *
                  │
                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ TẦNG 1: DETERMINISTIC CYBERSECURITY & CUSTOM ONNX (ONNX P50 10ms / 14ms)│
+│ TẦNG 1: DETERMINISTIC CYBERSECURITY & CUSTOM ONNX (ONNX P50 10ms / 13ms)│
 │ • Chống SSRF gắn chặt IP công cộng đến tầng socket (httpx + Playwright) │
 │ • Giải mã EMVCo VietQR CRC-16 · Pháp y ảnh ELA + EXIF + dHash + OCR     │
-│ • Mô hình riêng: pruned multilingual-e5-small INT8 ONNX (34.25 MB, 10ms)│
+│ • Mô hình riêng: pruned multilingual-e5-small INT8 ONNX (34.30 MB, 10ms)│
 │ • Guardrails nhận diện khuyến cáo chính thống & bẫy Prompt Injection     │
 └────────────────────────────────┬────────────────────────────────────────┘
                                  │ Dữ liệu bọc trong <UNTRUSTED_USER_CONTENT>
@@ -62,11 +62,11 @@ Phần lớn các vụ lừa đảo tài chính tại Việt Nam diễn ra ở *
 | Chỉ số Thực nghiệm | Kết quả Đo Thực tế | Ghi chú |
 | --- | --- | --- |
 | **Precision / Recall / F1** | **`1.0000` / `1.0000` / `1.0000`** | Phân loại đúng `40/40` ca tổng hợp (`28` ca lừa đảo/tấn công, `12` ca sạch) |
-| **Tỷ lệ Báo động giả trên Tin Khuyến cáo (`Advisory FPR`)** | **`0.0000` (`0%`)** | `5/5` ca khuyến cáo chính thống đều được phân loại `SAFE` (`6–15/100`) |
-| **Kết quả Nhóm ca `Prompt Injection`** | **`3/3` ca `>= 70` đ (`100%`)** | `3/3` ca đạt ngưỡng `>= 70` đ; `2/3` ca (`66.7%`) bật cờ tĩnh `prompt_injection_detected` |
-| **Kết quả Nhóm ca `Fake Bill` & `VietQR`** | **`1.0000` (`7/7` ca phát hiện)** | Phân loại đúng toàn bộ các ca mẫu biên lai chỉnh sửa & mã VietQR bẫy |
-| **Dung lượng & Độ trễ `scam_e5_int8.onnx` (CPU)** | **`34.25 MB` · `P50 = 10 ms` (`P95 = 14 ms`)** | Cắt tỉa từ vựng Việt–Anh (`36.000` token), không cần PyTorch |
-| **Model Suy luận Đa phương thức Thực tế** | `gemini-4-hydrogen` (`40/40` ca hoàn tất, `0` ca suy giảm cuối) | Độ trễ toàn trình `E2E P50 = 7.27s` |
+| **Tỷ lệ Báo động giả trên Tin Khuyến cáo (`Advisory FPR`)** | **`0.0000` (`0%`)** | `5/5` ca khuyến cáo chính thống đều được phân loại `SAFE` (`1–5/100`) |
+| **Kết quả Nhóm ca `Prompt Injection`** | **`3/3` ca `>= 70` đ (`100%`)** | `3/3` ca đạt ngưỡng `>= 70` đ và **`3/3` (`100%`)** bật cờ tĩnh `prompt_injection_detected` |
+| **Kết quả Nhóm ca `Fake Bill` & `VietQR`** | **`1.0000` (`7/7` ca phát hiện)** | `4/4` (`100%`) ca Fake Bill bật tín hiệu pháp y Tầng 1 + phát hiện đủ `3/3` ca VietQR bẫy |
+| **Dung lượng & Độ trễ `scam_e5_int8.onnx` (CPU)** | **`34.30 MB` · `P50 = 10 ms` (`P95 = 13 ms`)** | Cắt tỉa `36.000` token Việt–Anh; `Test INT8 Macro-F1 = 0.9314` trên bộ tách khung mẫu (0% rò rỉ) |
+| **Model Suy luận Đa phương thức Thực tế** | `gemini-4-hydrogen` (`40/40` ca hoàn tất, `0` lỗi API) | Độ trễ toàn trình `E2E P50 = 7.18s` (`P95 = 10.08s`) |
 
 ---
 
@@ -116,14 +116,16 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 ### 4.1. Mô hình AI & Trọng số Cơ sở
 | Thành phần | Nguồn gốc | Giấy phép | Mục đích sử dụng |
 | --- | --- | --- | --- |
-| `intfloat/multilingual-e5-small` | Microsoft / HuggingFace | `MIT` | Backbone huấn luyện tinh chỉnh bộ phân loại 7 lớp & nhúng ngữ nghĩa tiếng Việt (`scam_e5_int8.onnx` `34.25 MB`) |
+| `intfloat/multilingual-e5-small` | Microsoft / HuggingFace | `MIT` | Bộ mã hóa ngữ nghĩa đóng băng + đầu phân loại MLP 7 lớp & vector 384 chiều tiếng Việt (`scam_e5_int8.onnx` `34.30 MB`) |
 | `RapidOCR` (`PP-OCRv4` ONNX) | RapidAI / PaddleOCR | `Apache-2.0` | Trích xuất văn bản & tọa độ dòng chữ nội bộ trên biên lai |
-| `faster-whisper` (`CTranslate2`) | SYSTRAN | `MIT` | Gỡ băng giọng nói cuộc gọi nội bộ dự phòng |
-| `Gemini` / OpenAI-Compatible API | Google GenAI / CLIProxyAPI | API Thương mại | Suy luận giải thích đa phương thức Tầng 2 (có chế độ dự phòng Tầng 1 khi không cấu hình khóa) |
+| `faster-whisper` (`CTranslate2` + Whisper `tiny` INT8) | SYSTRAN / OpenAI Whisper | `MIT` | Gỡ băng giọng nói cuộc gọi nội bộ dự phòng (tải sẵn trong Docker image) |
+| `Gemini` / OpenAI-Compatible API (`google-genai` SDK) | Google GenAI (`Apache-2.0` SDK) / CLIProxyAPI | API Thương mại | Suy luận giải thích đa phương thức Tầng 2 (có chế độ dự phòng Tầng 1 khi không cấu hình khóa) |
 
-### 4.2. Thư viện Mã nguồn mở chính
-- **Backend Python:** `FastAPI` (`MIT`), `Pydantic v2` (`MIT`), `Uvicorn` (`BSD-3-Clause`), `HTTPX` (`BSD-3-Clause`), `ONNX Runtime` (`MIT`), `Tokenizers` (`Apache-2.0`), `OpenCV-Headless` (`Apache-2.0`), `Pillow` (`MIT-CMU`), `NumPy` (`BSD-3-Clause`), `Playwright` (`Apache-2.0`), `fpdf2` (`LGPL-3.0`), phông chữ `DejaVuSans.ttf` (`Bitstream Vera`).
+### 4.2. Thư viện Mã nguồn mở, Hạ tầng & Stack Huấn luyện
+- **Backend Python Runtime:** `FastAPI` (`MIT`), `Pydantic v2` (`MIT`), `pydantic-settings` (`MIT`), `Uvicorn` (`BSD-3-Clause`), `python-multipart` (`Apache-2.0`), `HTTPX` (`BSD-3-Clause`), `idna` (`BSD-3-Clause`), `ONNX Runtime` (`MIT`), `Tokenizers` (`Apache-2.0`), `OpenCV-Headless` (`Apache-2.0`), `Pillow` (`MIT-CMU`), `NumPy` (`BSD-3-Clause`), `PyAV / av` (`LGPL-3.0-or-later`), `Playwright` (`Apache-2.0`), `google-genai` (`Apache-2.0`), `fpdf2` (`LGPL-3.0-only`), phông chữ `DejaVuSans.ttf` (`Bitstream Vera` — xem [LICENSE-DejaVu.txt](backend/app/data/fonts/LICENSE-DejaVu.txt)).
+- **Pipeline Huấn luyện & Đánh giá (chỉ chạy ngoại tuyến, tách khỏi runtime):** `PyTorch` (`BSD-3-Clause`), `Transformers` (`Apache-2.0`), `ONNX` (`Apache-2.0`), `ONNXScript` (`MIT`), `scikit-learn` (`BSD-3-Clause`), `pypdf` (`BSD-3-Clause`), `pytest` / `pytest-asyncio` / `respx` / `ruff` / `mypy` (`MIT` / `BSD`).
 - **Frontend Web:** `Next.js 15` (`MIT`), `React 19` (`MIT`), `TypeScript` (`Apache-2.0`), `Tailwind CSS v4` (`MIT`), `Lucide Icons` (`ISC`).
+- **Hạ tầng Triển khai:** `SQLite 3 WAL` (`Public Domain`), `Caddy 2` Reverse Proxy & Automatic TLS (`Apache-2.0`), `Docker Compose`.
 
 ### 4.3. Công cụ AI Hỗ trợ Phát triển & Cam kết Dữ liệu / Pháp lý
 - **Công cụ hỗ trợ lập trình & kiểm định mã nguồn:** Google Antigravity & OpenAI Codex CLI (rà soát bảo mật và kiểm thử tự động).

@@ -1,4 +1,4 @@
-"""Aggregated v1 API router exposing all 10 VeriShield AI endpoints."""
+"""Aggregated v1 API router exposing all 11 VeriShield AI endpoints."""
 
 from fastapi import APIRouter
 

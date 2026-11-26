@@ -12,6 +12,7 @@ from app.schemas import AnalyzeMode, ReceiptLogicResult, ReceiptVerificationStat
 from app.services.ioc_extractor import (
     EXPLICIT_RECIPIENT_SPAN_RE,
     LABELED_ACCOUNT_SPAN_RE,
+    fold_vi_ascii,
     is_labeled_account_match,
     mask_ioc,
 )
@@ -85,8 +86,9 @@ def build_trusted_merchant_summary(
     return cleaned
 
 _RECEIPT_KEYWORD_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?:chuyển\s+(?:tiền|khoản)\s+thành\s+công|giao\s+dịch\s+thành\s+công|"
-    r"mã\s*(?:gd|giao\s*dịch)|số\s*tham\s*chiếu|biên\s*lai\s*chuyển\s*tiền)",
+    r"(?:chuyen\s*(?:tien|khoan)\s*thanh\s*cong|giao\s*dich\s*thanh\s*cong|"
+    r"ma\s*(?:gd|giao\s*dich)|so\s*tham\s*chieu|bien\s*lai\s*chuyen\s*tien|"
+    r"stk\s*nhan\s*:?\s*\d{6,19})",
     re.IGNORECASE,
 )
 
@@ -95,10 +97,10 @@ _MIXED_AMOUNT_SEPARATOR_RE: Final[re.Pattern[str]] = re.compile(
 )
 _AMOUNT_CANDIDATE_RE: Final[re.Pattern[str]] = re.compile(
     r"(?:"
-    r"(?:số\s*tiền|thành\s*tiền|tổng\s*tiền|tiền\s*chuyển|amount|total)"
+    r"(?:s[o06]\s*tien|thanh\s*tien|tong\s*tien|tien\s*chuyen|amount|total)"
     r"[\s:.\-\u2013\u2014]{1,12}(?P<labeled_amt>\d[\d.,]{2,18})"
-    r"|(?P<suffixed_amt>\b\d{1,3}(?:[.,]\d{3})+|\b\d{4,15})\s*(?:vnđ|vnd|đồng|đ)(?!\w)"
-    r"|(?:vnđ|vnd)\s*(?P<prefixed_amt>\d[\d.,]{2,18})"
+    r"|(?P<suffixed_amt>\b\d{1,3}(?:[.,]\d{3})+|\b\d{4,15})\s*(?:vnd|dong|d)(?!\w)"
+    r"|(?:vnd)\s*(?P<prefixed_amt>\d[\d.,]{2,18})"
     r")",
     re.IGNORECASE,
 )
@@ -106,7 +108,7 @@ _AMOUNT_CANDIDATE_RE: Final[re.Pattern[str]] = re.compile(
 MAX_REF_CODE_LEN: Final[int] = 24
 
 _REF_CODE_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?:mã\s*(?:gd|giao\s*dịch)|số\s*tham\s*chiếu|ref(?:\s*no)?)"
+    r"(?:ma\s*(?:gd|giao\s*dich)|so\s*tham\s*chieu|ref(?:\s*no)?)"
     r"[\s:.\-]{1,6}([A-Z0-9#]{4,}(?:[-/_][A-Z0-9#]+)*)(?![A-Z0-9#]|[-/_][A-Z0-9#])",
     re.IGNORECASE,
 )
@@ -117,11 +119,11 @@ _STANDALONE_FT_RE: Final[re.Pattern[str]] = re.compile(
 
 _DATE_TIME_PATTERNS: Final[tuple[tuple[re.Pattern[str], str], ...]] = (
     (
-        re.compile(r"\b(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}(?::\d{2})?)\b"),
+        re.compile(r"\b(\d{2}/\d{2}/\d{4})\s*(\d{2}:\d{2}(?::\d{2})?)\b"),
         "%d/%m/%Y %H:%M",
     ),
     (
-        re.compile(r"\b(\d{2}:\d{2}(?::\d{2})?\s+\d{2}/\d{2}/\d{4})\b"),
+        re.compile(r"\b(\d{2}:\d{2}(?::\d{2})?)\s*(\d{2}/\d{2}/\d{4})\b"),
         "%H:%M %d/%m/%Y",
     ),
 )
@@ -157,7 +159,7 @@ def _parse_vn_timestamp(text: str) -> tuple[datetime | None, bool]:
         match = regex.search(text)
         if not match:
             continue
-        raw_ts = match.group(1).strip()
+        raw_ts = f"{match.group(1).strip()} {match.group(2).strip()}"
         fmt = base_fmt.replace("%H:%M", "%H:%M:%S") if raw_ts.count(":") == 2 else base_fmt
         try:
             naive = datetime.strptime(raw_ts, fmt)
@@ -187,7 +189,7 @@ def validate_receipt_logic(
     replay_checked: bool = False,
 ) -> ReceiptLogicResult:
     """Validate Vietnamese banking receipt logic and enforce the Merchant Honesty Guardrail."""
-    cleaned = ocr_text.strip()
+    cleaned = fold_vi_ascii(ocr_text.strip())
     is_candidate = bool(_RECEIPT_KEYWORD_RE.search(cleaned)) or is_replayed_hash
     if not is_candidate:
         return ReceiptLogicResult(

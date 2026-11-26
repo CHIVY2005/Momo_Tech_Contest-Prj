@@ -93,7 +93,11 @@ export function ApiPlaygroundCard() {
           <Code2 className="h-5 w-5 text-sky-400" aria-hidden="true" />
           <div>
             <h2 id="api-playground-heading" className="text-sm font-bold text-slate-50">
-              Fintech Pre-Transfer REST API Playground (`POST /api/v1/analyze`)
+              Fintech Pre-Transfer REST API Playground (
+              <code className="font-[family-name:var(--font-mono)] text-sky-300">
+                POST /api/v1/analyze
+              </code>
+              )
             </h2>
             <p className="text-xs text-slate-400">
               Kiểm chứng ngay lập tức: Khi Fraud Ops bấm Khóa 1-Click ở trên, lệnh chuyển tiền của Ví bị chặn cứng (&ge;96 điểm) trong tích tắc!
@@ -147,7 +151,12 @@ export function ApiPlaygroundCard() {
               }}
               className="h-4 w-4 cursor-pointer accent-amber-500"
             />
-            <span>`in_active_call = true` (Đang trong cuộc gọi thoại)</span>
+            <span>
+              <code className="font-[family-name:var(--font-mono)] text-amber-300">
+                in_active_call = true
+              </code>{" "}
+              (Đang trong cuộc gọi thoại)
+            </span>
           </label>
 
           <button

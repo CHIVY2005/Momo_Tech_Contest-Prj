@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 from typing import Final
 from urllib.parse import urlsplit
 
@@ -151,6 +152,10 @@ _TRAILING_PUNCT: Final[str] = ".,!?;:)'\"»]"
 _VN_PHONE_RE: Final[re.Pattern[str]] = re.compile(
     r"(?<!\d)(?:\+?84[\s.\-]?|0)(?P<body_head>[35789])(?P<body_rest>(?:[\s.\-]?\d){8})(?!\d)"
 )
+_ALT_VN_PHONE_SCRUB_RE: Final[re.Pattern[str]] = re.compile(
+    r"(?<!\d)(?:\(\+?84\)[\s.\-/_]*|(?:\+?84)[\s.\-/_]*\(0\)[\s.\-/_]*|(?:\+?84)[\s.\-/_]?|0)"
+    r"(?P<body_head>[35789])(?P<body_rest>(?:[\s.\-/_]?\d){8})(?!\d)"
+)
 
 # Only match grouped currency numbers starting with 1-9 (never touches 0-prefixed or +84 phones)
 _CURRENCY_AMOUNT_RE: Final[re.Pattern[str]] = re.compile(
@@ -158,11 +163,13 @@ _CURRENCY_AMOUNT_RE: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 _STRICT_CURRENCY_SYMBOL_AFTER_RE: Final[re.Pattern[str]] = re.compile(
-    r"^[ \t]*(?:vnđ|vnd|đ)(?!\w)",
+    r"^[ \t]*(?:vn[đd]|[đd])(?!\w)",
     re.IGNORECASE,
 )
 _BANK_CURRENCY_WORD_AFTER_RE: Final[re.Pattern[str]] = re.compile(
-    r"^[ \t]*(?:vnđ|vnd|đ(?!\w)|đồng(?!\w)(?![ \t]+(?:phạm|bọn|thời|ý|chí|loạt|hành|tình|đội|nghiệp)\b))",
+    r"^[ \t]*(?:vn[đd]|[đd](?!\w)|(?:đồng|dong)(?!\w)"
+    r"(?![ \t]+(?:phạm|pham|bọn|bon|thời|thoi|ý|y|chí|chi|loạt|loat|"
+    r"hành|hanh|tình|tinh|đội|doi|nghiệp|nghiep)\b))",
     re.IGNORECASE,
 )
 
@@ -171,10 +178,16 @@ _LEGACY_8DIGIT_MASK_RE: Final[re.Pattern[str]] = re.compile(
     r"(?<!\d)(\d{2})\d{2}\*{4}\d{2}(\d{2})(?!\d)"
 )
 _GROUPED_ACCOUNT_SCRUB_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?<![+\d.,])\d{3,4}(?:[\s\-–—]\d{3,5}){2,4}(?![\d.,])"
+    r"(?<![+\d.,])\d{3,4}(?:[\s\-–—]\d{2,5}){2,4}(?![\d.]|,\d)"
+)
+_TWO_GROUP_ACCOUNT_SCRUB_RE: Final[re.Pattern[str]] = re.compile(
+    r"(?<![+\d.,/:])\d{4,10}[\s\-–—]\d{4,10}(?![\d./:]|,\d)"
+)
+_DOT_GROUPED_ACCOUNT_SCRUB_RE: Final[re.Pattern[str]] = re.compile(
+    r"(?<![+\d.,])\d{4}(?:\.\d{2,5}){2,3}(?![\d.]|,\d)"
 )
 _DATE_LIKE_SPAN_RE: Final[re.Pattern[str]] = re.compile(
-    r"^\d{1,2}[.\-]\d{1,2}[.\-](?:19|20)\d{2}$"
+    r"^(?:\d{1,2}[.\-/]\d{1,2}[.\-/](?:19|20)\d{2}|(?:19|20)\d{2}[.\-/]\d{1,2}[.\-/]\d{1,2})$"
 )
 
 # Intra-account separators ONLY: horizontal spaces/tabs or tight single '.'/'-' between digits
@@ -183,20 +196,38 @@ _ACCT_SPAN_PAT: Final[str] = r"(?P<acct>\d+(?:(?:[ \t]+|[.\-])\d+)*)(?!\d|[ \t]+
 _LABEL_SEP_PAT: Final[str] = r"(?:[ \t:.\-\u2013\u2014]{1,16}|[ \t:.\-\u2013\u2014]{0,12}\r?\n[ \t]{0,12})"
 
 _EXPLICIT_RECIPIENT_LABEL_PAT: Final[str] = (
-    r"(?:số[ \t]*)?(?:\bstk|\btk|tài[ \t]*khoản)[ \t]*"
-    r"(?:nhận|thụ[ \t]*hưởng|đến|đích|người[ \t]*nhận)"
-    r"|(?:tới|đến)[ \t]+(?:số[ \t]*)?(?:stk|tk|tài[ \t]*khoản)"
+    r"(?:s[ốo][ \t]*)?(?:\bstk|\btk|t[àa]i[ \t]*kho[ảa]n)[ \t]*"
+    r"(?:nh[ậa]n|th[ụu][ \t]*h[ưởu][ởo]ng|[đd][ếe]n|[đd][íi]ch|ng[ườu][ờo]i[ \t]*nh[ậa]n)"
+    r"|(?:t[ớo]i|[đd][ếe]n)[ \t]+(?:s[ốo][ \t]*)?(?:stk|tk|t[àa]i[ \t]*kho[ảa]n)"
 )
 _EXPLICIT_ACCOUNT_LABEL_PAT: Final[str] = (
     rf"(?:{_EXPLICIT_RECIPIENT_LABEL_PAT})"
-    r"|(?:số[ \t]*)?(?:\bstk|\btk|tài[ \t]*khoản)"
-    r"(?:[ \t]*(?:tạm[ \t]*giữ|cá[ \t]*nhân|ngân[ \t]*hàng))?"
+    r"|(?:s[ốo][ \t]*)?(?:\bstk|\btk|t[àa]i[ \t]*kho[ảa]n)"
+    r"(?:[ \t]*(?:t[ạa]m[ \t]*gi[ữ u]|c[áa][ \t]*nh[âa]n|ng[âa]n[ \t]*h[àa]ng))?"
     r"|\baccount(?:[ \t]*no\.?|[ \t]*number)?"
 )
 _BANK_NAME_LABEL_PAT: Final[str] = (
-    r"\b(?:vietcombank|techcombank|mbbank|mb[ \t]*bank|bidv|vietinbank|"
+    r"\b(?:vietcombank(?:digibank)?|techcombank(?:mobile)?|mbbank|mb[ \t]*bank|bidv|vietinbank|"
     r"agribank|acb|vpbank|tpbank|sacombank|vib|shb|hdbank)\b"
 )
+
+
+def fold_vi_ascii(text: str) -> str:
+    """Fold Vietnamese diacritics 1-to-1 per NFC character for OCR-tolerant matching."""
+    nfc = unicodedata.normalize("NFC", text)
+    out: list[str] = []
+    for ch in nfc:
+        if ch == "đ":
+            out.append("d")
+        elif ch == "Đ":
+            out.append("D")
+        elif ord(ch) < 128:
+            out.append(ch)
+        else:
+            decomp = unicodedata.normalize("NFD", ch)
+            base = decomp[0] if decomp else ch
+            out.append(base if ord(base) < 128 else ch)
+    return "".join(out)
 
 EXPLICIT_RECIPIENT_SPAN_RE: Final[re.Pattern[str]] = re.compile(
     rf"(?P<prefix>(?:{_EXPLICIT_RECIPIENT_LABEL_PAT}){_LABEL_SEP_PAT}){_ACCT_SPAN_PAT}",
@@ -225,24 +256,24 @@ def is_labeled_account_match(text: str, match: re.Match[str]) -> bool:
 _is_labeled_account_match = is_labeled_account_match
 
 _BRAND_PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
-    ("Vietcombank", re.compile(r"\b(?:vietcombank|vcb)\b", re.IGNORECASE)),
-    ("Techcombank", re.compile(r"\b(?:techcombank|tcb)\b", re.IGNORECASE)),
+    ("Vietcombank", re.compile(r"\b(?:vietcombank(?:digibank)?|vcb)\b", re.IGNORECASE)),
+    ("Techcombank", re.compile(r"\b(?:techcombank(?:mobile)?|tcb)\b", re.IGNORECASE)),
     ("MB Bank", re.compile(r"\b(?:mb\s*bank|mbbank)\b", re.IGNORECASE)),
-    ("BIDV", re.compile(r"\bbidv\b", re.IGNORECASE)),
-    ("VietinBank", re.compile(r"\b(?:vietinbank|ctg)\b", re.IGNORECASE)),
-    ("Agribank", re.compile(r"\bagribank\b", re.IGNORECASE)),
-    ("ACB", re.compile(r"\bacb\b", re.IGNORECASE)),
-    ("VPBank", re.compile(r"\bvpbank\b", re.IGNORECASE)),
+    ("BIDV", re.compile(r"\bbidv(?:smartbanking)?\b", re.IGNORECASE)),
+    ("VietinBank", re.compile(r"\b(?:vietinbank(?:ipay)?|ctg)\b", re.IGNORECASE)),
+    ("Agribank", re.compile(r"\bagribank(?:plus)?\b", re.IGNORECASE)),
+    ("ACB", re.compile(r"\bacb(?:one)?\b", re.IGNORECASE)),
+    ("VPBank", re.compile(r"\bvpbank(?:neo)?\b", re.IGNORECASE)),
     ("TPBank", re.compile(r"\btpbank\b", re.IGNORECASE)),
-    ("Sacombank", re.compile(r"\bsacombank\b", re.IGNORECASE)),
+    ("Sacombank", re.compile(r"\bsacombank(?:pay)?\b", re.IGNORECASE)),
     ("VIB", re.compile(r"\bvib\b", re.IGNORECASE)),
     ("SHB", re.compile(r"\bshb\b", re.IGNORECASE)),
     ("HDBank", re.compile(r"\bhdbank\b", re.IGNORECASE)),
     ("NAPAS", re.compile(r"\bnapas(?:247)?\b", re.IGNORECASE)),
     ("VNeID", re.compile(r"\bvneid\b", re.IGNORECASE)),
-    ("Bộ Công an", re.compile(r"\b(?:bộ\s+công\s+an|cục\s+a05)\b", re.IGNORECASE)),
-    ("Cục Thuế", re.compile(r"\b(?:tổng\s+cục\s+thuế|cục\s+thuế|etax)\b", re.IGNORECASE)),
-    ("EVN", re.compile(r"\b(?:điện\s+lực|evn)\b", re.IGNORECASE)),
+    ("Bộ Công an", re.compile(r"\b(?:bo\s+cong\s+an|cuc\s+a05)\b", re.IGNORECASE)),
+    ("Cục Thuế", re.compile(r"\b(?:tong\s+cuc\s+thue|cuc\s+thue|etax)\b", re.IGNORECASE)),
+    ("EVN", re.compile(r"\b(?:dien\s+luc|evn)\b", re.IGNORECASE)),
     ("ZaloPay", re.compile(r"\bzalopay\b", re.IGNORECASE)),
     ("VNPay", re.compile(r"\bvnpay\b", re.IGNORECASE)),
     ("Viettel Money", re.compile(r"\bviettel\s*money\b", re.IGNORECASE)),
@@ -278,6 +309,8 @@ def normalize_ioc_value(ioc_type: str, value: str) -> str:
             return "0" + digits[2:]
         return digits
     if ioc_type == "bank_account":
+        if re.fullmatch(r"[A-Za-z0-9\-_]+", cleaned) and any(ch.isalpha() for ch in cleaned):
+            return re.sub(r"[^A-Za-z0-9]", "", cleaned).upper()
         return re.sub(r"\D", "", cleaned)
     if ioc_type == "domain":
         host = cleaned.lower().rstrip(".")
@@ -303,8 +336,6 @@ def mask_ioc(ioc_type: IocType, value: str) -> str:
             return f"{norm[:2]}****{norm[-1:]}"
         return "****"
     if ioc_type == "bank_account":
-        if len(norm) >= 10:
-            return f"{norm[:4]}****{norm[-4:]}"
         if len(norm) >= 6:
             return f"{norm[:2]}****{norm[-2:]}"
         return "****"
@@ -381,12 +412,20 @@ def scrub_free_text_pii(
             return f"{m.group('prefix')}{mask_ioc('bank_account', digits)}"
         return m.group(0)
 
-    out = _VN_PHONE_RE.sub(_replace_phone, out)
+    def _replace_grouped_acct(m: re.Match[str]) -> str:
+        tok = m.group(0)
+        if _DATE_LIKE_SPAN_RE.fullmatch(tok):
+            return tok
+        digits = re.sub(r"\D", "", tok)
+        if 8 <= len(digits) <= 19:
+            return mask_ioc("bank_account", digits)
+        return tok
+
+    out = _ALT_VN_PHONE_SCRUB_RE.sub(_replace_phone, out)
     out = LABELED_ACCOUNT_SPAN_RE.sub(_replace_labeled_acct, out)
-    out = _GROUPED_ACCOUNT_SCRUB_RE.sub(
-        lambda m: mask_ioc("bank_account", m.group(0)),
-        out,
-    )
+    out = _GROUPED_ACCOUNT_SCRUB_RE.sub(_replace_grouped_acct, out)
+    out = _TWO_GROUP_ACCOUNT_SCRUB_RE.sub(_replace_grouped_acct, out)
+    out = _DOT_GROUPED_ACCOUNT_SCRUB_RE.sub(_replace_grouped_acct, out)
     out = _RAW_DIGIT_ACCOUNT_SCRUB_RE.sub(
         lambda m: mask_ioc("bank_account", m.group(0)),
         out,
@@ -446,7 +485,8 @@ def extract_iocs(text: str, extra_urls: list[str] | None = None) -> ExtractedIOC
             domains.append(host)
     domains = _dedupe_preserve_order(domains)
 
-    scrubbed = _URL_RE.sub(" ", text)
+    folded_text = fold_vi_ascii(text)
+    scrubbed = _URL_RE.sub(" ", folded_text)
     scrubbed = _SCHEMELESS_TOKEN_RE.sub(" ", scrubbed)
 
     raw_accounts: list[str] = []
@@ -471,7 +511,7 @@ def extract_iocs(text: str, extra_urls: list[str] | None = None) -> ExtractedIOC
 
     brands: list[str] = []
     for brand_name, pattern in _BRAND_PATTERNS:
-        if pattern.search(text):
+        if pattern.search(folded_text):
             brands.append(brand_name)
 
     return ExtractedIOCs(

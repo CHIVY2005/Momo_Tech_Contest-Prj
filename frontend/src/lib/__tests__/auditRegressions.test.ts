@@ -3,10 +3,13 @@ import test from "node:test";
 
 import { analyzeStream } from "../api.ts";
 import {
+  formatVietQrAmount,
   isValidAnalysisReport,
   isValidTraceStep,
   maskDisplayIoc,
   sanitizeValidationErrorDetail,
+  shouldShowReceiptCard,
+  validateAnalystPinInput,
 } from "../formatters.ts";
 import { consumeUtf8SseStream } from "../sse.ts";
 
@@ -45,10 +48,48 @@ test("sanitizeValidationErrorDetail omits raw input values such as PIN or bank a
 });
 
 test("maskDisplayIoc conceals middle digits on raw accounts and phones without double-masking", () => {
-  assert.equal(maskDisplayIoc("190384756201"), "1903****6201");
+  assert.equal(maskDisplayIoc("190384756201"), "19****01");
+  assert.equal(maskDisplayIoc("1012345678"), "10****78");
   assert.equal(maskDisplayIoc("12345678"), "12****78");
   assert.equal(maskDisplayIoc("0912345678"), "091****678");
-  assert.equal(maskDisplayIoc("1903****6201"), "1903****6201");
+  assert.equal(maskDisplayIoc("19****01"), "19****01");
+});
+
+test("formatVietQrAmount never renders NaN VND on PII-scrubbed amounts", () => {
+  assert.equal(formatVietQrAmount(null), "QR tĩnh / Tự nhập");
+  assert.equal(formatVietQrAmount("19****01"), "19****01");
+  assert.ok(formatVietQrAmount("1850000").includes("VND"));
+  assert.ok(!formatVietQrAmount("19****01").includes("NaN"));
+});
+
+test("shouldShowReceiptCard shows receipt card whenever calibrated status is applicable", () => {
+  assert.equal(
+    shouldShowReceiptCard({
+      receipt_verification_status: "TAMPER_OR_LOGIC_ANOMALY",
+      receipt_logic: null,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldShowReceiptCard({
+      receipt_verification_status: "UNVERIFIED_SCREENSHOT",
+      receipt_logic: { is_receipt_candidate: false },
+    }),
+    true,
+  );
+  assert.equal(
+    shouldShowReceiptCard({
+      receipt_verification_status: "NOT_APPLICABLE",
+      receipt_logic: { is_receipt_candidate: false },
+    }),
+    false,
+  );
+});
+
+test("validateAnalystPinInput returns Vietnamese message when PIN is empty or < 4 chars", () => {
+  assert.ok(validateAnalystPinInput("") !== null);
+  assert.ok(validateAnalystPinInput("123") !== null);
+  assert.equal(validateAnalystPinInput("2026"), null);
 });
 
 test("isValidAnalysisReport rejects partial or malformed payloads and accepts complete reports", () => {

@@ -111,7 +111,7 @@ Các siêu ứng dụng thanh toán tại Việt Nam hiện đã có hệ thốn
 ### 5.1. Cấu trúc Thư mục Monorepo Chuẩn Hóa
 
 ```text
-momo-tech-contest-prj/
+verishield-ai/
 ├── AGENTS.md                           # "Hiến pháp" cho Antigravity & Codex CLI (bất biến bảo mật, giới hạn dòng, lệnh verify)
 ├── README.md                           # Tài liệu nộp bài chuẩn thể lệ (link live, cách chạy, OSS/AI licenses, synthetic data)
 ├── CHANGELOG.MD

@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, Field
 
 from app.schemas import EvidenceItem
-from app.services.ioc_extractor import extract_candidate_urls
+from app.services.ioc_extractor import extract_candidate_urls, extract_iocs
 
 _INVISIBLE_CHARS_RE: Final[re.Pattern[str]] = re.compile(
     r"[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]"
@@ -22,7 +22,7 @@ _INVISIBLE_CHARS_RE: Final[re.Pattern[str]] = re.compile(
 _PROMPT_INJECTION_PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     (
         "xml_tag_breakout",
-        re.compile(r"</?\s*untrusted_user_content\s*>", re.IGNORECASE),
+        re.compile(r"</?\s*untrusted_user_content(?:\b[^>]*)?>", re.IGNORECASE),
     ),
     (
         "en_ignore_instructions",
@@ -35,8 +35,8 @@ _PROMPT_INJECTION_PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     (
         "en_force_safe_verdict",
         re.compile(
-            r"\b(?:system\s+override|developer\s+mode|output|return|set)\b.{0,50}"
-            r"\b(?:risk_score\s*[:=]\s*0|verdict\s*[:=]?\s*['\"]?safe)\b",
+            r"\b(?:system\s+override|developer\s+(?:mode|note)|output|return|set)\b.{0,70}"
+            r"(?:(?:ai_)?risk_score\s*[:=]\s*0|\bverdict\s*[:=]?\s*['\"]?safe\b)",
             re.IGNORECASE | re.DOTALL,
         ),
     ),
@@ -105,8 +105,12 @@ _BASE_OFFICIAL_SUFFIXES: Final[tuple[str, ...]] = (
 )
 
 _ACTIONABLE_SCAM_DEMAND_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?:chuyển\s+(?:ngay|gấp|tiền|khoản)\s+(?:\d|vào\s+stk)|"
+    r"(?:(?:chuyển|nộp|gửi)\s+(?:ngay|gấp|tiền|khoản)?\s*(?:\d|vào\s+(?:số\s+)?(?:stk|tài\s+khoản))|"
+    r"vào\s+(?:số\s+)?(?:stk|tài\s+khoản)|"
     r"stk\s+tạm\s+giữ|"
+    r"giữ\s+bí\s+mật(?:\s+tuyệt\s+đối)?\s+cuộc\s+gọi|"
+    r"(?:lệnh\s+)?(?:khởi\s+tố|bắt\s+tạm\s+giam)|"
+    r"nếu\s+không\s+sẽ\s+(?:bị\s+)?(?:khóa|bắt|khởi\s+tố|truy\s+tố)|"
     r"bấm\s+ngay\s+vào|truy\s+cập\s+ngay\s+(?:http|www\.)|"
     r"gửi\s+mã\s+otp\s+của\s+bạn|"
     r"liên\s+hệ\s+zalo\s+\d)",
@@ -184,13 +188,16 @@ def detect_safety_advisory(
     normalized_text: str,
     has_suspicious_url: bool = False,
 ) -> tuple[bool, bool, list[str]]:
-    """Identify genuine security advisories and explicit scam/URL vetoes."""
+    """Identify genuine security advisories and explicit scam/URL/PII vetoes."""
     if not normalized_text:
         return False, False, []
+    extracted_iocs = extract_iocs(normalized_text)
     if (
         has_suspicious_url
         or _has_non_official_url(normalized_text)
         or bool(_ACTIONABLE_SCAM_DEMAND_RE.search(normalized_text))
+        or bool(extracted_iocs.phones)
+        or bool(extracted_iocs.bank_accounts)
     ):
         return False, True, []
 

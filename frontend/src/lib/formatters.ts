@@ -37,9 +37,6 @@ export function maskDisplayIoc(raw: string | null | undefined): string {
   if (/^0[35789]\d{8}$/.test(digits)) {
     return `${digits.slice(0, 3)}****${digits.slice(-3)}`;
   }
-  if (digits.length >= 10) {
-    return `${digits.slice(0, 4)}****${digits.slice(-4)}`;
-  }
   if (digits.length >= 6) {
     return `${digits.slice(0, 2)}****${digits.slice(-2)}`;
   }
@@ -47,6 +44,35 @@ export function maskDisplayIoc(raw: string | null | undefined): string {
     return "****";
   }
   return trimmed;
+}
+
+export function formatVietQrAmount(amount?: string | null): string {
+  if (!amount || !amount.trim()) {
+    return "QR tĩnh / Tự nhập";
+  }
+  const trimmed = amount.trim();
+  const parsed = Number(trimmed);
+  if (Number.isFinite(parsed)) {
+    return `${parsed.toLocaleString("vi-VN")} VND`;
+  }
+  return trimmed;
+}
+
+export function shouldShowReceiptCard(report: {
+  receipt_verification_status: string;
+  receipt_logic?: { is_receipt_candidate: boolean } | null;
+}): boolean {
+  return Boolean(
+    report.receipt_logic?.is_receipt_candidate ||
+      report.receipt_verification_status !== "NOT_APPLICABLE",
+  );
+}
+
+export function validateAnalystPinInput(pin: string): string | null {
+  if (pin.trim().length < 4) {
+    return "Vui lòng nhập Mã PIN chuyên viên Fraud Ops (tối thiểu 4 ký tự) ở ô PIN trước khi thao tác.";
+  }
+  return null;
 }
 
 function isObjectRecord(val: unknown): val is Record<string, unknown> {

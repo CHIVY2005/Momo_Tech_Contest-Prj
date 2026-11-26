@@ -36,11 +36,17 @@ export function computeRadarLayout(
     });
   });
 
+  const useTwoRings = iocs.length > 14;
   iocs.forEach((node, idx) => {
-    const count = Math.max(1, iocs.length);
-    const angle = (2 * Math.PI * idx) / count - Math.PI / 3;
-    const rx = width * 0.39;
-    const ry = height * 0.37;
+    const ringIndex = useTwoRings ? idx % 2 : 0;
+    const ringCount = useTwoRings
+      ? Math.max(1, Math.ceil((iocs.length - ringIndex) / 2))
+      : Math.max(1, iocs.length);
+    const posInRing = useTwoRings ? Math.floor(idx / 2) : idx;
+    const phase = useTwoRings && ringIndex === 1 ? Math.PI / ringCount : 0;
+    const angle = (2 * Math.PI * posInRing) / ringCount - Math.PI / 3 + phase;
+    const rx = useTwoRings ? width * (ringIndex === 0 ? 0.31 : 0.43) : width * 0.39;
+    const ry = useTwoRings ? height * (ringIndex === 0 ? 0.29 : 0.41) : height * 0.37;
     positioned.push({
       ...node,
       x: Math.round(clamp(cx + rx * Math.cos(angle), 52, width - 52)),
@@ -95,7 +101,7 @@ export function getNextRuleExpiryDelayMs(
   }
   const diff = earliestTarget - nowMs;
   if (diff <= 0) {
-    return 250;
+    return 5_000;
   }
   return Math.min(diff + 250, 30_000);
 }

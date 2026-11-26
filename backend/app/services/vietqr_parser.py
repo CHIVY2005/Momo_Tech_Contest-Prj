@@ -56,7 +56,7 @@ def read_tlv(raw: str) -> tuple[dict[str, str], bool]:
             return fields, False
         tag = raw[idx : idx + 2]
         len_str = raw[idx + 2 : idx + 4]
-        if not (tag.isdigit() and len_str.isdigit()):
+        if not (tag.isascii() and tag.isdigit() and len_str.isascii() and len_str.isdigit()):
             return fields, False
         if tag in fields:
             return fields, False
@@ -245,11 +245,13 @@ def parse_qr_payload(
     ):
         return VietQRInfo(raw=frame_tag, kind="TEXT_QR", crc_valid=True), evidence
 
-    act_digits = re.sub(r"\D", "", account_number)
     if service_code == "QRIBFTTA":
-        if not account_number.isdigit() or not (6 <= len(account_number) <= 19):
+        if (
+            not re.fullmatch(r"[A-Za-z0-9]{6,19}", account_number)
+            or sum(ch.isdigit() for ch in account_number) < 4
+        ):
             return VietQRInfo(raw=frame_tag, kind="TEXT_QR", crc_valid=True), evidence
-    elif not account_number.isdigit() or not (12 <= len(account_number) <= 19):
+    elif not (account_number.isascii() and account_number.isdigit() and 12 <= len(account_number) <= 19):
         return VietQRInfo(raw=frame_tag, kind="TEXT_QR", crc_valid=True), evidence
 
     amount = top_fields.get("54")
@@ -272,6 +274,8 @@ def parse_qr_payload(
         )
 
     bank_name = _load_bin_map().get(bank_bin, f"BIN {bank_bin}")
+    currency_code = top_fields.get("53", "704")
+    currency_label = "VND" if currency_code == "704" else f"ISO-{currency_code}"
 
     note: str | None = None
     if "62" in top_fields:
@@ -290,7 +294,7 @@ def parse_qr_payload(
                 title="Bẫy lừa quét mã VietQR để 'nhận tiền'",
                 detail=(
                     f"Mã QR là lệnh CHUYỂN TIỀN ĐI ({service_code})"
-                    f"{f' số tiền {amount} VND' if amount else ''} tới {bank_name} "
+                    f"{f' số tiền {amount} {currency_label}' if amount else ''} tới {bank_name} "
                     "nhưng tin nhắn lại dụ quét mã để nhận tiền hoàn/nhận thưởng."
                 ),
             )
@@ -298,8 +302,9 @@ def parse_qr_payload(
 
     beneficiary_mismatch = False
     if expected_merchant_account:
-        exp_digits = re.sub(r"\D", "", expected_merchant_account)
-        if exp_digits and exp_digits != act_digits:
+        act_norm = re.sub(r"[^A-Za-z0-9]", "", account_number).upper()
+        exp_norm = re.sub(r"[^A-Za-z0-9]", "", expected_merchant_account).upper()
+        if exp_norm and exp_norm != act_norm:
             beneficiary_mismatch = True
             evidence.append(
                 EvidenceItem(

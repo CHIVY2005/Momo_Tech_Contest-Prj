@@ -60,10 +60,27 @@ test("getNextRuleExpiryDelayMs schedules refresh at earliest rule expiry or 30s 
   );
   assert.equal(
     getNextRuleExpiryDelayMs([{ expires_at: "2026-11-26T01:59:59Z" }], nowMs),
-    250,
+    5_000,
   );
   assert.equal(
     getNextRuleExpiryDelayMs([{ expires_at: "2026-11-26T02:20:00Z" }], nowMs),
     30_000,
   );
+});
+
+test("computeRadarLayout staggers high IOC counts onto two concentric rings within SVG bounds", () => {
+  const manyIocs: RadarNode[] = Array.from({ length: 24 }, (_, idx) => ({
+    node_id: `ioc_${idx}`,
+    kind: idx % 2 === 0 ? "bank_account" : "domain",
+    label: `19****${String(idx).padStart(2, "0")}`,
+    hit_count: idx + 1,
+    risk_level: "HIGH_RISK",
+    blocked: false,
+  }));
+  const positioned = computeRadarLayout(manyIocs, 760, 420);
+  assert.equal(positioned.length, 24);
+  const radii = new Set(
+    positioned.map((n) => Math.round(Math.hypot((n.x - 380) / 760, (n.y - 210) / 420) * 10)),
+  );
+  assert.ok(radii.size >= 2, "Expected at least two staggered concentric rings for 24 IOCs");
 });

@@ -36,7 +36,11 @@ export function CampaignQueue({
               Hàng đợi Chiến dịch Bùng phát (1-Click Ecosystem Block)
             </h2>
             <p className="text-xs text-slate-400">
-              Khóa trực tiếp qua mã băm SHA-256 (`primary_ioc_hash`) mà không cần lộ dữ liệu cá nhân thô.
+              Khóa trực tiếp qua mã băm SHA-256 (
+              <code className="font-[family-name:var(--font-mono)] text-slate-300">
+                primary_ioc_hash
+              </code>
+              ) mà không cần lộ dữ liệu cá nhân thô.
             </p>
           </div>
         </div>

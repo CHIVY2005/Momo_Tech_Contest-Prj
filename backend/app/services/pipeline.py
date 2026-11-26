@@ -30,7 +30,7 @@ from app.services.action_copilot import build_action_bundle
 from app.services.ai_orchestrator import run_gemini_reasoning
 from app.services.guardrails import evaluate_guardrails
 from app.services.image_forensics import analyze_image_forensics
-from app.services.ioc_extractor import extract_iocs
+from app.services.ioc_extractor import extract_candidate_urls, extract_iocs
 from app.services.knowledge_base import KnowledgeBaseRetriever
 from app.services.local_ocr import run_local_ocr
 from app.services.local_stt import run_local_stt
@@ -149,6 +149,7 @@ class AnalysisPipeline:
         ocr_boxes = None
         vietqr_list: list[VietQRInfo] = []
         qr_urls: list[str] = []
+        qr_text_parts: list[str] = []
         local_transcript: str | None = None
 
         if image_bytes is not None:
@@ -186,6 +187,10 @@ class AnalysisPipeline:
                 evidence.extend(vqr_ev)
                 if vqr.kind == "URL_QR":
                     qr_urls.append(vqr.raw)
+                elif vqr.kind == "TEXT_QR" and not vqr.raw.startswith("[VIETQR_INVALID_FRAME:"):
+                    qr_urls.extend(extract_candidate_urls(vqr.raw))
+                    if vqr.raw.strip():
+                        qr_text_parts.append(vqr.raw.strip())
 
         if audio_bytes is not None:
             stt_res = await asyncio.to_thread(
@@ -218,6 +223,7 @@ class AnalysisPipeline:
             for part in (
                 text,
                 img_forensics.ocr_text if img_forensics else "",
+                "\n".join(qr_text_parts),
                 local_transcript or "",
             )
             if part.strip()
@@ -405,7 +411,7 @@ class AnalysisPipeline:
         t_llm = time.perf_counter()
         llm_res = await run_gemini_reasoning(
             settings=self.settings,
-            text=combined_text,
+            text=guardrails.normalized_text or combined_text,
             mode=mode,
             guardrails=guardrails,
             classifier=clf_out if clf_out.available else None,

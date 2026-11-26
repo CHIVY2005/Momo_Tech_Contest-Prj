@@ -20,7 +20,7 @@ Hệ thống vận hành theo kiến trúc **Lai Neuro-Symbolic 3 Tầng (Local-
    - **Bảo mật Mạng & Buồng Cô lập Phishing Động:** Chặn SSRF/DNS Rebinding, bắt giả mạo tên miền IDN Punycode/Homoglyph, giải mã toán học chuẩn **EMVCo VietQR TLV + CRC-16/CCITT-FALSE**, và kích hoạt **Headless Chromium Sandbox (`Playwright` giới hạn 3s)** để mở trang phishing động, bắt form thu thập OTP/mật khẩu/tải `.apk` ẩn kèm ảnh chụp bằng chứng an toàn.
    - **Mô hình AI Tự huấn luyện Sạch Pháp lý (`intfloat/multilingual-e5-small`, `MIT License`, ONNX INT8 `~35 MB`):** Fine-tune trên 3.500+ mẫu tổng hợp tiếng Việt, cắt gọn bảng từ vựng VI+EN để vừa phân loại 7 lớp rủi ro vừa xuất vector ngữ nghĩa 384 chiều trong `< 20ms` trên CPU.
    - **OCR & Chuyển ngữ Cục bộ + Kiểm chứng Biên lai 4 Lớp:** Kết hợp **`RapidOCR` (PP-OCRv4 ONNX)** đo độ lệch khung bao chữ số, **`faster-whisper` INT8** chuyển ngữ cuộc gọi tiếng Việt tức thời, bản đồ nhiệt **ELA + EXIF + mã băm `dHash` chống gửi lại bill cũ**, kiểm tra nghiệp vụ mã giao dịch FT/BIN/thời gian/STK chủ shop và **Rào chắn Trung thực Tiểu thương** (không bao giờ kết luận ảnh chụp màn hình là "tiền đã về" khi chưa đối soát số dư).
-2. **Tầng 2 — Deep Multimodal Grounded Reasoning (`Gemini 2.5 Flash`):**
+2. **Tầng 2 — Deep Multimodal Grounded Reasoning (`Gemini 2.5 Flash` / Cổng OpenAI-Compatible như `CLIProxyAPI`):**
    - Thẩm định sâu ngữ cảnh hội thoại, hình học biên lai, sắc thái giọng nói thúc ép đối chiếu với **20 kịch bản lừa đảo Việt Nam** (bao gồm chiến dịch SMS giả mạo NAPAS tháng 11/2026), hợp nhất điểm rủi ro hiệu chuẩn 3 tín hiệu (`0–100`) và tự động chuyển sang `degraded_mode` giàu thông tin nếu API ngoài quá tải.
 3. **Tầng 3 — Multi-Touchpoint Action Copilot & Closed-Loop Fraud Ops:**
    - Hỗ trợ **Web Workbench**, **Telegram 1-Tap Forward Bot**, **Mô phỏng Ví Điện Tử** tự bật **Khóa làm nguội 30 giây (`in_active_call`)**, xuất **Hồ sơ Tố giác PDF tiếng Việt**, và không gian `/radar` gom cụm IOC ẩn danh + duyệt luật chặn 1 chạm có cơ chế cách ly an toàn giữa nhiều Giám khảo.
@@ -39,10 +39,10 @@ Hệ thống vận hành theo kiến trúc **Lai Neuro-Symbolic 3 Tầng (Local-
 
 ## 3. Kiến trúc Kỹ thuật Tổng thể
 
-- **Thiết kế chi tiết & Cấu trúc Monorepo:** Xem tại [2026-11-25-verishield-v2-architecture-and-codex-workflow-design.md](file:///D:/Misc/momo-tech-contest-prj/docs/superpowers/specs/2026-11-25-verishield-v2-architecture-and-codex-workflow-design.md).
-- **Kế hoạch triển khai từng Task TDD:** Xem tại [IMPLEMENTATION_PLAN.md](file:///D:/Misc/momo-tech-contest-prj/docs/IMPLEMENTATION_PLAN.md).
+- **Thiết kế chi tiết & Cấu trúc Monorepo:** Xem tại [2026-11-25-verishield-v2-architecture-and-codex-workflow-design.md](superpowers/specs/2026-11-25-verishield-v2-architecture-and-codex-workflow-design.md).
+- **Kế hoạch triển khai từng Task TDD:** Xem tại [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
-### Danh mục 10 Endpoint API (`backend/app/api/v1/`)
+### Danh mục 11 Endpoint API (`backend/app/api/v1/`)
 | Endpoint | Method | Chức năng |
 | :--- | :--- | :--- |
 | `/api/v1/health` | `GET` | Trạng thái dịch vụ, SQLite WAL, E5 ONNX, RapidOCR, faster-whisper & Gemini |
@@ -54,6 +54,7 @@ Hệ thống vận hành theo kiến trúc **Lai Neuro-Symbolic 3 Tầng (Local-
 | `/api/v1/cases/{case_id}/report.pdf` | `GET` | Xuất Hồ sơ Trình báo Tố giác PDF tiếng Việt (`fpdf2` + `DejaVuSans.ttf`) |
 | `/api/v1/radar/graph` | `GET` | Đồ thị IOC ẩn danh, chiến dịch đang nổi & các Block Rules hiệu lực |
 | `/api/v1/radar/block-rules` | `POST` | Chuyên viên duyệt 1 chạm ban hành Block Rule (TTL 30 phút, bảo vệ kịch bản mẫu) |
+| `/api/v1/radar/block-rules/{rule_id}/revoke` | `POST` | Chuyên viên thu hồi từng Block Rule riêng lẻ theo `rule_id` |
 | `/api/v1/radar/block-rules/reset` | `POST` | Khôi phục trạng thái mẫu sạch trên `/radar` cho lượt chấm mới |
 
 ---

@@ -56,6 +56,11 @@ export function IocGraphSvg({ nodes, edges }: IocGraphSvgProps) {
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-800 bg-[#070b14]">
+        {positioned.length === 0 ? (
+          <div className="flex h-56 items-center justify-center p-6 text-center text-xs text-slate-400">
+            Chưa có cụm chiến dịch hoặc thực thể IOC nào được ghi nhận trên đồ thị Fraud Ops.
+          </div>
+        ) : (
         <svg
           viewBox="0 0 760 420"
           role="group"
@@ -151,6 +156,7 @@ export function IocGraphSvg({ nodes, edges }: IocGraphSvgProps) {
             );
           })}
         </svg>
+        )}
       </div>
 
       {selectedNode && (

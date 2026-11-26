@@ -1,10 +1,11 @@
-"""Fine-tune intfloat/multilingual-e5-small (MIT), prune VI+EN vocab, and export INT8 ONNX (<40MB)."""
+"""Train Dual-Head E5 Classifier (frozen pretrained E5 + MLP head), prune VI+EN vocab & export INT8 ONNX."""
 
 # ruff: noqa: S106
 
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -17,12 +18,12 @@ import torch.nn.functional as F
 from generate_vn_dataset import SCAM_LABELS, save_splits
 from onnxruntime.quantization import QuantType, quantize_dynamic
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, TensorDataset
 from transformers import AutoModel, AutoTokenizer
 
 MODEL_NAME = "intfloat/multilingual-e5-small"
 MAX_SEQ_LEN = 192
-TRAIN_SEQ_LEN = 96
+TRAIN_SEQ_LEN = 128
 TARGET_MAX_VOCAB = 36_000
 MAX_ONNX_SIZE_MB = 50.0
 
@@ -49,15 +50,20 @@ def _classify_token(token_str: str) -> str:
 
 
 class DualHeadE5Classifier(nn.Module):
-    """Outputs both 7-class scam logits and 384-d L2-normalized semantic embeddings."""
+    """Frozen pretrained E5 semantic encoder + length-invariant mean-pool MLP head."""
 
     def __init__(self, encoder: nn.Module, hidden_size: int = 384, num_labels: int = 7) -> None:
         super().__init__()
         self.encoder = encoder
-        self.dropout = nn.Dropout(0.1)
-        self.classifier = nn.Linear(hidden_size, num_labels)
+        self.classifier = nn.Sequential(
+            nn.Linear(hidden_size, 128),
+            nn.LayerNorm(128),
+            nn.GELU(),
+            nn.Dropout(0.25),
+            nn.Linear(128, num_labels),
+        )
 
-    def forward(
+    def encode_features(
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
@@ -67,9 +73,16 @@ class DualHeadE5Classifier(nn.Module):
         mask_expanded = attention_mask.unsqueeze(-1).to(last_hidden.dtype)
         summed = torch.sum(last_hidden * mask_expanded, dim=1)
         counts = torch.clamp(mask_expanded.sum(dim=1), min=1e-9)
-        pooled = summed / counts
-        normalized_emb = F.normalize(pooled, p=2, dim=1)
-        logits = self.classifier(self.dropout(pooled))
+        mean_emb = F.normalize(summed / counts, p=2, dim=1)
+        return mean_emb, mean_emb
+
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        features, normalized_emb = self.encode_features(input_ids, attention_mask)
+        logits = self.classifier(features)
         return logits, normalized_emb
 
 
@@ -177,13 +190,32 @@ def prune_e5_vocabulary(
     return base_model, old_to_new
 
 
-def _evaluate_int8_onnx_on_test(
+def _extract_embeddings_and_labels(
+    model: DualHeadE5Classifier,
+    loader: DataLoader[dict[str, torch.Tensor]],
+    device: torch.device,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    model.eval()
+    feats: list[torch.Tensor] = []
+    labels: list[torch.Tensor] = []
+    with torch.no_grad():
+        for batch in loader:
+            feat, _ = model.encode_features(
+                batch["input_ids"].to(device),
+                batch["attention_mask"].to(device),
+            )
+            feats.append(feat.cpu())
+            labels.append(batch["labels"].cpu())
+    return torch.cat(feats, dim=0), torch.cat(labels, dim=0)
+
+
+def _evaluate_int8_onnx_on_split(
     onnx_path: Path,
     rust_tok: Any,
-    test_jsonl_path: Path,
+    jsonl_path: Path,
     label_to_id: dict[str, int],
 ) -> tuple[float, list[list[int]], dict[str, Any]]:
-    """Run the actual quantized INT8 ONNX artifact + shipped tokenizer on held-out test.jsonl."""
+    """Run the exported INT8 ONNX artifact + shipped tokenizer on a JSONL split."""
     opts = ort.SessionOptions()
     opts.enable_cpu_mem_arena = False
     opts.enable_mem_pattern = False
@@ -191,7 +223,7 @@ def _evaluate_int8_onnx_on_test(
 
     rows = [
         json.loads(line)
-        for line in test_jsonl_path.read_text(encoding="utf-8").splitlines()
+        for line in jsonl_path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
     y_true: list[int] = []
@@ -216,18 +248,21 @@ def _evaluate_int8_onnx_on_test(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Fine-tune & export pruned E5 INT8 ONNX.")
+    parser = argparse.ArgumentParser(description="Train frozen-E5 MLP & export pruned INT8 ONNX.")
     parser.add_argument("--data-dir", type=Path, default=Path("training/data"))
     parser.add_argument("--out-dir", type=Path, default=Path("backend/app/data/models"))
     parser.add_argument("--kb-path", type=Path, default=Path("backend/app/data/vn_scam_kb.json"))
-    parser.add_argument("--epochs", type=int, default=3)
-    parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--lr", type=float, default=1.5e-4)
+    parser.add_argument("--epochs", type=int, default=35)
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--lr", type=float, default=3e-3)
+    parser.add_argument("--regenerate-data", action="store_true")
     args = parser.parse_args()
 
+    torch.manual_seed(2026)
     torch.set_num_threads(min(8, max(2, torch.get_num_threads())))
-    if not (args.data_dir / "train.jsonl").exists():
-        save_splits(args.data_dir, per_class=520)
+    if args.regenerate_data or not (args.data_dir / "train.jsonl").exists():
+        counts = save_splits(args.data_dir, per_class=520)
+        print(f"[train_export_e5_onnx] Generated disjoint splits: {counts}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[train_export_e5_onnx] Using device: {device}")
@@ -235,7 +270,7 @@ def main() -> None:
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     encoder = AutoModel.from_pretrained(MODEL_NAME)
 
-    # Fit vocabulary strictly on training split + production playbook KB (never val/test!)
+    # Fit vocabulary strictly on training split + production playbook KB (zero val/test leakage!)
     train_only_texts = [
         json.loads(line)["text"]
         for line in (args.data_dir / "train.jsonl").read_text(encoding="utf-8").splitlines()
@@ -264,50 +299,71 @@ def main() -> None:
 
     label_to_id = {lbl: i for i, lbl in enumerate(SCAM_LABELS)}
     train_ds = JsonlScamDataset(args.data_dir / "train.jsonl", train_tok, label_to_id)
+    val_ds = JsonlScamDataset(args.data_dir / "val.jsonl", train_tok, label_to_id)
     test_ds = JsonlScamDataset(args.data_dir / "test.jsonl", train_tok, label_to_id)
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
-    test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False)
+
+    train_raw_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=False)
+    val_raw_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False)
+    test_raw_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False)
 
     model = DualHeadE5Classifier(encoder, hidden_size=384, num_labels=len(SCAM_LABELS)).to(device)
-    for param in model.encoder.embeddings.parameters():
+    for param in model.encoder.parameters():
         param.requires_grad = False
-    encoder_layers = getattr(getattr(model.encoder, "encoder", None), "layer", None)
-    if encoder_layers is not None:
-        for layer in list(encoder_layers)[:8]:
-            for param in layer.parameters():
-                param.requires_grad = False
 
-    trainable_params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, weight_decay=0.01)
+    print("[train_export_e5_onnx] Precomputing frozen E5 embeddings for train/val/test...")
+    x_train, y_train = _extract_embeddings_and_labels(model, train_raw_loader, device)
+    x_val, y_val = _extract_embeddings_and_labels(model, val_raw_loader, device)
+    x_test, y_test = _extract_embeddings_and_labels(model, test_raw_loader, device)
+
+    emb_train_loader = DataLoader(
+        TensorDataset(x_train, y_train),
+        batch_size=args.batch_size,
+        shuffle=True,
+    )
+    optimizer = torch.optim.AdamW(model.classifier.parameters(), lr=args.lr, weight_decay=0.02)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
     criterion = nn.CrossEntropyLoss()
 
+    best_val_f1 = -1.0
+    best_epoch = 0
+    best_head_state = copy.deepcopy(model.classifier.state_dict())
+
     for epoch in range(1, args.epochs + 1):
-        model.train()
+        model.classifier.train()
         total_loss = 0.0
-        for batch in train_loader:
+        for bx, by in emb_train_loader:
             optimizer.zero_grad()
-            logits, _ = model(
-                batch["input_ids"].to(device),
-                batch["attention_mask"].to(device),
-            )
-            loss = criterion(logits, batch["labels"].to(device))
+            bx_dev = bx.to(device)
+            # Mild hypersphere jitter regularizes against synthetic template memorization
+            bx_aug = F.normalize(bx_dev + 0.025 * torch.randn_like(bx_dev), p=2, dim=1)
+            logits = model.classifier(bx_aug)
+            loss = criterion(logits, by.to(device))
             loss.backward()
             optimizer.step()
             total_loss += float(loss.item())
-        print(f"Epoch {epoch}/{args.epochs} - avg_loss={total_loss / len(train_loader):.4f}")
+        scheduler.step()
 
-    model.eval()
-    fp32_true: list[int] = []
-    fp32_pred: list[int] = []
-    with torch.no_grad():
-        for batch in test_loader:
-            logits, _ = model(
-                batch["input_ids"].to(device),
-                batch["attention_mask"].to(device),
+        model.classifier.eval()
+        with torch.no_grad():
+            val_logits = model.classifier(x_val.to(device))
+            val_preds = torch.argmax(val_logits, dim=1).cpu().tolist()
+        val_f1 = float(f1_score(y_val.tolist(), val_preds, average="macro"))
+        if val_f1 > best_val_f1:
+            best_val_f1 = val_f1
+            best_epoch = epoch
+            best_head_state = copy.deepcopy(model.classifier.state_dict())
+        if epoch in (1, 5, 10, 15, 20, args.epochs):
+            print(
+                f"Epoch {epoch:02d}/{args.epochs} - loss={total_loss / len(emb_train_loader):.4f} "
+                f"| val_macro_f1={val_f1:.4f} (best={best_val_f1:.4f} @ ep {best_epoch})"
             )
-            fp32_pred.extend(torch.argmax(logits, dim=1).cpu().tolist())
-            fp32_true.extend(batch["labels"].tolist())
-    fp32_f1 = float(f1_score(fp32_true, fp32_pred, average="macro"))
+
+    model.classifier.load_state_dict(best_head_state)
+    model.eval()
+    with torch.no_grad():
+        test_logits = model.classifier(x_test.to(device))
+        fp32_pred = torch.argmax(test_logits, dim=1).cpu().tolist()
+    fp32_f1 = float(f1_score(y_test.tolist(), fp32_pred, average="macro"))
 
     pb_vecs: list[np.ndarray] = []
     with torch.no_grad():
@@ -323,9 +379,22 @@ def main() -> None:
                 padding="max_length",
                 return_tensors="pt",
             )
-            _, emb = model(enc_pb["input_ids"].to(device), enc_pb["attention_mask"].to(device))
+            _, emb = model.encode_features(
+                enc_pb["input_ids"].to(device),
+                enc_pb["attention_mask"].to(device),
+            )
             pb_vecs.append(emb.squeeze(0).cpu().numpy().astype(np.float32))
-    np.save(str(args.out_dir / "playbook_embeddings.npy"), np.stack(pb_vecs, axis=0))
+    pb_mat = np.stack(pb_vecs, axis=0)
+    np.save(str(args.out_dir / "playbook_embeddings.npy"), pb_mat)
+
+    sim_mat = pb_mat @ pb_mat.T
+    off_diag = sim_mat[~np.eye(sim_mat.shape[0], dtype=bool)]
+    off_diag_max = float(np.max(off_diag))
+    off_diag_p90 = float(np.percentile(off_diag, 90))
+    print(
+        f"[train_export_e5_onnx] Playbook embedding off-diag cos: "
+        f"p90={off_diag_p90:.4f}, max={off_diag_max:.4f}"
+    )
 
     model_cpu = model.cpu().eval()
     dummy_ids = torch.ones((1, 32), dtype=torch.long)
@@ -368,13 +437,22 @@ def main() -> None:
             f"Exported scam_e5_int8.onnx is {size_mb} MB (>= {MAX_ONNX_SIZE_MB} MB Git limit)!"
         )
 
-    int8_f1, int8_cm, int8_report = _evaluate_int8_onnx_on_test(
+    int8_val_f1, _, _ = _evaluate_int8_onnx_on_split(
+        int8_onnx,
+        pruned_rust_tok,
+        args.data_dir / "val.jsonl",
+        label_to_id,
+    )
+    int8_f1, int8_cm, int8_report = _evaluate_int8_onnx_on_split(
         int8_onnx,
         pruned_rust_tok,
         args.data_dir / "test.jsonl",
         label_to_id,
     )
-    print(f"[train_export_e5_onnx] FP32 Macro-F1={fp32_f1:.4f} | INT8 ONNX Macro-F1={int8_f1:.4f}")
+    print(
+        f"[train_export_e5_onnx] Val FP32={best_val_f1:.4f} (ep {best_epoch}) | "
+        f"Val INT8={int8_val_f1:.4f} | Test FP32={fp32_f1:.4f} | Test INT8={int8_f1:.4f}"
+    )
 
     (args.out_dir / "label_map.json").write_text(
         json.dumps({"labels": list(SCAM_LABELS)}, ensure_ascii=False, indent=2),
@@ -385,12 +463,19 @@ def main() -> None:
             {
                 "backbone": MODEL_NAME,
                 "license": "MIT",
+                "architecture": "frozen_e5_semantic_encoder_plus_mean_pool_mlp_head",
+                "split_strategy": "disjoint_template_families_train_val_test",
                 "vocab_fit_scope": "train_plus_kb_only",
                 "pruned_vocab_size": pruned_rust_tok.get_vocab_size(),
                 "onnx_size_mb": size_mb,
+                "best_val_epoch": best_epoch,
+                "pytorch_fp32_val_macro_f1": round(best_val_f1, 4),
+                "onnx_int8_val_macro_f1": round(int8_val_f1, 4),
                 "pytorch_fp32_test_macro_f1": round(fp32_f1, 4),
                 "onnx_int8_test_macro_f1": round(int8_f1, 4),
                 "test_macro_f1": round(int8_f1, 4),
+                "playbook_embedding_off_diag_cos_p90": round(off_diag_p90, 4),
+                "playbook_embedding_off_diag_cos_max": round(off_diag_max, 4),
                 "confusion_matrix": int8_cm,
                 "classification_report": int8_report,
             },

@@ -8,7 +8,13 @@ import { ApiPlaygroundCard } from "@/components/radar/ApiPlaygroundCard";
 import { BlockRuleManager } from "@/components/radar/BlockRuleManager";
 import { CampaignQueue } from "@/components/radar/CampaignQueue";
 import { IocGraphSvg } from "@/components/radar/IocGraphSvg";
-import { createBlockRule, fetchRadarGraph, resetBlockRules } from "@/lib/api";
+import {
+  createBlockRule,
+  fetchRadarGraph,
+  resetBlockRules,
+  revokeBlockRule,
+  validateAnalystPinInput,
+} from "@/lib/api";
 import { getNextRuleExpiryDelayMs } from "@/lib/radarLayout";
 import type { EmergingCampaign, IocType, RadarGraphResponse } from "@/lib/types";
 
@@ -103,6 +109,11 @@ export default function RadarPage() {
 
   async function handleBlockCampaign(camp: EmergingCampaign) {
     if (anyWriteBusy) return;
+    const pinErr = validateAnalystPinInput(analystPin);
+    if (pinErr) {
+      setBanner({ kind: "err", text: pinErr });
+      return;
+    }
     setBusyCampaignId(camp.campaign_id);
     setBanner(null);
     try {
@@ -135,6 +146,11 @@ export default function RadarPage() {
     reason: string,
   ): Promise<boolean> {
     if (anyWriteBusy) return false;
+    const pinErr = validateAnalystPinInput(analystPin);
+    if (pinErr) {
+      setBanner({ kind: "err", text: pinErr });
+      return false;
+    }
     setIsMutating(true);
     setBanner(null);
     try {
@@ -163,8 +179,41 @@ export default function RadarPage() {
     }
   }
 
+  async function handleRevokeRule(ruleId: string) {
+    if (anyWriteBusy) return;
+    const pinErr = validateAnalystPinInput(analystPin);
+    if (pinErr) {
+      setBanner({ kind: "err", text: pinErr });
+      return;
+    }
+    setIsMutating(true);
+    setBanner(null);
+    try {
+      await revokeBlockRule(ruleId, analystPin);
+      const refreshed = await loadGraph();
+      setBanner({
+        kind: refreshed ? "ok" : "err",
+        text: refreshed
+          ? "Đã thu hồi lệnh chặn tạm thời khỏi danh sách kích hoạt."
+          : "Đã thu hồi lệnh chặn trên máy chủ nhưng làm mới đồ thị tạm thời thất bại.",
+      });
+    } catch (e) {
+      setBanner({
+        kind: "err",
+        text: e instanceof Error ? e.message : "Không thể thu hồi quy tắc chặn.",
+      });
+    } finally {
+      setIsMutating(false);
+    }
+  }
+
   async function handleReset() {
     if (anyWriteBusy) return;
+    const pinErr = validateAnalystPinInput(analystPin);
+    if (pinErr) {
+      setBanner({ kind: "err", text: pinErr });
+      return;
+    }
     setIsMutating(true);
     setBanner(null);
     try {
@@ -288,6 +337,7 @@ export default function RadarPage() {
             isBusy={anyWriteBusy}
             onPinChange={setAnalystPin}
             onCreateManualRule={handleManualBlock}
+            onRevokeRule={(ruleId) => void handleRevokeRule(ruleId)}
             onResetRules={() => void handleReset()}
           />
         </div>

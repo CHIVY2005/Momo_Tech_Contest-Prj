@@ -2,7 +2,7 @@
 
 import { AlertOctagon, CheckCircle2, Globe, QrCode } from "lucide-react";
 
-import { maskDisplayIoc } from "@/lib/api";
+import { formatVietQrAmount, maskDisplayIoc } from "@/lib/api";
 import type { VietQRInfo } from "@/lib/types";
 
 interface VietQrCardProps {
@@ -83,36 +83,53 @@ export function VietQrCard({ items }: VietQrCardProps) {
               </p>
             )}
 
+            {qr.beneficiary_mismatch && (
+              <p className="mt-2.5 rounded-lg border border-rose-500/50 bg-rose-950/70 px-3 py-2 text-xs font-semibold text-rose-200">
+                CẢNH BÁO TRÁO MÃ QR QUẦY THU NGÂN: Tài khoản thụ hưởng giải mã trong VietQR KHÔNG KHỚP
+                với số tài khoản đăng ký của cửa hàng — nghi vấn bị dán đè QR lạ!
+              </p>
+            )}
+
             {isVietQrFrame ? (
-              <dl className="mt-3 grid grid-cols-2 gap-2.5 text-xs sm:grid-cols-4">
-                <div className="rounded-lg bg-slate-900/90 p-2.5">
-                  <dt className="text-[11px] text-slate-400">Ngân hàng / BIN</dt>
-                  <dd className="mt-0.5 font-semibold text-slate-100">
-                    {qr.bank_name ?? "Không rõ"} {qr.bank_bin ? `(${qr.bank_bin})` : ""}
-                  </dd>
-                </div>
-                <div className="rounded-lg bg-slate-900/90 p-2.5">
-                  <dt className="text-[11px] text-slate-400">Tài khoản Thụ hưởng</dt>
-                  <dd className="mt-0.5 font-[family-name:var(--font-mono)] font-semibold text-amber-300">
-                    {qr.account_number ? maskDisplayIoc(qr.account_number) : "N/A"}
-                  </dd>
-                </div>
-                <div className="rounded-lg bg-slate-900/90 p-2.5">
-                  <dt className="text-[11px] text-slate-400">Số tiền Ấn định sẵn</dt>
-                  <dd className="mt-0.5 font-[family-name:var(--font-mono)] font-semibold text-slate-100">
-                    {qr.amount ? `${Number(qr.amount).toLocaleString("vi-VN")} VND` : "QR tĩnh / Tự nhập"}
-                  </dd>
-                </div>
-                <div className="rounded-lg bg-slate-900/90 p-2.5">
-                  <dt className="text-[11px] text-slate-400">Mã Dịch vụ NAPAS</dt>
-                  <dd className="mt-0.5 font-[family-name:var(--font-mono)] text-slate-200">
-                    {qr.service_code ??
-                      (qr.kind === "INVALID_CRC_VIETQR" && qr.crc_valid && qr.tlv_valid === false
-                        ? "LỖI CẤU TRÚC TLV"
-                        : qr.kind)}
-                  </dd>
-                </div>
-              </dl>
+              <div className="mt-3 space-y-2.5">
+                <dl className="grid grid-cols-2 gap-2.5 text-xs sm:grid-cols-4">
+                  <div className="rounded-lg bg-slate-900/90 p-2.5">
+                    <dt className="text-[11px] text-slate-400">Ngân hàng / BIN</dt>
+                    <dd className="mt-0.5 font-semibold text-slate-100">
+                      {qr.bank_name ?? "Không rõ"} {qr.bank_bin ? `(${qr.bank_bin})` : ""}
+                    </dd>
+                  </div>
+                  <div className="rounded-lg bg-slate-900/90 p-2.5">
+                    <dt className="text-[11px] text-slate-400">Tài khoản Thụ hưởng</dt>
+                    <dd className="mt-0.5 font-[family-name:var(--font-mono)] font-semibold text-amber-300">
+                      {qr.account_number ? maskDisplayIoc(qr.account_number) : "N/A"}
+                    </dd>
+                  </div>
+                  <div className="rounded-lg bg-slate-900/90 p-2.5">
+                    <dt className="text-[11px] text-slate-400">Số tiền Ấn định sẵn</dt>
+                    <dd className="mt-0.5 font-[family-name:var(--font-mono)] font-semibold text-slate-100">
+                      {formatVietQrAmount(qr.amount)}
+                    </dd>
+                  </div>
+                  <div className="rounded-lg bg-slate-900/90 p-2.5">
+                    <dt className="text-[11px] text-slate-400">Mã Dịch vụ NAPAS</dt>
+                    <dd className="mt-0.5 font-[family-name:var(--font-mono)] text-slate-200">
+                      {qr.service_code ??
+                        (qr.kind === "INVALID_CRC_VIETQR" && qr.crc_valid && qr.tlv_valid === false
+                          ? "LỖI CẤU TRÚC TLV"
+                          : qr.kind)}
+                    </dd>
+                  </div>
+                </dl>
+                {qr.note && (
+                  <p className="rounded-lg bg-slate-900/90 px-3 py-2 text-xs text-slate-200">
+                    <span className="text-slate-400">Nội dung chuyển khoản (Tag 62.08): </span>
+                    <strong className="font-[family-name:var(--font-mono)] text-sky-300">
+                      {qr.note}
+                    </strong>
+                  </p>
+                )}
+              </div>
             ) : (
               <p className="mt-2.5 break-all rounded-lg bg-slate-900/90 p-2.5 font-[family-name:var(--font-mono)] text-xs text-slate-200">
                 Nội dung QR: {qr.raw}

@@ -13,7 +13,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { type FormEvent, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import type { AnalyzeMode } from "@/lib/types";
 
@@ -76,6 +76,18 @@ export function InputWorkbench({
   const [fileError, setFileError] = useState<string | null>(null);
   const imgInputRef = useRef<HTMLInputElement | null>(null);
   const audInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (value.imageFile === null && imgInputRef.current) {
+      imgInputRef.current.value = "";
+    }
+  }, [value.imageFile]);
+
+  useEffect(() => {
+    if (value.audioFile === null && audInputRef.current) {
+      audInputRef.current.value = "";
+    }
+  }, [value.audioFile]);
 
   function updateField<K extends keyof WorkbenchFormState>(
     key: K,
@@ -255,7 +267,11 @@ export function InputWorkbench({
                 htmlFor="wb-active-call-toggle"
                 className="cursor-pointer text-xs font-semibold text-slate-100"
               >
-                Tín hiệu ngữ cảnh: Đang trong cuộc gọi thoại (`in_active_call`)
+                Tín hiệu ngữ cảnh: Đang trong cuộc gọi thoại (
+                <code className="font-[family-name:var(--font-mono)] text-amber-300">
+                  in_active_call
+                </code>
+                )
               </label>
               <p className="text-[11px] text-slate-400">
                 Kích hoạt cộng hưởng rủi ro &amp; Khóa làm nguội 30 giây khi kẻ gian thúc ép qua điện thoại.

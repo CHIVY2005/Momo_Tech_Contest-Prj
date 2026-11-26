@@ -21,16 +21,41 @@ class LocalSttResult(BaseModel):
     latency_ms: int = Field(default=0, ge=0)
 
 
+def _configured_whisper_model() -> str:
+    return os.getenv("VERISHIELD_WHISPER_MODEL", "base").strip() or "base"
+
+
+def is_local_stt_ready(enabled: bool = True) -> bool:
+    """Return True only when local STT is enabled AND Whisper weights exist locally on disk."""
+    if not enabled:
+        return False
+    try:
+        from faster_whisper import download_model
+
+        cache_dir = os.getenv("HF_HUB_CACHE") or None
+        model_path = download_model(
+            _configured_whisper_model(),
+            local_files_only=True,
+            cache_dir=cache_dir,
+        )
+        return bool(model_path and Path(model_path).exists())
+    except Exception:
+        return False
+
+
 @lru_cache(maxsize=1)
-def _get_whisper_model(model_size: str = "base") -> Any:
+def _get_whisper_model(model_size: str | None = None) -> Any:
     from faster_whisper import WhisperModel
 
+    resolved_size = model_size or _configured_whisper_model()
     local_only = os.getenv("VERISHIELD_ALLOW_WHISPER_DOWNLOAD", "0") != "1"
+    download_root = os.getenv("HF_HUB_CACHE") or None
     return WhisperModel(
-        model_size,
+        resolved_size,
         device="cpu",
         compute_type="int8",
         cpu_threads=4,
+        download_root=download_root,
         local_files_only=local_only,
     )
 

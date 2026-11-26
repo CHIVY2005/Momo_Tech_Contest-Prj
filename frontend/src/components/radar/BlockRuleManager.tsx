@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, Lock, PlusCircle, RotateCcw, ShieldAlert } from "lucide-react";
+import { KeyRound, Lock, PlusCircle, RotateCcw, ShieldAlert, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import { formatRemainingTtl } from "@/lib/radarLayout";
@@ -13,6 +13,7 @@ interface BlockRuleManagerProps {
   isBusy: boolean;
   onPinChange: (pin: string) => void;
   onCreateManualRule: (iocType: IocType, rawValue: string, reason: string) => Promise<boolean>;
+  onRevokeRule: (ruleId: string) => void;
   onResetRules: () => void;
 }
 
@@ -23,6 +24,7 @@ export function BlockRuleManager({
   isBusy,
   onPinChange,
   onCreateManualRule,
+  onRevokeRule,
   onResetRules,
 }: BlockRuleManagerProps) {
   const [iocType, setIocType] = useState<IocType>("bank_account");
@@ -180,9 +182,21 @@ export function BlockRuleManager({
                   <p className="text-[11px] text-slate-300">{rule.reason}</p>
                 </div>
               </div>
-              <span className="rounded bg-slate-950 px-2 py-0.5 font-[family-name:var(--font-mono)] text-[10px] text-amber-300">
-                {formatRemainingTtl(rule.expires_at, nowMs)}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-slate-950 px-2 py-0.5 font-[family-name:var(--font-mono)] text-[10px] text-amber-300">
+                  {formatRemainingTtl(rule.expires_at, nowMs)}
+                </span>
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => onRevokeRule(rule.rule_id)}
+                  aria-label={`Thu hồi lệnh chặn ${rule.masked_value}`}
+                  className="inline-flex cursor-pointer items-center gap-1 rounded border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-200 hover:border-rose-400 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Trash2 className="h-3 w-3" aria-hidden="true" />
+                  <span>Gỡ</span>
+                </button>
+              </div>
             </div>
           ))
         )}

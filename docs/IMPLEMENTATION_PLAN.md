@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.12+, FastAPI, Pydantic v2, httpx, idna, Pillow, NumPy, opencv-python-headless, onnxruntime, tokenizers, rapidocr-onnxruntime, faster-whisper, playwright, google-genai (`gemini-2.5-flash`), fpdf2, SQLite (WAL), pytest, ruff, mypy · Training: PyTorch, Transformers (`intfloat/multilingual-e5-small`, MIT), onnx · Frontend: Next.js 15, React 19, TypeScript (`strict`), TailwindCSS, lucide-react · Deploy: Ubuntu VPS (4–8 GB RAM) + Docker Compose + Caddy 2 (`verishield.joiboi.app`).
 
-**Spec:** [docs/superpowers/specs/2026-11-25-verishield-v2-architecture-and-codex-workflow-design.md](file:///D:/Misc/momo-tech-contest-prj/docs/superpowers/specs/2026-11-25-verishield-v2-architecture-and-codex-workflow-design.md)
+**Spec:** [superpowers/specs/2026-11-25-verishield-v2-architecture-and-codex-workflow-design.md](superpowers/specs/2026-11-25-verishield-v2-architecture-and-codex-workflow-design.md)
 
 ## Global Constraints
 

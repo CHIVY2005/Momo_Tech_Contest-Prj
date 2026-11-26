@@ -48,7 +48,7 @@ class SlidingWindowRateLimiter:
         self._limit = max(1, max_per_minute)
         self._buckets: OrderedDict[str, deque[float]] = OrderedDict()
 
-    def allow(self, client_key: str) -> bool:
+    def check(self, client_key: str) -> tuple[bool, int]:
         now = time.monotonic()
         cutoff = now - 60.0
         bucket = self._buckets.get(client_key)
@@ -64,9 +64,14 @@ class SlidingWindowRateLimiter:
             bucket.popleft()
 
         if len(bucket) >= self._limit:
-            return False
+            retry_after = max(1, min(60, int(60.0 - (now - bucket[0])) + 1))
+            return False, retry_after
         bucket.append(now)
-        return True
+        return True, 0
+
+    def allow(self, client_key: str) -> bool:
+        allowed, _ = self.check(client_key)
+        return allowed
 
 
 class SecurityAndLimitsMiddleware:
@@ -78,9 +83,11 @@ class SecurityAndLimitsMiddleware:
         limiter: SlidingWindowRateLimiter,
         analyze_limit_bytes: int,
         default_post_limit_bytes: int = DEFAULT_JSON_POST_LIMIT_BYTES,
+        pin_limiter: SlidingWindowRateLimiter | None = None,
     ) -> None:
         self.app = app
         self.limiter = limiter
+        self.pin_limiter = pin_limiter
         self.analyze_limit_bytes = analyze_limit_bytes
         self.default_post_limit_bytes = default_post_limit_bytes
 
@@ -109,9 +116,16 @@ class SecurityAndLimitsMiddleware:
         if method == "POST" and path.startswith("/api/v1/"):
             client_tuple = scope.get("client")
             client_ip = str(client_tuple[0]) if client_tuple else "local"
-            if not self.limiter.allow(client_ip):
+            active_limiter = (
+                self.pin_limiter
+                if (self.pin_limiter is not None and path.startswith("/api/v1/radar/block-rules"))
+                else self.limiter
+            )
+            allowed, retry_after = active_limiter.check(client_ip)
+            if not allowed:
                 rate_resp = JSONResponse(
                     status_code=429,
+                    headers={"Retry-After": str(retry_after)},
                     content={
                         "detail": "Quá giới hạn số lượt yêu cầu mỗi phút. Vui lòng thử lại sau ít giây."
                     },
@@ -201,6 +215,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     pipeline = AnalysisPipeline(settings=cfg, repo=repo)
     limiter = SlidingWindowRateLimiter(max_per_minute=cfg.rate_limit_per_minute)
+    pin_limiter = SlidingWindowRateLimiter(max_per_minute=min(15, cfg.rate_limit_per_minute))
 
     app.state.settings = cfg
     app.state.repo = repo
@@ -210,6 +225,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         SecurityAndLimitsMiddleware,
         limiter=limiter,
+        pin_limiter=pin_limiter,
         analyze_limit_bytes=2 * cfg.max_upload_bytes + MULTIPART_ENVELOPE_OVERHEAD_BYTES,
         default_post_limit_bytes=DEFAULT_JSON_POST_LIMIT_BYTES,
     )

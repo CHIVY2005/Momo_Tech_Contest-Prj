@@ -6,6 +6,8 @@ import json
 import re
 import sqlite3
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -342,7 +344,7 @@ def redact_report_pii(report: AnalysisReport, strip_visual_blobs: bool = False) 
     )
 
 
-_STRICT_ACCOUNT_MASK_RE = re.compile(r"^(?:\d{2}\*{4}\d{2}|stk_[0-9a-f]{6}\*{4})$")
+_STRICT_ACCOUNT_MASK_RE = re.compile(r"^(?:[A-Z0-9]{2}\*{4}[A-Z0-9]{2}|stk_[0-9a-f]{6}\*{4})$")
 _STRICT_PHONE_MASK_RE = re.compile(r"^(?:\d{3}\*{4}\d{3}|\d{2}\*{4}\d|tel_[0-9a-f]{6}\*{4})$")
 _STRICT_DOMAIN_LABEL_RE = re.compile(r"^[a-z0-9]{1,2}\*{4}$", re.IGNORECASE)
 
@@ -418,9 +420,18 @@ class CaseRepository:
         conn.execute("PRAGMA foreign_keys=ON;")
         return conn
 
+    @contextmanager
+    def _session(self) -> Iterator[sqlite3.Connection]:
+        conn = self._connect()
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
+
     def is_wal_ready(self) -> bool:
         try:
-            with self._connect() as conn:
+            with self._session() as conn:
                 row = conn.execute("PRAGMA journal_mode;").fetchone()
                 return bool(row and str(row[0]).lower() == "wal")
         except sqlite3.Error:
@@ -429,7 +440,7 @@ class CaseRepository:
     def init_db(self) -> None:
         """Initialize SQLite schema with hashed/masked-only IOC graph tables."""
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as conn:
+        with self._session() as conn:
             conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS cases (
@@ -611,7 +622,7 @@ class CaseRepository:
         protected_iocs: list[tuple[str, str]] | None = None,
     ) -> None:
         """Seed synthetic masked IOC campaigns and register protected SAFE demo IOC hashes."""
-        with self._connect() as conn:
+        with self._session() as conn:
             if protected_iocs:
                 for prot_type, prot_raw in protected_iocs:
                     conn.execute(
@@ -751,7 +762,7 @@ class CaseRepository:
         """Persist PII-redacted report, update IOC graph & campaigns, and store replay hashes."""
         live_redacted = redact_report_pii(report, strip_visual_blobs=False)
         stored_redacted = redact_report_pii(report, strip_visual_blobs=True)
-        with self._connect() as conn:
+        with self._session() as conn:
             already_saved = (
                 conn.execute(
                     "SELECT 1 FROM cases WHERE case_id = ? LIMIT 1",
@@ -842,7 +853,7 @@ class CaseRepository:
         return live_redacted
 
     def get_report(self, case_id: str) -> AnalysisReport | None:
-        with self._connect() as conn:
+        with self._session() as conn:
             row = conn.execute(
                 "SELECT report_json FROM cases WHERE case_id = ?",
                 (case_id,),
@@ -923,7 +934,7 @@ class CaseRepository:
         lease_seconds: int = 180,
     ) -> bool:
         expires_iso = (datetime.now(UTC) + timedelta(seconds=max(1, lease_seconds))).isoformat()
-        with self._connect() as conn:
+        with self._session() as conn:
             cur = conn.execute(
                 "UPDATE telegram_updates SET lease_expires_at = ? "
                 "WHERE update_id = ? AND status = 'processing' AND lease_owner = ?",
@@ -936,7 +947,7 @@ class CaseRepository:
         update_id: int,
         owner_id: str | None = None,
     ) -> None:
-        with self._connect() as conn:
+        with self._session() as conn:
             if owner_id is not None:
                 conn.execute(
                     "DELETE FROM telegram_updates "
@@ -950,7 +961,7 @@ class CaseRepository:
                 )
 
     def get_telegram_update_cache(self, update_id: int) -> tuple[str | None, str] | None:
-        with self._connect() as conn:
+        with self._session() as conn:
             row = conn.execute(
                 "SELECT case_id, reply_text FROM telegram_updates "
                 "WHERE update_id = ? AND status = 'completed'",
@@ -968,7 +979,7 @@ class CaseRepository:
         owner_id: str | None = None,
     ) -> None:
         now_iso = datetime.now(UTC).isoformat()
-        with self._connect() as conn:
+        with self._session() as conn:
             if owner_id is not None:
                 conn.execute(
                     """
@@ -1006,23 +1017,54 @@ class CaseRepository:
         if not probes:
             return False
         placeholders = ",".join("?" for _ in probes)
-        with self._connect() as conn:
+        with self._session() as conn:
             row = conn.execute(
                 f"SELECT 1 FROM receipt_hashes WHERE fingerprint IN ({placeholders}) LIMIT 1",  # noqa: S608
                 tuple(probes),
             ).fetchone()
         return row is not None
 
+    @staticmethod
+    def _expand_domain_candidates(domains: list[str]) -> list[str]:
+        candidates: list[str] = []
+        multi_sfx = {
+            "com.vn",
+            "gov.vn",
+            "net.vn",
+            "org.vn",
+            "edu.vn",
+            "int.vn",
+            "ac.vn",
+            "co.uk",
+            "org.uk",
+            "com.sg",
+        }
+        for raw in domains:
+            host = raw.strip().lower().rstrip(".")
+            if not host:
+                continue
+            if host not in candidates:
+                candidates.append(host)
+            labels = [lbl for lbl in host.split(".") if lbl]
+            for start in range(1, len(labels) - 1):
+                parent = ".".join(labels[start:])
+                if parent in multi_sfx:
+                    continue
+                if parent not in candidates:
+                    candidates.append(parent)
+        return candidates
+
     def count_ioc_hits(self, iocs: ExtractedIOCs) -> int:
+        domain_cands = self._expand_domain_candidates(iocs.domains)
         hashes = (
             [hash_ioc("phone", p) for p in iocs.phones]
             + [hash_ioc("bank_account", a) for a in iocs.bank_accounts]
-            + [hash_ioc("domain", d) for d in iocs.domains]
+            + [hash_ioc("domain", d) for d in domain_cands]
         )
         if not hashes:
             return 0
         placeholders = ",".join("?" for _ in hashes)
-        with self._connect() as conn:
+        with self._session() as conn:
             sql = (
                 f"SELECT COALESCE(SUM(hit_count), 0) AS total "  # noqa: S608
                 f"FROM ioc_sightings WHERE ioc_hash IN ({placeholders})"
@@ -1035,16 +1077,17 @@ class CaseRepository:
         iocs: ExtractedIOCs,
         now: datetime | None = None,
     ) -> list[BlockRule]:
+        domain_cands = self._expand_domain_candidates(iocs.domains)
         hashes = (
             [hash_ioc("phone", p) for p in iocs.phones]
             + [hash_ioc("bank_account", a) for a in iocs.bank_accounts]
-            + [hash_ioc("domain", d) for d in iocs.domains]
+            + [hash_ioc("domain", d) for d in domain_cands]
         )
         if not hashes:
             return []
         now_iso = (now or datetime.now(UTC)).isoformat()
         placeholders = ",".join("?" for _ in hashes)
-        with self._connect() as conn:
+        with self._session() as conn:
             rows = conn.execute(
                 f"""
                 SELECT rule_id, ioc_type, masked_value, reason, created_at, expires_at
@@ -1102,7 +1145,7 @@ class CaseRepository:
         created_iso = ts_now.isoformat()
         rule_id = f"rule_{uuid.uuid4().hex[:10]}"
 
-        with self._connect() as conn:
+        with self._session() as conn:
             prot = conn.execute(
                 "SELECT 1 FROM protected_demo_iocs WHERE ioc_hash = ?",
                 (target_hash,),
@@ -1171,19 +1214,19 @@ class CaseRepository:
         )
 
     def revoke_block_rule(self, rule_id: str) -> bool:
-        with self._connect() as conn:
+        with self._session() as conn:
             cur = conn.execute("DELETE FROM block_rules WHERE rule_id = ?", (rule_id,))
             return bool(cur.rowcount and cur.rowcount > 0)
 
     def reset_transient_rules(self) -> int:
         """Clear transient /radar block rules without erasing receipt-replay forensic history."""
-        with self._connect() as conn:
+        with self._session() as conn:
             cur = conn.execute("DELETE FROM block_rules")
             return int(cur.rowcount or 0)
 
     def get_radar_graph(self, now: datetime | None = None) -> RadarGraphResponse:
         now_iso = (now or datetime.now(UTC)).isoformat()
-        with self._connect() as conn:
+        with self._session() as conn:
             rule_rows = conn.execute(
                 """
                 SELECT rule_id, ioc_hash, ioc_type, masked_value, reason, created_at, expires_at

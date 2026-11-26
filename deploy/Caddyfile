@@ -1,3 +1,8 @@
+http://{$DOMAIN:verishield.joiboi.app} {
+    header -Server
+    redir https://{host}{uri} 308
+}
+
 {$DOMAIN:verishield.joiboi.app} {
     encode zstd gzip
 
@@ -10,12 +15,21 @@
         X-Content-Type-Options "nosniff"
         X-Frame-Options "DENY"
         Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
         -Server
+    }
+
+    @app_html {
+        not path /api/*
+    }
+    header @app_html {
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
     }
 
     handle /api/* {
         reverse_proxy backend:8000 {
             flush_interval -1
+            header_up X-Forwarded-For {remote_host}
         }
     }
 

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request
 
 from app.db.repository import CaseRepository
 from app.schemas import DemoScenario
+from app.services.local_stt import is_local_stt_ready
 
 router = APIRouter(tags=["system"])
 
@@ -17,6 +18,7 @@ async def get_health(request: Request) -> dict[str, Any]:
     pipeline = request.app.state.pipeline
     settings = request.app.state.settings
     repo: CaseRepository = request.app.state.repo
+    stt_ready = is_local_stt_ready(settings.enable_local_stt)
     return {
         "status": "ok",
         "service": settings.app_name,
@@ -24,7 +26,8 @@ async def get_health(request: Request) -> dict[str, Any]:
         "sqlite_wal_ready": repo.is_wal_ready(),
         "onnx_classifier_loaded": pipeline.classifier.is_available,
         "local_ocr_enabled": settings.enable_local_ocr,
-        "local_stt_enabled": settings.enable_local_stt,
+        "local_stt_enabled": stt_ready,
+        "local_stt_ready": stt_ready,
         "gemini_configured": bool(
             settings.gemini_api_key.strip() or settings.gemini_backup_api_key.strip()
         ),

@@ -52,10 +52,29 @@ _BLOCKED_IPV6_NETS: Final[tuple[ipaddress.IPv6Network, ...]] = (
     ipaddress.IPv6Network("ff00::/8"),
 )
 
-_NON_STANDARD_IP_HOST_RE: Final[re.Pattern[str]] = re.compile(
-    r"^(?:0x[0-9a-f]+|\d+|0[0-7]+(?:\.[0-9a-fx]+)+)$",
+_NUMERIC_HOST_LABEL_RE: Final[re.Pattern[str]] = re.compile(
+    r"^(?:0x[0-9a-f]+|\d+)$",
     re.IGNORECASE,
 )
+
+
+def _is_obfuscated_numeric_ip(hostname: str) -> bool:
+    """Return True for shorthand, hex, octal, or integer-encoded IPv4 host literals."""
+    labels = hostname.split(".")
+    if not (1 <= len(labels) <= 4):
+        return False
+    if not all(_NUMERIC_HOST_LABEL_RE.fullmatch(lbl) for lbl in labels):
+        return False
+    if len(labels) != 4:
+        return True
+    for lbl in labels:
+        if lbl.lower().startswith("0x") or (len(lbl) > 1 and lbl.startswith("0")):
+            return True
+    try:
+        ipaddress.IPv4Address(hostname)
+    except ValueError:
+        return True
+    return False
 
 
 class UploadTooLargeError(ValueError):
@@ -134,7 +153,7 @@ def _parse_url_authority(url: str) -> tuple[bool, str | None, str, int, list[str
         return False, "Missing hostname", "", 0, []
     if hostname == "localhost" or hostname.endswith((".localhost", ".local", ".internal")):
         return False, f"Internal hostname blocked: {hostname}", "", 0, []
-    if _NON_STANDARD_IP_HOST_RE.match(hostname):
+    if _is_obfuscated_numeric_ip(hostname):
         return False, f"Obfuscated numeric IP literal blocked: {hostname}", "", 0, []
 
     try:

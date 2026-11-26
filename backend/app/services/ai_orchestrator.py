@@ -21,7 +21,7 @@ from app.schemas import (
     UrlFinding,
     VietQRInfo,
 )
-from app.services.guardrails import GuardrailResult
+from app.services.guardrails import GuardrailResult, normalize_guardrail_text
 from app.services.llm_client import GeminiStructuredSchema, execute_llm_call
 
 logger = logging.getLogger(__name__)
@@ -55,11 +55,12 @@ class LLMReasoningResult(BaseModel):
 
 
 def _sanitize_untrusted_text(raw: str) -> str:
-    """Neutralize any attempt to break out of <UNTRUSTED_USER_CONTENT> XML boundary."""
+    """Neutralize invisible chars and any attempt to break out of <UNTRUSTED_USER_CONTENT>."""
+    cleaned, _ = normalize_guardrail_text(raw)
     return re.sub(
-        r"</?\s*untrusted_user_content\s*>",
+        r"</?\s*untrusted_user_content(?:\b[^>]*)?>",
         "[STRIPPED_TAG]",
-        raw,
+        cleaned,
         flags=re.IGNORECASE,
     )
 
