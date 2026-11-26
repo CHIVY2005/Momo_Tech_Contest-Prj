@@ -114,17 +114,32 @@ body {
   left: 0.75rem;
 }
 
+@keyframes vs-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
   }
 
-  *,
+  *:not(.animate-spin),
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Keep functional loading spinners rotating so users never mistake analysis for a frozen UI */
+  .animate-spin {
+    animation: vs-spin 1s linear infinite !important;
+    transform-origin: center;
   }
 }
