@@ -1,0 +1,298 @@
+{
+  "generated_at": "2026-11-26T16:01:11.988633+00:00",
+  "host": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "python": "3.13.5",
+    "cpu_count": 16
+  },
+  "dataset_size": 25,
+  "categories": [
+    "bank_receipt",
+    "chat_sms",
+    "dark_mode",
+    "low_quality",
+    "vietqr"
+  ],
+  "engines": [
+    {
+      "engine": "rapidocr_ppocrv4",
+      "model_id": "ch_PP-OCRv4_det_mobile.onnx+ch_PP-OCRv4_rec_mobile.onnx",
+      "license": "Apache-2.0",
+      "available": true,
+      "samples_total": 25,
+      "samples_ok": 25,
+      "cer_exact_mean": 0.2243,
+      "cer_ascii_mean": 0.1054,
+      "wer_mean": 0.9222,
+      "entity_precision": 0.8095,
+      "entity_recall": 0.6415,
+      "entity_f1": 0.7158,
+      "scam_classification_accuracy": 0.92,
+      "receipt_detection_recall": 1.0,
+      "receipt_false_positives": 1,
+      "latency_p50_ms": 1341.69,
+      "latency_p95_ms": 1688.84,
+      "latency_mean_ms": 1377.92,
+      "cold_load_ms": 1990.56,
+      "peak_rss_mb": 339.16,
+      "cpu_util_single_core_pct": 201.0,
+      "cpu_util_machine_pct": 12.6,
+      "per_category": {
+        "chat_sms": {
+          "cer_exact_mean": 0.2609,
+          "cer_ascii_mean": 0.1115,
+          "wer_mean": 0.9234,
+          "latency_p50_ms": 1609.33
+        },
+        "bank_receipt": {
+          "cer_exact_mean": 0.1614,
+          "cer_ascii_mean": 0.1058,
+          "wer_mean": 0.9778,
+          "latency_p50_ms": 1491.5
+        },
+        "vietqr": {
+          "cer_exact_mean": 0.2575,
+          "cer_ascii_mean": 0.1251,
+          "wer_mean": 0.9493,
+          "latency_p50_ms": 1332.13
+        },
+        "dark_mode": {
+          "cer_exact_mean": 0.1792,
+          "cer_ascii_mean": 0.0475,
+          "wer_mean": 0.8073,
+          "latency_p50_ms": 1253.81
+        },
+        "low_quality": {
+          "cer_exact_mean": 0.2626,
+          "cer_ascii_mean": 0.1371,
+          "wer_mean": 0.9533,
+          "latency_p50_ms": 1188.65
+        }
+      }
+    },
+    {
+      "engine": "rapidocr_ppocrv5_latin",
+      "model_id": "ch_PP-OCRv5_det_mobile.onnx+latin_PP-OCRv5_rec_mobile.onnx",
+      "license": "Apache-2.0",
+      "available": true,
+      "samples_total": 25,
+      "samples_ok": 25,
+      "cer_exact_mean": 0.1096,
+      "cer_ascii_mean": 0.0294,
+      "wer_mean": 0.4994,
+      "entity_precision": 0.8864,
+      "entity_recall": 0.7358,
+      "entity_f1": 0.8041,
+      "scam_classification_accuracy": 0.92,
+      "receipt_detection_recall": 1.0,
+      "receipt_false_positives": 0,
+      "latency_p50_ms": 733.54,
+      "latency_p95_ms": 1032.09,
+      "latency_mean_ms": 765.76,
+      "cold_load_ms": 1391.42,
+      "peak_rss_mb": 336.15,
+      "cpu_util_single_core_pct": 205.8,
+      "cpu_util_machine_pct": 12.9,
+      "per_category": {
+        "chat_sms": {
+          "cer_exact_mean": 0.1498,
+          "cer_ascii_mean": 0.0422,
+          "wer_mean": 0.6749,
+          "latency_p50_ms": 1020.25
+        },
+        "bank_receipt": {
+          "cer_exact_mean": 0.0505,
+          "cer_ascii_mean": 0.0112,
+          "wer_mean": 0.3111,
+          "latency_p50_ms": 734.31
+        },
+        "vietqr": {
+          "cer_exact_mean": 0.1154,
+          "cer_ascii_mean": 0.0357,
+          "wer_mean": 0.4781,
+          "latency_p50_ms": 730.01
+        },
+        "dark_mode": {
+          "cer_exact_mean": 0.0995,
+          "cer_ascii_mean": 0.0283,
+          "wer_mean": 0.4691,
+          "latency_p50_ms": 656.27
+        },
+        "low_quality": {
+          "cer_exact_mean": 0.1331,
+          "cer_ascii_mean": 0.0298,
+          "wer_mean": 0.5638,
+          "latency_p50_ms": 698.23
+        }
+      }
+    },
+    {
+      "engine": "rapidocr_ppocrv5_latin_cls",
+      "model_id": "ch_PP-OCRv5_det_mobile.onnx+latin_PP-OCRv5_rec_mobile.onnx",
+      "license": "Apache-2.0",
+      "available": true,
+      "samples_total": 25,
+      "samples_ok": 25,
+      "cer_exact_mean": 0.1933,
+      "cer_ascii_mean": 0.1251,
+      "wer_mean": 0.5162,
+      "entity_precision": 0.9474,
+      "entity_recall": 0.6792,
+      "entity_f1": 0.7912,
+      "scam_classification_accuracy": 0.84,
+      "receipt_detection_recall": 1.0,
+      "receipt_false_positives": 0,
+      "latency_p50_ms": 749.17,
+      "latency_p95_ms": 1069.0,
+      "latency_mean_ms": 768.77,
+      "cold_load_ms": 1357.78,
+      "peak_rss_mb": 340.5,
+      "cpu_util_single_core_pct": 212.3,
+      "cpu_util_machine_pct": 13.3,
+      "per_category": {
+        "chat_sms": {
+          "cer_exact_mean": 0.4166,
+          "cer_ascii_mean": 0.3529,
+          "wer_mean": 0.7257,
+          "latency_p50_ms": 1009.8
+        },
+        "bank_receipt": {
+          "cer_exact_mean": 0.0505,
+          "cer_ascii_mean": 0.0112,
+          "wer_mean": 0.3111,
+          "latency_p50_ms": 749.17
+        },
+        "vietqr": {
+          "cer_exact_mean": 0.1965,
+          "cer_ascii_mean": 0.1222,
+          "wer_mean": 0.5115,
+          "latency_p50_ms": 718.65
+        },
+        "dark_mode": {
+          "cer_exact_mean": 0.0995,
+          "cer_ascii_mean": 0.0283,
+          "wer_mean": 0.4691,
+          "latency_p50_ms": 751.57
+        },
+        "low_quality": {
+          "cer_exact_mean": 0.2033,
+          "cer_ascii_mean": 0.1108,
+          "wer_mean": 0.5638,
+          "latency_p50_ms": 647.44
+        }
+      }
+    },
+    {
+      "engine": "gemini_multimodal",
+      "model_id": "gemini-4-hydrogen",
+      "license": "Commercial API (Gemini Multimodal)",
+      "available": true,
+      "samples_total": 25,
+      "samples_ok": 25,
+      "cer_exact_mean": 0.0,
+      "cer_ascii_mean": 0.0,
+      "wer_mean": 0.0,
+      "entity_precision": 1.0,
+      "entity_recall": 1.0,
+      "entity_f1": 1.0,
+      "scam_classification_accuracy": 0.92,
+      "receipt_detection_recall": 1.0,
+      "receipt_false_positives": 1,
+      "latency_p50_ms": 5181.95,
+      "latency_p95_ms": 12349.99,
+      "latency_mean_ms": 6252.53,
+      "cold_load_ms": 0.0,
+      "peak_rss_mb": 112.21,
+      "cpu_util_single_core_pct": 3.3,
+      "cpu_util_machine_pct": 0.2,
+      "per_category": {
+        "chat_sms": {
+          "cer_exact_mean": 0.0,
+          "cer_ascii_mean": 0.0,
+          "wer_mean": 0.0,
+          "latency_p50_ms": 10970.13
+        },
+        "bank_receipt": {
+          "cer_exact_mean": 0.0,
+          "cer_ascii_mean": 0.0,
+          "wer_mean": 0.0,
+          "latency_p50_ms": 5213.86
+        },
+        "vietqr": {
+          "cer_exact_mean": 0.0,
+          "cer_ascii_mean": 0.0,
+          "wer_mean": 0.0,
+          "latency_p50_ms": 4587.84
+        },
+        "dark_mode": {
+          "cer_exact_mean": 0.0,
+          "cer_ascii_mean": 0.0,
+          "wer_mean": 0.0,
+          "latency_p50_ms": 4929.67
+        },
+        "low_quality": {
+          "cer_exact_mean": 0.0,
+          "cer_ascii_mean": 0.0,
+          "wer_mean": 0.0,
+          "latency_p50_ms": 4979.13
+        }
+      }
+    },
+    {
+      "engine": "mineru_basic_onnx",
+      "model_id": "mineru-4.2.3-basic-onnx",
+      "license": "LicenseRef-MinerU-Open-Source-License",
+      "available": true,
+      "samples_total": 25,
+      "samples_ok": 25,
+      "cer_exact_mean": 0.0906,
+      "cer_ascii_mean": 0.0554,
+      "wer_mean": 0.4465,
+      "entity_precision": 1.0,
+      "entity_recall": 0.8868,
+      "entity_f1": 0.94,
+      "scam_classification_accuracy": 0.96,
+      "receipt_detection_recall": 1.0,
+      "receipt_false_positives": 1,
+      "latency_p50_ms": 1209.75,
+      "latency_p95_ms": 1312.22,
+      "latency_mean_ms": 1209.17,
+      "cold_load_ms": 6384.47,
+      "peak_rss_mb": 948.42,
+      "cpu_util_single_core_pct": 357.2,
+      "cpu_util_machine_pct": 22.3,
+      "per_category": {
+        "chat_sms": {
+          "cer_exact_mean": 0.1001,
+          "cer_ascii_mean": 0.0498,
+          "wer_mean": 0.5597,
+          "latency_p50_ms": 1241.7
+        },
+        "bank_receipt": {
+          "cer_exact_mean": 0.0403,
+          "cer_ascii_mean": 0.0288,
+          "wer_mean": 0.2753,
+          "latency_p50_ms": 1215.92
+        },
+        "vietqr": {
+          "cer_exact_mean": 0.1235,
+          "cer_ascii_mean": 0.0913,
+          "wer_mean": 0.4264,
+          "latency_p50_ms": 1191.05
+        },
+        "dark_mode": {
+          "cer_exact_mean": 0.0832,
+          "cer_ascii_mean": 0.0728,
+          "wer_mean": 0.433,
+          "latency_p50_ms": 1210.08
+        },
+        "low_quality": {
+          "cer_exact_mean": 0.1061,
+          "cer_ascii_mean": 0.0343,
+          "wer_mean": 0.5379,
+          "latency_p50_ms": 1183.01
+        }
+      }
+    }
+  ]
+}
