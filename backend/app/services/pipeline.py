@@ -345,7 +345,11 @@ class AnalysisPipeline:
             tier1_score = max(tier1_score, receipt_logic.logic_risk_points)
         if any(v.receive_scam_detected or v.beneficiary_mismatch for v in vietqr_list):
             tier1_score = max(tier1_score, 88)
-        if matched_pbs and not guardrails.safety_advisory_detected:
+        if (
+            matched_pbs
+            and not guardrails.safety_advisory_detected
+            and (not clf_out.available or clf_out.scam_probability >= 0.45)
+        ):
             tier1_score = max(tier1_score, min(85, 58 + 12 * len(matched_pbs)))
 
         # Step 4: Tier-2 Gemini 2.5 Flash Reasoning + 3-Signal Calibration

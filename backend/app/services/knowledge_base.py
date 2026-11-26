@@ -85,11 +85,13 @@ class KnowledgeBaseRetriever:
             vec_score = 0.0
             if cos_scores is not None:
                 raw_cos = float(cos_scores[idx])
-                if raw_cos > 0.25:
-                    vec_score = raw_cos * 3.5
+                # Pruned E5 embeddings sit around ~0.72-0.80 for unrelated Vietnamese prose;
+                # only reward genuine high-similarity semantic alignment (>= 0.85).
+                if raw_cos >= 0.85:
+                    vec_score = (raw_cos - 0.70) * 8.0
 
             total = lex_score + vec_score
-            if total <= 0.35:
+            if total < 1.40:
                 continue
 
             if mode in pb.get("modes", []):

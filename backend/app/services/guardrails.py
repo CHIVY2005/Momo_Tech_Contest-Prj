@@ -55,28 +55,48 @@ _PROMPT_INJECTION_PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
 
 _ADVISORY_HEADER_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
     re.compile(
-        r"(?:cảnh\s+báo(?:\s+an\s+toàn|\s+lừa\s+đảo|\s+bảo\s+mật)?|thông\s+báo\s+cảnh\s+báo|"
-        r"khuyến\s+cáo(?:\s+an\s+toàn|\s+bảo\s+mật)?)",
+        r"(?:cảnh\s+báo(?:\s+an\s+toàn|\s+lừa\s+đảo|\s+bảo\s+mật)?|thông\s+báo\s+(?:cảnh\s+báo|bảo\s+mật)|"
+        r"khuyến\s+cáo(?:\s+an\s+toàn|\s+bảo\s+mật|\s+bộ\s+công\s+an|\s+phòng\s+chống\s+lừa\s+đảo)?|"
+        r"cẩm\s+nang\s+an\s+toàn)",
         re.IGNORECASE,
     ),
     re.compile(
-        r"(?:ngân\s+hàng|napas|cơ\s+quan\s+công\s+an|bộ\s+công\s+an).{0,40}"
-        r"không\s+bao\s+giờ\s+yêu\s+cầu",
+        r"(?:ngân\s+hàng|napas|cơ\s+quan\s+công\s+an|bộ\s+công\s+an|viện\s+kiểm\s+sát).{0,45}"
+        r"không(?:\s+bao\s+giờ)?\s+(?:yêu\s+cầu|làm\s+việc\s+qua\s+điện\s+thoại)",
         re.IGNORECASE | re.DOTALL,
     ),
 )
 
 _ADVISORY_PROTECTIVE_CLAUSES: Final[tuple[re.Pattern[str], ...]] = (
     re.compile(
-        r"(?:tuyệt\s+đối\s+)?không(?:\s+bao\s+giờ)?\s+(?:cung\s+cấp|chia\s+sẻ|đưa).{0,35}"
+        r"(?:tuyệt\s+đối\s+)?không(?:\s+bao\s+giờ)?\s+(?:cung\s+cấp|chia\s+sẻ|đưa|nhập).{0,40}"
         r"(?:mã\s+otp|otp|mật\s+khẩu)",
         re.IGNORECASE | re.DOTALL,
     ),
     re.compile(
-        r"không\s+(?:bấm\s+vào\s+(?:đường\s+)?link\s+lạ|"
-        r"(?:tải|cài(?:\s+đặt)?)\s+(?:file\s+|ứng\s+dụng\s+)?\.apk)",
-        re.IGNORECASE,
+        r"không(?:\s+bao\s+giờ)?\s+gửi\s+(?:đường\s+(?:link|dẫn)|link).{0,45}(?:otp|mật\s+khẩu)",
+        re.IGNORECASE | re.DOTALL,
     ),
+    re.compile(
+        r"không\s+(?:bấm\s+vào\s+(?:đường\s+)?link\s+lạ|(?:tải|cài(?:\s+đặt)?).{0,40}\.apk|"
+        r"quét\s+mã\s+(?:qr|vietqr)\s+do\s+người\s+lạ)",
+        re.IGNORECASE | re.DOTALL,
+    ),
+)
+
+_OFFICIAL_ADVISORY_DOMAIN_SUFFIXES: Final[tuple[str, ...]] = (
+    ".gov.vn",
+    "chinhphu.vn",
+    "vietcombank.com.vn",
+    "techcombank.com.vn",
+    "napas.com.vn",
+    "mbbank.com.vn",
+    "bidv.com.vn",
+    "vietinbank.vn",
+    "agribank.com.vn",
+    "acb.com.vn",
+    "vpbank.com.vn",
+    "tpb.vn",
 )
 
 _ACTIONABLE_SCAM_DEMAND_RE: Final[re.Pattern[str]] = re.compile(
@@ -118,6 +138,18 @@ def detect_prompt_injection(normalized_text: str, had_invisible: bool = False) -
     return bool(matches), matches
 
 
+def _has_non_official_url(text: str) -> bool:
+    for m in re.finditer(r"https?://([a-zA-Z0-9.\-]+)", text, re.IGNORECASE):
+        host = m.group(1).lower().rstrip(".")
+        is_official = any(
+            host == sfx.lstrip(".") or host.endswith(sfx if sfx.startswith(".") else f".{sfx}")
+            for sfx in _OFFICIAL_ADVISORY_DOMAIN_SUFFIXES
+        )
+        if not is_official:
+            return True
+    return False
+
+
 def detect_safety_advisory(
     normalized_text: str,
     has_suspicious_url: bool = False,
@@ -125,7 +157,7 @@ def detect_safety_advisory(
     """Identify genuine security advisories that must not trigger false positives."""
     if not normalized_text or has_suspicious_url:
         return False, []
-    if re.search(r"https?://", normalized_text, re.IGNORECASE):
+    if _has_non_official_url(normalized_text):
         return False, []
     if _ACTIONABLE_SCAM_DEMAND_RE.search(normalized_text):
         return False, []

@@ -48,3 +48,45 @@ def test_classifier_dual_head_softmax_and_embedding_extraction(tmp_path: Path) -
     assert abs(sum(pred.class_probabilities.values()) - 1.0) < 1e-4
     assert emb is not None and emb.shape == (384,)
     assert abs(float(np.linalg.norm(emb)) - 1.0) < 1e-4
+
+
+def test_real_exported_e5_int8_onnx_artifact_size_accuracy_and_cpu_latency() -> None:
+    model_dir = Path(__file__).resolve().parents[2] / "app" / "data" / "models"
+    onnx_path = model_dir / "scam_e5_int8.onnx"
+    if not onnx_path.exists():
+        return
+
+    # Hard Invariant #4: Model artifact committed to Git must remain < 50 MB
+    size_mb = onnx_path.stat().st_size / (1024 * 1024)
+    assert size_mb < 50.0, f"scam_e5_int8.onnx is {size_mb:.2f} MB (must be < 50 MB)"
+
+    clf = ScamClassifier(str(model_dir))
+    assert clf.is_available is True
+
+    # Warmup pass
+    clf.predict("Xin chào buổi sáng")
+
+    latencies: list[int] = []
+    scam_pred, scam_emb = clf.predict(
+        "Cơ quan Cảnh sát điều tra yêu cầu chuyển tạm giữ 20 triệu vào STK 8800123456 ngay lập tức"
+    )
+    latencies.append(scam_pred.latency_ms)
+    assert scam_pred.scam_probability >= 0.75
+    assert scam_emb is not None and scam_emb.shape == (384,)
+
+    adv_pred, _ = clf.predict(
+        "[CẢNH BÁO AN TOÀN] Vietcombank khuyến cáo khách hàng "
+        "TUYỆT ĐỐI KHÔNG cung cấp mã OTP hay cài file .apk"
+    )
+    latencies.append(adv_pred.latency_ms)
+    assert adv_pred.predicted_label == "SAFE_ADVISORY"
+    assert adv_pred.advisory_probability >= 0.60
+
+    norm_pred, _ = clf.predict("Chào Lan, tối nay 7h ghé chợ mua rau muống về nấu cơm nhé.")
+    latencies.append(norm_pred.latency_ms)
+    assert norm_pred.predicted_label == "SAFE_NORMAL"
+    assert norm_pred.scam_probability < 0.35
+
+    latencies.sort()
+    p50_ms = latencies[len(latencies) // 2]
+    assert p50_ms < 35, f"Expected ONNX CPU P50 < 35ms, got {p50_ms}ms"

@@ -1,5 +1,7 @@
 """Fine-tune intfloat/multilingual-e5-small (MIT), prune VI+EN vocab, and export INT8 ONNX (<40MB)."""
 
+# ruff: noqa: S106
+
 from __future__ import annotations
 
 import argparse
@@ -19,24 +21,29 @@ from transformers import AutoModel, AutoTokenizer
 
 MODEL_NAME = "intfloat/multilingual-e5-small"
 MAX_SEQ_LEN = 192
+TRAIN_SEQ_LEN = 96
+TARGET_MAX_VOCAB = 36_000
+
+_VIETNAMESE_CHARS = frozenset(
+    "ÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝàáâãèéêìíòóôõùúýĂăĐđĨĩŨũƠơƯư"
+    "ẠạẢảẤấẦầẨẩẪẫẬậẮắẰằẲẳẴẵẶặẸẹẺẻẼẽẾếỀềỂểỄễỆệ"
+    "ỈỉỊịỌọỎỏỐốỒồỔổỖỗỘộỚớỜờỞởỠỡỢợỤụỦủỨứỪừỬửỮữỰự"
+    "ỲỳỴỵỶỷỸỹ₫"
+)
 
 
-def _is_vi_en_token(token_str: str) -> bool:
-    """Keep ASCII, Latin-1, Latin Extended-A/B, and Latin Extended Additional (Vietnamese) tokens."""
+def _classify_token(token_str: str) -> str:
+    """Classify SentencePiece token as 'vi' (has VN diacritic), 'ascii' (EN/digits/punct), or 'other'."""
     clean = token_str.replace("▁", "")
     if not clean:
-        return True
+        return "ascii"
+    has_vi = False
     for ch in clean:
-        cp = ord(ch)
-        is_vi_latin = (
-            cp <= 0x024F  # Basic Latin + Latin-1 + Latin Extended-A/B (includes ơ, ư, đ)
-            or (0x1E00 <= cp <= 0x1EFF)  # Vietnamese tone combinations
-            or (0x2000 <= cp <= 0x206F)  # General punctuation / currency (₫ = 0x20AB)
-            or (0x20A0 <= cp <= 0x20CF)
-        )
-        if not is_vi_latin:
-            return False
-    return True
+        if ch in _VIETNAMESE_CHARS:
+            has_vi = True
+        elif ord(ch) > 0x007E:
+            return "other"
+    return "vi" if has_vi else "ascii"
 
 
 class DualHeadE5Classifier(nn.Module):
@@ -82,7 +89,7 @@ class JsonlScamDataset(Dataset[dict[str, torch.Tensor]]):
         enc = self.tokenizer(
             f"query: {row['text']}",
             truncation=True,
-            max_length=MAX_SEQ_LEN,
+            max_length=TRAIN_SEQ_LEN,
             padding="max_length",
             return_tensors="pt",
         )
@@ -106,22 +113,42 @@ def prune_e5_vocabulary(
     tok_json_path = tmp_tok_dir / "tokenizer.json"
     tok_data = json.loads(tok_json_path.read_text(encoding="utf-8"))
 
-    # Always keep special IDs (0..10) + any token triggered by our Vietnamese corpus + VI/EN subwords
-    must_keep_ids: set[int] = set(range(min(16, fast_tokenizer.vocab_size)))
-    for text in corpus_texts:
-        must_keep_ids.update(fast_tokenizer.encode(text, add_special_tokens=True))
-
+    # Always keep special IDs + corpus-triggered IDs + all Vietnamese tokens + highest-prob ASCII/EN tokens
     vocab_list: list[list[Any]] = tok_data["model"]["vocab"]
+    must_keep_ids: set[int] = set(range(min(16, len(vocab_list))))
+    for added in tok_data.get("added_tokens", []):
+        aid = int(added["id"])
+        if 0 <= aid < len(vocab_list):
+            must_keep_ids.add(aid)
+    for text in corpus_texts:
+        for tid in fast_tokenizer.encode(text, add_special_tokens=True):
+            if 0 <= tid < len(vocab_list):
+                must_keep_ids.add(tid)
+
+    ascii_candidates: list[tuple[float, int]] = []
+    for old_id, entry in enumerate(vocab_list):
+        if old_id in must_keep_ids:
+            continue
+        kind = _classify_token(str(entry[0]))
+        if kind == "vi":
+            must_keep_ids.add(old_id)
+        elif kind == "ascii":
+            score = float(entry[1]) if len(entry) > 1 else -99.0
+            ascii_candidates.append((score, old_id))
+
+    # Sort ASCII/English subwords by Unigram log-probability descending to stay <= TARGET_MAX_VOCAB
+    ascii_candidates.sort(key=lambda item: item[0], reverse=True)
+    remaining_budget = max(0, TARGET_MAX_VOCAB - len(must_keep_ids))
+    for _, old_id in ascii_candidates[:remaining_budget]:
+        must_keep_ids.add(old_id)
+
     old_to_new: dict[int, int] = {}
     new_vocab_list: list[list[Any]] = []
-    kept_old_ids: list[int] = []
+    kept_old_ids: list[int] = sorted(must_keep_ids)
 
-    for old_id, entry in enumerate(vocab_list):
-        piece = str(entry[0])
-        if old_id in must_keep_ids or _is_vi_en_token(piece):
-            old_to_new[old_id] = len(new_vocab_list)
-            new_vocab_list.append(entry)
-            kept_old_ids.append(old_id)
+    for old_id in kept_old_ids:
+        old_to_new[old_id] = len(new_vocab_list)
+        new_vocab_list.append(vocab_list[old_id])
 
     tok_data["model"]["vocab"] = new_vocab_list
     if "unk_id" in tok_data["model"]:
@@ -155,11 +182,12 @@ def main() -> None:
     parser.add_argument("--data-dir", type=Path, default=Path("training/data"))
     parser.add_argument("--out-dir", type=Path, default=Path("backend/app/data/models"))
     parser.add_argument("--kb-path", type=Path, default=Path("backend/app/data/vn_scam_kb.json"))
-    parser.add_argument("--epochs", type=int, default=4)
+    parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--lr", type=float, default=3e-5)
+    parser.add_argument("--lr", type=float, default=1.5e-4)
     args = parser.parse_args()
 
+    torch.set_num_threads(min(8, max(2, torch.get_num_threads())))
     if not (args.data_dir / "train.jsonl").exists():
         save_splits(args.data_dir, per_class=520)
 
@@ -188,7 +216,7 @@ def main() -> None:
     # Wrap pruned tokenizer for training
     from transformers import PreTrainedTokenizerFast
 
-    train_tok = PreTrainedTokenizerFast(
+    train_tok = PreTrainedTokenizerFast(  # noqa: S106
         tokenizer_object=pruned_rust_tok,
         bos_token="<s>",
         eos_token="</s>",
@@ -205,7 +233,17 @@ def main() -> None:
     test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False)
 
     model = DualHeadE5Classifier(encoder, hidden_size=384, num_labels=len(SCAM_LABELS)).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
+    # Freeze token embeddings & lower 8 transformer layers to preserve E5 retrieval geometry
+    for param in model.encoder.embeddings.parameters():
+        param.requires_grad = False
+    encoder_layers = getattr(getattr(model.encoder, "encoder", None), "layer", None)
+    if encoder_layers is not None:
+        for layer in list(encoder_layers)[:8]:
+            for param in layer.parameters():
+                param.requires_grad = False
+
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = torch.optim.AdamW(trainable_params, lr=args.lr, weight_decay=0.01)
     criterion = nn.CrossEntropyLoss()
 
     for epoch in range(1, args.epochs + 1):

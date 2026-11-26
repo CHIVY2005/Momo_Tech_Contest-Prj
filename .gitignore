@@ -251,8 +251,10 @@ Thumbs.db
 *.db-wal
 *.db-shm
 
-# Agent scratch & submission build outputs
+# Agent scratch, training scratch & submission build outputs
 .superpowers/
+training/.venv/
+training/data/
 submission/dist/
 verishield-ai-source.zip
 

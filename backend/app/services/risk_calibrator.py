@@ -101,12 +101,19 @@ def calibrate_risk(
         receipt_logic=receipt_logic,
     )
 
+    is_neural_advisory = bool(
+        onnx_avail
+        and classifier is not None
+        and classifier.predicted_label == "SAFE_ADVISORY"
+        and classifier.advisory_probability >= 0.70
+    )
+
     # 1. Active Fraud Ops Block Rule always overrides (>= 95)
     if active_block_rule_hit:
         fused = max(fused, 96)
         confidence = 0.99
     # 2. Official Safety Advisory Cap (<= 20) when free of any threat indicators
-    elif guardrails.safety_advisory_detected and not hard_threat:
+    elif (guardrails.safety_advisory_detected or is_neural_advisory) and not hard_threat:
         fused = min(fused, 16)
         confidence = max(confidence, 0.92)
     else:

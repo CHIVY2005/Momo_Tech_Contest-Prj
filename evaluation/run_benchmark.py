@@ -188,6 +188,12 @@ async def run_benchmark_suite(
                     "e2e_latency_ms": e2e_ms,
                 }
             )
+            print(
+                f"  [{idx + 1:02d}/{len(cases):02d}] {case.case_id} ({case.category}) -> "
+                f"{report.verdict} ({report.risk_score}/100) | pass={passed} | "
+                f"model={report.llm_model or 'FALLBACK'} | e2e={e2e_ms}ms",
+                flush=True,
+            )
 
             if inter_case_delay_ms > 0 and idx + 1 < len(cases):
                 await asyncio.sleep(inter_case_delay_ms / 1000.0)

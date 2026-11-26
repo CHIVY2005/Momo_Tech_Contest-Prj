@@ -1,0 +1,11 @@
+{
+  "labels": [
+    "SAFE_NORMAL",
+    "SAFE_ADVISORY",
+    "SCAM_IMPERSONATION",
+    "SCAM_TASK_INVEST_LOAN",
+    "SCAM_PHISHING_APK_OTP",
+    "SCAM_URGENT_BORROW",
+    "PROMPT_INJECTION"
+  ]
+}

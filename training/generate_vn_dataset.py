@@ -1,5 +1,7 @@
 """Synthetic 7-class Vietnamese anti-scam dataset generator (100% synthetic, zero real PII)."""
 
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 import argparse
@@ -42,29 +44,45 @@ def _build_class_pools(rng: random.Random) -> dict[str, list[str]]:
     pools: dict[str, list[str]] = {label: [] for label in SCAM_LABELS}
 
     # 1. SAFE_NORMAL
+    places = ["Quận 1", "Quận 3", "Cầu Giấy", "Đà Nẵng", "tầng 4", "quán cà phê cũ", "văn phòng"]
+    times_of_day = ["sáng mai 8h30", "chiều nay 14h30", "tối nay 7h", "thứ Bảy tuần này", "trưa nay 12h"]
+    casual_topics = [
+        "ghé chợ mua cá kho với rau muống về nấu cơm tối",
+        "họp review tiến độ dự án quý 4 cùng cả nhóm",
+        "nhắc lịch khám sức khỏe định kỳ, nhớ nhịn ăn sáng trước khi xét nghiệm",
+        "hỏi thăm mẫu bàn phím cơ không dây màu xám còn sẵn hàng tại chi nhánh không",
+        "gửi chỉ số điện nước tháng này để cuối tuần đối chiếu sổ",
+    ]
     for i in range(900):
         name = names[i % len(names)]
         item = items[(i // 3) % len(items)]
         amt = amounts[(i // 5) % len(amounts)]
         bank = banks[i % len(banks)]
+        place = places[(i // 2) % len(places)]
+        tod = times_of_day[(i // 4) % len(times_of_day)]
+        topic = casual_topics[(i // 6) % len(casual_topics)]
         acct = f"1903{100000 + i:06d}"
         templates = [
-            f"Ơi {name} ơi, lát chuyển khoản cho mình {amt} {item} vào {bank} {acct} nhé, cảm ơn bạn!",
-            f"Shop xác nhận đơn #{4000 + i} của chị {name} tổng {amt}, khi nào giao tới nơi shipper gọi chị nha.",
-            f"Em vừa thanh toán {amt} {item} qua mã QR tại quầy rồi ạ, chị kiểm tra giúp em xem nổi số dư chưa nhé.",
-            f"Chiều nay {6 + (i % 4)}h họp nhóm dự án xong mình ghé quán cũ ăn tối rồi chia bill sau nha {name}.",
+            f"{name} ơi, lát tiện chuyển lại cho mình {amt} {item} vào {bank} {acct} nhé, cảm ơn nhiều!",
+            f"Shop xác nhận đơn {item} của chị {name} tổng {amt} tại {place}, khi giao tới nơi bưu tá gọi chị nha.",
+            f"Chào {name}, hẹn {tod} tại {place} để {topic} nhé mọi người.",
+            f"Ghi chú công việc cùng {name} lúc {tod}: {topic} ở {place}.",
+            f"Biên lai chuyển khoản thành công {bank} số tiền {amt} đến STK {acct} thanh toán {item} lúc {tod}.",
         ]
         pools["SAFE_NORMAL"].append(templates[i % len(templates)])
 
     # 2. SAFE_ADVISORY
-    orgs = ["Ngân hàng", "NAPAS", "Cục An ninh mạng A05", "Bộ Công an", "Vietcombank", "Techcombank"]
+    orgs = ["Ngân hàng", "NAPAS", "Cục An ninh mạng A05", "Bộ Công an", "Vietcombank", "Techcombank", "Cổng Dịch vụ công"]
+    advisory_domains = ["vietcombank.com.vn", "techcombank.com.vn", "napas.com.vn", "dichvucong.gov.vn"]
     for i in range(900):
         org = orgs[i % len(orgs)]
+        dom = advisory_domains[(i // 3) % len(advisory_domains)]
+        bank = banks[(i // 2) % len(banks)]
         templates = [
-            f"CẢNH BÁO AN TOÀN #{100 + i}: {org} KHÔNG BAO GIỜ yêu cầu khách hàng cung cấp mã OTP, mật khẩu hay cài file .apk lạ.",
-            f"Khuyến cáo bảo mật từ {org}: Tuyệt đối không bấm vào đường link trong tin nhắn SMS đổi điểm thưởng thẻ tín dụng (bản tin {i}).",
-            f"Thông báo phòng chống lừa đảo ({i}): Cơ quan Công an không làm việc qua điện thoại/Zalo và không yêu cầu chuyển tiền chứng minh trong sạch.",
-            f"Lưu ý bảo mật kỳ {i}: Luôn kiểm tra biến động số dư trên ứng dụng {org} trước khi giao hàng, ảnh chụp màn hình biên lai có thể bị làm giả.",
+            f"[CẢNH BÁO AN TOÀN] {org} khuyến cáo khách hàng TUYỆT ĐỐI KHÔNG cung cấp mã OTP, mật khẩu và KHÔNG cài đặt file .apk không rõ nguồn gốc. Chi tiết tại https://{dom}",
+            f"[THÔNG BÁO BẢO MẬT] {org} cảnh báo thủ đoạn mạo danh SMS đổi điểm thưởng thẻ {bank}. Ngân hàng KHÔNG bao giờ gửi đường link yêu cầu nhập OTP.",
+            f"[KHUYẾN CÁO PHÒNG CHỐNG LỪA ĐẢO] {org} khẳng định Cơ quan Công an và Viện Kiểm sát KHÔNG làm việc qua điện thoại/Zalo và KHÔNG yêu cầu chuyển tiền chứng minh trong sạch.",
+            f"[CẨM NANG AN TOÀN {org}] Mã VietQR chỉ dùng để CHUYỂN TIỀN ĐI, tuyệt đối KHÔNG quét mã QR do người lạ gửi để nhận tiền hoàn đơn hàng ({bank}).",
         ]
         pools["SAFE_ADVISORY"].append(templates[i % len(templates)])
 

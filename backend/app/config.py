@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_backup_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash"
-    llm_timeout_sec: float = Field(default=18.0, ge=2.0, le=120.0)
+    llm_timeout_sec: float = Field(default=35.0, ge=2.0, le=120.0)
     llm_max_retries: int = Field(default=2, ge=0, le=5)
 
     telegram_bot_token: str = ""
