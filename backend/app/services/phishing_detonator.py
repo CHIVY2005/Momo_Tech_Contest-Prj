@@ -39,6 +39,11 @@ def _get_playwright_concurrency_limit() -> int:
         return 2
 
 
+def _use_chromium_sandbox() -> bool:
+    raw = os.getenv("PLAYWRIGHT_CHROMIUM_SANDBOX", "true").strip().lower()
+    return raw not in ("0", "false", "no", "off")
+
+
 def _get_playwright_semaphore() -> asyncio.Semaphore:
     loop = asyncio.get_running_loop()
     limit = _get_playwright_concurrency_limit()
@@ -302,7 +307,7 @@ async def detonate_url_in_sandbox(
             async with async_playwright() as pw:
                 browser = await pw.chromium.launch(
                     headless=True,
-                    chromium_sandbox=True,
+                    chromium_sandbox=_use_chromium_sandbox(),
                     args=[
                         "--disable-dev-shm-usage",
                         "--disable-background-networking",

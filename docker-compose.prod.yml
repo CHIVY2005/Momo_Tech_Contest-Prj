@@ -11,6 +11,7 @@ services:
       - ANALYST_PIN=${ANALYST_PIN:?Set ANALYST_PIN explicitly in deploy/.env.prod}
       - UVICORN_WORKERS=${UVICORN_WORKERS:-1}
       - PLAYWRIGHT_MAX_CONCURRENCY=${PLAYWRIGHT_MAX_CONCURRENCY:-1}
+      - PLAYWRIGHT_CHROMIUM_SANDBOX=${PLAYWRIGHT_CHROMIUM_SANDBOX:-false}
       - CORS_ORIGINS=${CORS_ORIGINS:-["https://verishield.joiboi.app"]}
 
   frontend:
