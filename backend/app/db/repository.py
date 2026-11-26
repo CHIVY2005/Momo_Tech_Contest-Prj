@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import re
 import sqlite3
@@ -10,16 +12,20 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Literal
 
 from app.schemas import (
     AnalysisReport,
     BlockRule,
     EmergingCampaign,
     ExtractedIOCs,
+    ImageForensicsResult,
     IocType,
+    RadarAuditEvent,
     RadarEdge,
     RadarGraphResponse,
     RadarNode,
+    VerdictLevel,
     score_to_verdict,
 )
 from app.services.action_copilot import MERCHANT_HONESTY_BANNER
@@ -231,27 +237,29 @@ def redact_report_pii(report: AnalysisReport, strip_visual_blobs: bool = False) 
         else None
     )
 
-    scrubbed_img = (
-        report.image_forensics.model_copy(
+    def _scrub_img_item(img_item: ImageForensicsResult) -> ImageForensicsResult:
+        return img_item.model_copy(
             update={
-                "filename": f"evidence.{report.image_forensics.format.lower()}",
+                "filename": f"evidence.{img_item.format.lower()}",
                 "exif_software": (
-                    None if strip_visual_blobs else _scrub(report.image_forensics.exif_software)
+                    None if strip_visual_blobs else _scrub(img_item.exif_software)
                 ),
                 "ela_heatmap_base64": (
-                    None if strip_visual_blobs else report.image_forensics.ela_heatmap_base64
+                    None if strip_visual_blobs else img_item.ela_heatmap_base64
                 ),
                 "qr_payloads": [
                     "[QR_PAYLOAD_REDACTED_IN_PUBLIC_CASE]"
-                    for _ in report.image_forensics.qr_payloads
+                    for _ in img_item.qr_payloads
                 ],
-                "ocr_text": _scrub(report.image_forensics.ocr_text) or "",
-                "reasons": [_scrub(r) or r for r in report.image_forensics.reasons],
+                "ocr_text": _scrub(img_item.ocr_text) or "",
+                "reasons": [_scrub(r) or r for r in img_item.reasons],
             }
         )
-        if report.image_forensics is not None
-        else None
+
+    scrubbed_img = (
+        _scrub_img_item(report.image_forensics) if report.image_forensics is not None else None
     )
+    scrubbed_img_list = [_scrub_img_item(item) for item in report.image_forensics_list]
 
     scrubbed_receipt = (
         report.receipt_logic.model_copy(
@@ -307,6 +315,16 @@ def redact_report_pii(report: AnalysisReport, strip_visual_blobs: bool = False) 
         st.model_copy(update={"detail": _scrub(st.detail) or st.detail}) for st in report.trace
     ]
 
+    all_imgs = list(report.image_forensics_list)
+    if report.image_forensics is not None and not all_imgs:
+        all_imgs = [report.image_forensics]
+    ocr_incomplete = bool(
+        report.degraded_mode
+        and (
+            any(img.ocr_status in ("timeout", "error", "unavailable") for img in all_imgs)
+            or any(ev.source == "ocr_engine" for ev in report.evidence)
+        )
+    )
     trusted_summary = build_trusted_merchant_summary(
         _scrub(report.summary_vi) or report.summary_vi,
         mode=report.mode,
@@ -315,6 +333,7 @@ def redact_report_pii(report: AnalysisReport, strip_visual_blobs: bool = False) 
         has_ocr_beneficiary_mismatch=bool(
             report.receipt_logic and report.receipt_logic.beneficiary_mismatch
         ),
+        ocr_incomplete=ocr_incomplete,
     )
 
     return report.model_copy(
@@ -336,6 +355,7 @@ def redact_report_pii(report: AnalysisReport, strip_visual_blobs: bool = False) 
             "url_findings": scrubbed_urls,
             "sandbox": scrubbed_sandbox,
             "image_forensics": scrubbed_img,
+            "image_forensics_list": scrubbed_img_list,
             "receipt_logic": scrubbed_receipt,
             "evidence": scrubbed_ev,
             "actions": scrubbed_actions,
@@ -408,9 +428,28 @@ def _sanitize_legacy_radar_label(ioc_type: str, masked_value: str, ioc_hash: str
 class CaseRepository:
     """Thread-safe SQLite WAL repository with multi-judge TTL block-rule isolation."""
 
-    def __init__(self, sqlite_path: str, default_ttl_minutes: int = 30) -> None:
+    def __init__(
+        self,
+        sqlite_path: str,
+        default_ttl_minutes: int = 30,
+        ioc_hmac_secret: str = "",
+        app_env: str = "development",
+    ) -> None:
         self._db_path = sqlite_path
         self._default_ttl = max(1, default_ttl_minutes)
+        self._ioc_hmac_secret = ioc_hmac_secret.strip()
+        self._app_env = app_env
+
+    def _hash_ioc(self, ioc_type: str, raw_value: str) -> str:
+        return hash_ioc(ioc_type, raw_value, hmac_key=self._ioc_hmac_secret or None)
+
+    def _hash_client_ip(self, client_ip: str) -> str:
+        payload = f"ip:{client_ip.strip() or 'unknown'}".encode()
+        if self._ioc_hmac_secret:
+            return hmac.new(
+                self._ioc_hmac_secret.encode("utf-8"), payload, hashlib.sha256
+            ).hexdigest()[:16]
+        return hashlib.sha256(payload).hexdigest()[:16]
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path, timeout=5.0)
@@ -455,7 +494,8 @@ class CaseRepository:
                     ioc_type TEXT NOT NULL,
                     masked_value TEXT NOT NULL,
                     hit_count INTEGER NOT NULL DEFAULT 1,
-                    campaign_id TEXT
+                    campaign_id TEXT,
+                    is_demo INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS ioc_edges (
                     source_id TEXT NOT NULL,
@@ -471,7 +511,8 @@ class CaseRepository:
                     primary_ioc_type TEXT NOT NULL,
                     primary_ioc_hash TEXT NOT NULL,
                     primary_ioc_masked TEXT NOT NULL,
-                    recommended_action TEXT NOT NULL
+                    recommended_action TEXT NOT NULL,
+                    is_demo INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS block_rules (
                     rule_id TEXT PRIMARY KEY,
@@ -481,6 +522,17 @@ class CaseRepository:
                     reason TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     expires_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS radar_audit_logs (
+                    audit_id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    outcome TEXT NOT NULL,
+                    ioc_type TEXT,
+                    masked_target TEXT,
+                    rule_id TEXT,
+                    detail TEXT NOT NULL,
+                    client_ip_hash TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS protected_demo_iocs (
                     ioc_hash TEXT PRIMARY KEY,
@@ -513,6 +565,23 @@ class CaseRepository:
                 conn.execute("ALTER TABLE telegram_updates ADD COLUMN lease_owner TEXT;")
             if "lease_expires_at" not in cols:
                 conn.execute("ALTER TABLE telegram_updates ADD COLUMN lease_expires_at TEXT;")
+
+            camp_cols = {
+                str(r["name"])
+                for r in conn.execute("PRAGMA table_info(campaigns);").fetchall()
+            }
+            if "is_demo" not in camp_cols:
+                conn.execute(
+                    "ALTER TABLE campaigns ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0;"
+                )
+            sight_cols = {
+                str(r["name"])
+                for r in conn.execute("PRAGMA table_info(ioc_sightings);").fetchall()
+            }
+            if "is_demo" not in sight_cols:
+                conn.execute(
+                    "ALTER TABLE ioc_sightings ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0;"
+                )
 
             # Migrate any pre-remediation stored rows & rotate legacy predictable vs_tg_* IDs
             for row in conn.execute(
@@ -618,18 +687,20 @@ class CaseRepository:
 
     def seed_if_empty(
         self,
-        seed_path: str,
+        seed_path: str | None,
         protected_iocs: list[tuple[str, str]] | None = None,
     ) -> None:
-        """Seed synthetic masked IOC campaigns and register protected SAFE demo IOC hashes."""
+        """Seed synthetic masked IOC campaigns (non-prod) and register protected SAFE IOC hashes."""
         with self._session() as conn:
             if protected_iocs:
                 for prot_type, prot_raw in protected_iocs:
                     conn.execute(
                         "INSERT OR IGNORE INTO protected_demo_iocs (ioc_hash, ioc_type) VALUES (?, ?)",
-                        (hash_ioc(prot_type, prot_raw), prot_type),
+                        (self._hash_ioc(prot_type, prot_raw), prot_type),
                     )
 
+            if not seed_path:
+                return
             seed_file = Path(seed_path)
             if not seed_file.exists():
                 return
@@ -638,17 +709,39 @@ class CaseRepository:
             existing = conn.execute("SELECT COUNT(*) AS cnt FROM campaigns").fetchone()
             if existing and int(existing["cnt"]) > 0:
                 for camp in payload.get("campaigns", []):
+                    p_type_ex: IocType = camp["primary_ioc_type"]
+                    p_raw_ex: str = camp["primary_ioc_raw_synthetic"]
+                    p_hash_ex = self._hash_ioc(p_type_ex, p_raw_ex)
+                    p_masked_ex = mask_ioc(p_type_ex, p_raw_ex)
                     conn.execute(
-                        "UPDATE campaigns SET title_vi = ?, recommended_action = ? "
+                        "UPDATE campaigns "
+                        "SET title_vi = ?, recommended_action = ?, primary_ioc_masked = ?, is_demo = 1 "
                         "WHERE campaign_id = ?",
-                        (camp["title_vi"], camp["recommended_action"], camp["campaign_id"]),
+                        (camp["title_vi"], camp["recommended_action"], p_masked_ex, camp["campaign_id"]),
+                    )
+                    conn.execute(
+                        "UPDATE ioc_sightings SET masked_value = ?, is_demo = 1 "
+                        "WHERE ioc_hash = ?",
+                        (p_masked_ex, p_hash_ex),
+                    )
+                    for co_ex in camp.get("co_iocs", []):
+                        co_t_ex: IocType = co_ex["ioc_type"]
+                        co_raw_ex: str = co_ex["raw_synthetic"]
+                        conn.execute(
+                            "UPDATE ioc_sightings SET masked_value = ?, is_demo = 1 "
+                            "WHERE ioc_hash = ?",
+                            (mask_ioc(co_t_ex, co_raw_ex), self._hash_ioc(co_t_ex, co_raw_ex)),
+                        )
+                    conn.execute(
+                        "UPDATE ioc_sightings SET is_demo = 1 WHERE campaign_id = ?",
+                        (camp["campaign_id"],),
                     )
                 return
             for camp in payload.get("campaigns", []):
                 cid: str = camp["campaign_id"]
                 p_type: IocType = camp["primary_ioc_type"]
                 p_raw_syn: str = camp["primary_ioc_raw_synthetic"]
-                p_hash = hash_ioc(p_type, p_raw_syn)
+                p_hash = self._hash_ioc(p_type, p_raw_syn)
                 p_masked = mask_ioc(p_type, p_raw_syn)
                 c_count = int(camp.get("case_count", 3))
 
@@ -656,8 +749,8 @@ class CaseRepository:
                     """
                     INSERT OR IGNORE INTO campaigns
                     (campaign_id, title_vi, playbook_id, case_count, primary_ioc_type,
-                     primary_ioc_hash, primary_ioc_masked, recommended_action)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                     primary_ioc_hash, primary_ioc_masked, recommended_action, is_demo)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
                     """,
                     (
                         cid,
@@ -673,8 +766,8 @@ class CaseRepository:
                 conn.execute(
                     """
                     INSERT OR IGNORE INTO ioc_sightings
-                    (ioc_hash, ioc_type, masked_value, hit_count, campaign_id)
-                    VALUES (?, ?, ?, ?, ?)
+                    (ioc_hash, ioc_type, masked_value, hit_count, campaign_id, is_demo)
+                    VALUES (?, ?, ?, ?, ?, 1)
                     """,
                     (p_hash, p_type, p_masked, c_count, cid),
                 )
@@ -686,13 +779,13 @@ class CaseRepository:
                 for co in camp.get("co_iocs", []):
                     co_t: IocType = co["ioc_type"]
                     co_raw: str = co["raw_synthetic"]
-                    co_h = hash_ioc(co_t, co_raw)
+                    co_h = self._hash_ioc(co_t, co_raw)
                     co_m = mask_ioc(co_t, co_raw)
                     conn.execute(
                         """
                         INSERT OR IGNORE INTO ioc_sightings
-                        (ioc_hash, ioc_type, masked_value, hit_count, campaign_id)
-                        VALUES (?, ?, ?, ?, ?)
+                        (ioc_hash, ioc_type, masked_value, hit_count, campaign_id, is_demo)
+                        VALUES (?, ?, ?, ?, ?, 1)
                         """,
                         (co_h, co_t, co_m, max(1, c_count - 1), cid),
                     )
@@ -707,12 +800,12 @@ class CaseRepository:
         ioc_type: IocType,
         raw_val: str,
     ) -> str:
-        h = hash_ioc(ioc_type, raw_val)
+        h = self._hash_ioc(ioc_type, raw_val)
         m = mask_ioc(ioc_type, raw_val)
         conn.execute(
             """
-            INSERT INTO ioc_sightings (ioc_hash, ioc_type, masked_value, hit_count)
-            VALUES (?, ?, ?, 1)
+            INSERT INTO ioc_sightings (ioc_hash, ioc_type, masked_value, hit_count, is_demo)
+            VALUES (?, ?, ?, 1, 0)
             ON CONFLICT(ioc_hash) DO UPDATE SET hit_count = hit_count + 1
             """,
             (h, ioc_type, m),
@@ -1063,9 +1156,9 @@ class CaseRepository:
     def count_ioc_hits(self, iocs: ExtractedIOCs) -> int:
         domain_cands = self._expand_domain_candidates(iocs.domains)
         hashes = (
-            [hash_ioc("phone", p) for p in iocs.phones]
-            + [hash_ioc("bank_account", a) for a in iocs.bank_accounts]
-            + [hash_ioc("domain", d) for d in domain_cands]
+            [self._hash_ioc("phone", p) for p in iocs.phones]
+            + [self._hash_ioc("bank_account", a) for a in iocs.bank_accounts]
+            + [self._hash_ioc("domain", d) for d in domain_cands]
         )
         if not hashes:
             return 0
@@ -1085,9 +1178,9 @@ class CaseRepository:
     ) -> list[BlockRule]:
         domain_cands = self._expand_domain_candidates(iocs.domains)
         hashes = (
-            [hash_ioc("phone", p) for p in iocs.phones]
-            + [hash_ioc("bank_account", a) for a in iocs.bank_accounts]
-            + [hash_ioc("domain", d) for d in domain_cands]
+            [self._hash_ioc("phone", p) for p in iocs.phones]
+            + [self._hash_ioc("bank_account", a) for a in iocs.bank_accounts]
+            + [self._hash_ioc("domain", d) for d in domain_cands]
         )
         if not hashes:
             return []
@@ -1129,7 +1222,7 @@ class CaseRepository:
         _ = masked_value  # Never trust caller-supplied display labels on public radar rules
         has_raw = bool(raw_value and raw_value.strip())
         if has_raw and raw_value is not None:
-            target_hash = hash_ioc(ioc_type, raw_value)
+            target_hash = self._hash_ioc(ioc_type, raw_value)
             resolved_type: IocType = ioc_type
             resolved_mask = mask_ioc(ioc_type, raw_value)
         elif ioc_hash:
@@ -1220,6 +1313,25 @@ class CaseRepository:
             active=True,
         )
 
+    def get_block_rule(self, rule_id: str) -> BlockRule | None:
+        with self._session() as conn:
+            row = conn.execute(
+                "SELECT rule_id, ioc_type, masked_value, reason, created_at, expires_at "
+                "FROM block_rules WHERE rule_id = ?",
+                (rule_id,),
+            ).fetchone()
+        if not row:
+            return None
+        return BlockRule(
+            rule_id=str(row["rule_id"]),
+            ioc_type=row["ioc_type"],
+            masked_value=str(row["masked_value"]),
+            reason=str(row["reason"]),
+            created_at=str(row["created_at"]),
+            expires_at=str(row["expires_at"]),
+            active=True,
+        )
+
     def revoke_block_rule(self, rule_id: str) -> bool:
         with self._session() as conn:
             cur = conn.execute("DELETE FROM block_rules WHERE rule_id = ?", (rule_id,))
@@ -1230,6 +1342,67 @@ class CaseRepository:
         with self._session() as conn:
             cur = conn.execute("DELETE FROM block_rules")
             return int(cur.rowcount or 0)
+
+    def record_audit_log(
+        self,
+        *,
+        action: Literal[
+            "create_rule",
+            "revoke_rule",
+            "reset_rules",
+            "auth_failed",
+            "protected_ioc_blocked",
+        ],
+        outcome: Literal["allowed", "denied"],
+        detail: str,
+        ioc_type: IocType | None = None,
+        masked_target: str | None = None,
+        rule_id: str | None = None,
+        client_ip: str = "unknown",
+    ) -> RadarAuditEvent:
+        audit_id = f"aud_{uuid.uuid4().hex[:10]}"
+        created_at = datetime.now(UTC).isoformat()
+        clean_detail = scrub_free_text_pii(detail.strip())[:300]
+        clean_target = scrub_free_text_pii(masked_target) if masked_target else None
+        ip_hash = self._hash_client_ip(client_ip)
+        with self._session() as conn:
+            conn.execute(
+                """
+                INSERT INTO radar_audit_logs
+                (audit_id, created_at, action, outcome, ioc_type, masked_target,
+                 rule_id, detail, client_ip_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    audit_id,
+                    created_at,
+                    action,
+                    outcome,
+                    ioc_type,
+                    clean_target,
+                    rule_id,
+                    clean_detail,
+                    ip_hash,
+                ),
+            )
+            conn.execute(
+                """
+                DELETE FROM radar_audit_logs
+                WHERE audit_id NOT IN (
+                    SELECT audit_id FROM radar_audit_logs ORDER BY created_at DESC LIMIT 200
+                )
+                """
+            )
+        return RadarAuditEvent(
+            audit_id=audit_id,
+            created_at=created_at,
+            action=action,
+            outcome=outcome,
+            ioc_type=ioc_type,
+            masked_target=clean_target,
+            rule_id=rule_id,
+            detail=clean_detail,
+        )
 
     def get_radar_graph(self, now: datetime | None = None) -> RadarGraphResponse:
         now_iso = (now or datetime.now(UTC)).isoformat()
@@ -1250,24 +1423,53 @@ class CaseRepository:
                 "SELECT * FROM ioc_sightings ORDER BY hit_count DESC LIMIT 60"
             ).fetchall()
             total_sightings_row = conn.execute(
-                "SELECT COUNT(*) AS cnt FROM ioc_sightings"
+                "SELECT COUNT(*) AS cnt, "
+                "COALESCE(SUM(CASE WHEN is_demo = 1 THEN 1 ELSE 0 END), 0) AS demo_cnt "
+                "FROM ioc_sightings"
             ).fetchone()
             edge_rows = conn.execute("SELECT * FROM ioc_edges LIMIT 120").fetchall()
             case_cnt_row = conn.execute("SELECT COUNT(*) AS c FROM cases").fetchone()
+            audit_rows = conn.execute(
+                """
+                SELECT audit_id, created_at, action, outcome, ioc_type, masked_target, rule_id, detail
+                FROM radar_audit_logs ORDER BY created_at DESC LIMIT 20
+                """
+            ).fetchall()
+
+        camp_iocs: dict[str, set[str]] = {}
+        for c in camp_rows:
+            cid = str(c["campaign_id"])
+            camp_iocs[cid] = {str(c["primary_ioc_hash"])}
+        for s in sighting_rows:
+            scid = str(s["campaign_id"]) if s["campaign_id"] else None
+            if scid and scid in camp_iocs:
+                camp_iocs[scid].add(str(s["ioc_hash"]))
+        for e in edge_rows:
+            src = str(e["source_id"])
+            dst = str(e["target_id"])
+            if src in camp_iocs and dst != src:
+                camp_iocs[src].add(dst)
+            elif dst in camp_iocs and src != dst:
+                camp_iocs[dst].add(src)
 
         nodes: list[RadarNode] = []
         valid_ids: set[str] = set()
         for c in camp_rows:
             cid = str(c["campaign_id"])
             valid_ids.add(cid)
+            linked = camp_iocs.get(cid, {str(c["primary_ioc_hash"])})
+            case_cnt = int(c["case_count"])
+            camp_risk: VerdictLevel = "CRITICAL_SCAM" if case_cnt >= 5 else "HIGH_RISK"
             nodes.append(
                 RadarNode(
                     node_id=cid,
                     kind="campaign",
                     label=str(c["title_vi"]),
-                    hit_count=int(c["case_count"]),
-                    risk_level="CRITICAL_SCAM",
-                    blocked=str(c["primary_ioc_hash"]) in blocked_hashes,
+                    hit_count=case_cnt,
+                    risk_level=camp_risk,
+                    blocked=str(c["primary_ioc_hash"]) in blocked_hashes
+                    or any(h in blocked_hashes for h in linked),
+                    is_demo=bool(int(c["is_demo"])),
                 )
             )
         for s in sighting_rows:
@@ -1281,6 +1483,7 @@ class CaseRepository:
                     hit_count=int(s["hit_count"]),
                     risk_level="CRITICAL_SCAM" if shash in blocked_hashes else "HIGH_RISK",
                     blocked=shash in blocked_hashes,
+                    is_demo=bool(int(s["is_demo"])),
                 )
             )
 
@@ -1294,20 +1497,34 @@ class CaseRepository:
             if str(e["source_id"]) in valid_ids and str(e["target_id"]) in valid_ids
         ]
 
-        campaigns = [
-            EmergingCampaign(
-                campaign_id=str(c["campaign_id"]),
-                title_vi=str(c["title_vi"]),
-                playbook_id=str(c["playbook_id"]),
-                case_count=int(c["case_count"]),
-                primary_ioc_type=c["primary_ioc_type"],
-                primary_ioc_masked=str(c["primary_ioc_masked"]),
-                primary_ioc_hash=str(c["primary_ioc_hash"]),
-                recommended_action=str(c["recommended_action"]),
-                already_blocked=str(c["primary_ioc_hash"]) in blocked_hashes,
+        campaigns: list[EmergingCampaign] = []
+        demo_campaigns = 0
+        for c in camp_rows:
+            cid = str(c["campaign_id"])
+            linked = camp_iocs.get(cid, {str(c["primary_ioc_hash"])})
+            blocked_in_camp = sum(1 for h in linked if h in blocked_hashes)
+            is_demo_camp = bool(int(c["is_demo"]))
+            if is_demo_camp:
+                demo_campaigns += 1
+            case_cnt = int(c["case_count"])
+            camp_risk_lvl: VerdictLevel = "CRITICAL_SCAM" if case_cnt >= 5 else "HIGH_RISK"
+            campaigns.append(
+                EmergingCampaign(
+                    campaign_id=cid,
+                    title_vi=str(c["title_vi"]),
+                    playbook_id=str(c["playbook_id"]),
+                    case_count=case_cnt,
+                    primary_ioc_type=c["primary_ioc_type"],
+                    primary_ioc_masked=str(c["primary_ioc_masked"]),
+                    primary_ioc_hash=str(c["primary_ioc_hash"]),
+                    recommended_action=str(c["recommended_action"]),
+                    already_blocked=str(c["primary_ioc_hash"]) in blocked_hashes,
+                    is_demo=is_demo_camp,
+                    risk_level=camp_risk_lvl,
+                    total_ioc_count=max(1, len(linked)),
+                    blocked_ioc_count=blocked_in_camp,
+                )
             )
-            for c in camp_rows
-        ]
 
         active_rules = [
             BlockRule(
@@ -1322,17 +1539,53 @@ class CaseRepository:
             for r in rule_rows
         ]
 
+        recent_audit_logs = [
+            RadarAuditEvent(
+                audit_id=str(a["audit_id"]),
+                created_at=str(a["created_at"]),
+                action=a["action"],
+                outcome=a["outcome"],
+                ioc_type=a["ioc_type"],
+                masked_target=str(a["masked_target"]) if a["masked_target"] else None,
+                rule_id=str(a["rule_id"]) if a["rule_id"] else None,
+                detail=str(a["detail"]),
+            )
+            for a in audit_rows
+        ]
+
+        total_cases = int(case_cnt_row["c"]) if case_cnt_row else 0
+        total_iocs = (
+            int(total_sightings_row["cnt"]) if total_sightings_row else len(sighting_rows)
+        )
+        demo_iocs = int(total_sightings_row["demo_cnt"]) if total_sightings_row else 0
+        real_iocs = max(0, total_iocs - demo_iocs)
+        real_campaigns = max(0, len(campaigns) - demo_campaigns)
+
+        has_demo = demo_campaigns > 0 or demo_iocs > 0
+        has_real = total_cases > 0 or real_campaigns > 0 or real_iocs > 0
+        if has_demo and has_real:
+            data_scope: Literal["live", "mixed_with_demo", "demo_only"] = "mixed_with_demo"
+        elif has_demo:
+            data_scope = "demo_only"
+        else:
+            data_scope = "live"
+
         return RadarGraphResponse(
             nodes=nodes,
             edges=edges,
             campaigns=campaigns,
             active_block_rules=active_rules,
             stats={
-                "total_cases": int(case_cnt_row["c"]) if case_cnt_row else 0,
-                "tracked_iocs": (
-                    int(total_sightings_row["cnt"]) if total_sightings_row else len(sighting_rows)
-                ),
+                "total_cases": total_cases,
+                "tracked_iocs": total_iocs,
+                "demo_iocs": demo_iocs,
+                "real_iocs": real_iocs,
                 "emerging_campaigns": len(campaigns),
+                "demo_campaigns": demo_campaigns,
+                "real_campaigns": real_campaigns,
                 "active_blocks": len(active_rules),
             },
+            data_scope=data_scope,
+            app_env=self._app_env,
+            recent_audit_logs=recent_audit_logs,
         )

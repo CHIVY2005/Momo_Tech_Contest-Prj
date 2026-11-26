@@ -9,16 +9,15 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
+from app.config import Settings
 from app.core.security import InvalidMediaError, UploadTooLargeError, validate_upload_bytes
 from app.schemas import AnalysisReport, AnalyzeMode
-from app.services.pipeline import AnalysisPipeline, UnknownDemoError
+from app.services.pipeline import AnalysisPipeline, MediaItem, UnknownDemoError
 
 router = APIRouter(tags=["analyze"])
 
 
-async def _read_bounded_upload(upload: UploadFile | None, max_bytes: int) -> bytes | None:
-    if upload is None:
-        return None
+async def _read_bounded_upload(upload: UploadFile, max_bytes: int) -> bytes:
     # Read at most max_bytes + 1 so chunked uploads without Content-Length cannot OOM RAM
     data = await upload.read(max_bytes + 1)
     if len(data) > max_bytes:
@@ -32,28 +31,91 @@ def _parse_bool_form(raw: str | bool) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _collect_uploads(
+    single: UploadFile | None,
+    plural: list[UploadFile] | None,
+) -> list[UploadFile]:
+    out: list[UploadFile] = []
+    if single is not None:
+        out.append(single)
+    if plural:
+        out.extend(plural)
+    return out
+
+
 async def _prepare_inputs(
     pipeline: AnalysisPipeline,
-    max_bytes: int,
+    settings: Settings,
     demo_id: str | None,
     text: str,
     url: str | None,
     image: UploadFile | None,
     audio: UploadFile | None,
-) -> tuple[bytes | None, str, str, bytes | None, str, str]:
+    images: list[UploadFile] | None = None,
+    audios: list[UploadFile] | None = None,
+) -> tuple[list[MediaItem], list[MediaItem]]:
     has_demo = bool(demo_id and demo_id.strip())
     valid_demos = {d.demo_id for d in pipeline.list_demos()}
     if has_demo and demo_id is not None and demo_id.strip() not in valid_demos:
         raise HTTPException(status_code=404, detail="Không tìm thấy tình huống mẫu được yêu cầu.")
 
-    try:
-        img_bytes = await _read_bounded_upload(image, max_bytes)
-        if img_bytes is not None:
-            validate_upload_bytes(img_bytes, max_bytes=max_bytes, kind="image")
+    raw_images = _collect_uploads(image, images)
+    raw_audios = _collect_uploads(audio, audios)
 
-        aud_bytes = await _read_bounded_upload(audio, max_bytes)
-        if aud_bytes is not None:
-            validate_upload_bytes(aud_bytes, max_bytes=max_bytes, kind="audio")
+    if len(raw_images) > settings.max_images_per_request:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Chỉ hỗ trợ tối đa {settings.max_images_per_request} hình ảnh mỗi lần kiểm tra.",
+        )
+    if len(raw_audios) > settings.max_audios_per_request:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Chỉ hỗ trợ tối đa {settings.max_audios_per_request} tệp ghi âm mỗi lần kiểm tra.",
+        )
+
+    img_items: list[MediaItem] = []
+    aud_items: list[MediaItem] = []
+    raw_img_buffers: list[tuple[bytes, str, str]] = []
+    raw_aud_buffers: list[tuple[bytes, str, str]] = []
+    total_bytes = 0
+    total_limit = 2 * settings.max_upload_bytes
+
+    try:
+        for idx, up in enumerate(raw_images, start=1):
+            data = await _read_bounded_upload(up, settings.max_upload_bytes)
+            total_bytes += len(data)
+            if total_bytes > total_limit:
+                raise UploadTooLargeError("Tổng dung lượng các tệp tải lên vượt quá 20 MB.")
+            raw_img_buffers.append(
+                (data, up.filename or f"upload_{idx}.jpg", up.content_type or "image/jpeg")
+            )
+
+        for idx, up in enumerate(raw_audios, start=1):
+            data = await _read_bounded_upload(up, settings.max_upload_bytes)
+            total_bytes += len(data)
+            if total_bytes > total_limit:
+                raise UploadTooLargeError("Tổng dung lượng các tệp tải lên vượt quá 20 MB.")
+            raw_aud_buffers.append(
+                (data, up.filename or f"call_{idx}.wav", up.content_type or "audio/wav")
+            )
+
+        for data, filename, declared_mime in raw_img_buffers:
+            validate_upload_bytes(
+                data,
+                max_bytes=settings.max_upload_bytes,
+                kind="image",
+                declared_mime=declared_mime,
+            )
+            img_items.append((data, filename, declared_mime))
+
+        for data, filename, declared_mime in raw_aud_buffers:
+            validate_upload_bytes(
+                data,
+                max_bytes=settings.max_upload_bytes,
+                kind="audio",
+                declared_mime=declared_mime,
+            )
+            aud_items.append((data, filename, declared_mime))
     except UploadTooLargeError as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc
     except InvalidMediaError as exc:
@@ -63,8 +125,8 @@ async def _prepare_inputs(
         not has_demo
         and not text.strip()
         and not (url and url.strip())
-        and img_bytes is None
-        and aud_bytes is None
+        and not img_items
+        and not aud_items
     ):
         raise HTTPException(
             status_code=400,
@@ -74,11 +136,7 @@ async def _prepare_inputs(
             ),
         )
 
-    img_name = (image.filename if image and image.filename else "upload.jpg")
-    img_mime = (image.content_type if image and image.content_type else "image/jpeg")
-    aud_name = (audio.filename if audio and audio.filename else "call.wav")
-    aud_mime = (audio.content_type if audio and audio.content_type else "audio/wav")
-    return img_bytes, img_name, img_mime, aud_bytes, aud_name, aud_mime
+    return img_items, aud_items
 
 
 @router.post("/analyze", response_model=AnalysisReport)
@@ -89,35 +147,37 @@ async def post_analyze(
     url: Annotated[str | None, Form()] = None,
     demo_id: Annotated[str | None, Form()] = None,
     in_active_call: Annotated[str, Form()] = "false",
+    is_simulation: Annotated[str, Form()] = "false",
     transfer_amount: Annotated[int | None, Form()] = None,
     expected_merchant_account: Annotated[str | None, Form()] = None,
     image: Annotated[UploadFile | None, File()] = None,
     audio: Annotated[UploadFile | None, File()] = None,
+    images: Annotated[list[UploadFile] | None, File()] = None,
+    audios: Annotated[list[UploadFile] | None, File()] = None,
 ) -> AnalysisReport:
     pipeline: AnalysisPipeline = request.app.state.pipeline
-    settings = request.app.state.settings
-    img_bytes, img_name, img_mime, aud_bytes, aud_name, aud_mime = await _prepare_inputs(
+    settings: Settings = request.app.state.settings
+    img_items, aud_items = await _prepare_inputs(
         pipeline,
-        settings.max_upload_bytes,
+        settings,
         demo_id,
         text,
         url,
         image,
         audio,
+        images=images,
+        audios=audios,
     )
     try:
         return await pipeline.run(
             mode=mode,
             text=text,
             url=url,
-            image_bytes=img_bytes,
-            image_filename=img_name,
-            image_mime=img_mime,
-            audio_bytes=aud_bytes,
-            audio_filename=aud_name,
-            audio_mime=aud_mime,
+            image_items=img_items or None,
+            audio_items=aud_items or None,
             demo_id=demo_id,
             in_active_call=_parse_bool_form(in_active_call),
+            is_simulation=_parse_bool_form(is_simulation),
             transfer_amount=transfer_amount,
             expected_merchant_account=expected_merchant_account,
         )
@@ -133,37 +193,40 @@ async def post_analyze_stream(
     url: Annotated[str | None, Form()] = None,
     demo_id: Annotated[str | None, Form()] = None,
     in_active_call: Annotated[str, Form()] = "false",
+    is_simulation: Annotated[str, Form()] = "false",
     transfer_amount: Annotated[int | None, Form()] = None,
     expected_merchant_account: Annotated[str | None, Form()] = None,
     image: Annotated[UploadFile | None, File()] = None,
     audio: Annotated[UploadFile | None, File()] = None,
+    images: Annotated[list[UploadFile] | None, File()] = None,
+    audios: Annotated[list[UploadFile] | None, File()] = None,
 ) -> StreamingResponse:
     pipeline: AnalysisPipeline = request.app.state.pipeline
-    settings = request.app.state.settings
-    img_bytes, img_name, img_mime, aud_bytes, aud_name, aud_mime = await _prepare_inputs(
+    settings: Settings = request.app.state.settings
+    img_items, aud_items = await _prepare_inputs(
         pipeline,
-        settings.max_upload_bytes,
+        settings,
         demo_id,
         text,
         url,
         image,
         audio,
+        images=images,
+        audios=audios,
     )
     active_call = _parse_bool_form(in_active_call)
+    simulation_mode = _parse_bool_form(is_simulation)
 
     async def _sse_generator() -> AsyncIterator[str]:
         async for ev in pipeline.stream(
             mode=mode,
             text=text,
             url=url,
-            image_bytes=img_bytes,
-            image_filename=img_name,
-            image_mime=img_mime,
-            audio_bytes=aud_bytes,
-            audio_filename=aud_name,
-            audio_mime=aud_mime,
+            image_items=img_items or None,
+            audio_items=aud_items or None,
             demo_id=demo_id,
             in_active_call=active_call,
+            is_simulation=simulation_mode,
             transfer_amount=transfer_amount,
             expected_merchant_account=expected_merchant_account,
         ):

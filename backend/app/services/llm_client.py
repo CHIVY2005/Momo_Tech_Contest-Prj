@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 RETRYABLE_HTTP_STATUSES: frozenset[int] = frozenset({408, 429, 500, 502, 503, 504})
 MAX_INTERACTIVE_RETRY_WAIT_SEC: Final[float] = 8.0
+MAX_LLM_AUDIO_BYTES: Final[int] = 10 * 1024 * 1024
+MAX_LLM_IMAGES: Final[int] = 4
 _SAFETY_FINISH_TOKENS: Final[frozenset[str]] = frozenset(
     {"SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "IMAGE_SAFETY"}
 )
@@ -214,6 +216,19 @@ def _compute_backoff_sec(retry_idx: int, retry_after_header: str | None) -> floa
     return base_delay + jitter
 
 
+def _normalize_media_pairs(
+    single_bytes: bytes | None,
+    single_mime: str,
+    multi_items: list[tuple[bytes, str]] | None,
+    max_items: int,
+) -> list[tuple[bytes, str]]:
+    if multi_items:
+        return [(b, m) for b, m in multi_items if b][:max_items]
+    if single_bytes:
+        return [(single_bytes, single_mime)]
+    return []
+
+
 def _build_openai_user_content(
     prompt: str,
     image_bytes: bytes | None,
@@ -221,17 +236,33 @@ def _build_openai_user_content(
     audio_bytes: bytes | None,
     audio_mime: str,
     include_audio: bool = True,
+    images: list[tuple[bytes, str]] | None = None,
+    audios: list[tuple[bytes, str]] | None = None,
 ) -> str | list[dict[str, Any]]:
-    if not image_bytes and not (audio_bytes and include_audio):
+    img_list = _normalize_media_pairs(image_bytes, image_mime, images, MAX_LLM_IMAGES)
+    aud_list = (
+        _normalize_media_pairs(audio_bytes, audio_mime, audios, 1)
+        if include_audio
+        else []
+    )
+    # Enforce audio payload ceiling for OpenAI-compatible gateways (local STT carries full transcripts)
+    bounded_auds: list[tuple[bytes, str]] = []
+    aud_total = 0
+    for ab, am in aud_list:
+        if aud_total + len(ab) <= MAX_LLM_AUDIO_BYTES:
+            bounded_auds.append((ab, am))
+            aud_total += len(ab)
+
+    if not img_list and not bounded_auds:
         return prompt
 
     parts: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
-    if image_bytes:
-        b64_img = base64.b64encode(image_bytes).decode("ascii")
-        parts.append({"type": "image_url", "image_url": {"url": f"data:{image_mime};base64,{b64_img}"}})
-    if audio_bytes and include_audio:
-        b64_aud = base64.b64encode(audio_bytes).decode("ascii")
-        fmt = audio_mime.split("/")[-1].lower().replace("mpeg", "mp3").replace("x-wav", "wav")
+    for ib, im in img_list:
+        b64_img = base64.b64encode(ib).decode("ascii")
+        parts.append({"type": "image_url", "image_url": {"url": f"data:{im};base64,{b64_img}"}})
+    for ab, am in bounded_auds:
+        b64_aud = base64.b64encode(ab).decode("ascii")
+        fmt = am.split("/")[-1].lower().replace("mpeg", "mp3").replace("x-wav", "wav")
         parts.append({"type": "input_audio", "input_audio": {"data": b64_aud, "format": fmt}})
     return parts
 
@@ -249,10 +280,13 @@ async def _call_openai_key(
     audio_mime: str,
     has_non_audio_evidence: bool = True,
     failover_cooldown_out: list[float] | None = None,
+    images: list[tuple[bytes, str]] | None = None,
+    audios: list[tuple[bytes, str]] | None = None,
 ) -> tuple[GeminiStructuredSchema | None, str | None, int, str | None]:
     attempts = 0
     use_json_format = True
     include_audio = True
+    has_any_audio = bool(audio_bytes or audios)
     last_err = "UNKNOWN_OPENAI_ERROR"
 
     timeout = httpx.Timeout(timeout_sec, connect=min(8.0, timeout_sec))
@@ -260,7 +294,14 @@ async def _call_openai_key(
         for retry_idx in range(max_retries + 1):
             attempts += 1
             user_content = _build_openai_user_content(
-                prompt, image_bytes, image_mime, audio_bytes, audio_mime, include_audio=include_audio
+                prompt,
+                image_bytes,
+                image_mime,
+                audio_bytes,
+                audio_mime,
+                include_audio=include_audio,
+                images=images,
+                audios=audios,
             )
             payload: dict[str, Any] = {
                 "model": model_name,
@@ -317,6 +358,8 @@ async def _call_openai_key(
                                 audio_bytes,
                                 audio_mime,
                                 include_audio=include_audio,
+                                images=images,
+                                audios=audios,
                             ),
                         },
                     ],
@@ -336,7 +379,7 @@ async def _call_openai_key(
                     return None, None, attempts, "NETWORK_TRANSPORT_ERROR"
 
             # Step 2 compat: if audio is rejected, only drop when non-audio evidence exists
-            if resp.status_code in (400, 422) and audio_bytes and include_audio:
+            if resp.status_code in (400, 422) and has_any_audio and include_audio:
                 if not has_non_audio_evidence:
                     return None, None, attempts, "UNSUPPORTED_AUDIO_INPUT"
                 include_audio = False
@@ -355,6 +398,8 @@ async def _call_openai_key(
                                 None,
                                 audio_mime,
                                 include_audio=False,
+                                images=images,
+                                audios=None,
                             ),
                         },
                     ],
@@ -478,12 +523,17 @@ async def _call_google_genai_key(
     audio_bytes: bytes | None,
     audio_mime: str,
     failover_cooldown_out: list[float] | None = None,
+    images: list[tuple[bytes, str]] | None = None,
+    audios: list[tuple[bytes, str]] | None = None,
 ) -> tuple[GeminiStructuredSchema | None, str | None, int, str | None]:
     media_parts: list[types.Part] = []
-    if image_bytes:
-        media_parts.append(types.Part.from_bytes(data=image_bytes, mime_type=image_mime))
-    if audio_bytes:
-        media_parts.append(types.Part.from_bytes(data=audio_bytes, mime_type=audio_mime))
+    for ib, im in _normalize_media_pairs(image_bytes, image_mime, images, MAX_LLM_IMAGES):
+        media_parts.append(types.Part.from_bytes(data=ib, mime_type=im))
+    aud_total = 0
+    for ab, am in _normalize_media_pairs(audio_bytes, audio_mime, audios, 2):
+        if aud_total + len(ab) <= MAX_LLM_AUDIO_BYTES:
+            media_parts.append(types.Part.from_bytes(data=ab, mime_type=am))
+            aud_total += len(ab)
 
     safety = [
         types.SafetySetting(category=cat, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH)
@@ -579,6 +629,8 @@ async def execute_llm_call(
     audio_bytes: bytes | None = None,
     audio_mime: str = "audio/wav",
     has_non_audio_evidence: bool = True,
+    images: list[tuple[bytes, str]] | None = None,
+    audios: list[tuple[bytes, str]] | None = None,
 ) -> LLMCallOutcome:
     """Execute structured scam reasoning across configured provider with retry & backup failover."""
     keys = [k.strip() for k in (settings.gemini_api_key, settings.gemini_backup_api_key) if k.strip()]
@@ -625,6 +677,8 @@ async def execute_llm_call(
                 audio_mime=audio_mime,
                 has_non_audio_evidence=has_non_audio_evidence,
                 failover_cooldown_out=pending_cooldown,
+                images=images,
+                audios=audios,
             )
             total_attempts += used_attempts
             if parsed is not None:
@@ -663,6 +717,8 @@ async def execute_llm_call(
                 audio_bytes=audio_bytes,
                 audio_mime=audio_mime,
                 failover_cooldown_out=pending_google_cooldown,
+                images=images,
+                audios=audios,
             )
             total_attempts += used_attempts
             if parsed is not None:

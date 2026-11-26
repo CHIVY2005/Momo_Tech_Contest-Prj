@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from collections import OrderedDict, deque
 from collections.abc import MutableMapping
@@ -195,9 +196,17 @@ class SecurityAndLimitsMiddleware:
             raise
 
 
+logger = logging.getLogger("verishield.security")
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Create and wire a configured VeriShield AI FastAPI application instance."""
     cfg = settings or get_settings()
+    if cfg.app_env == "production" and not cfg.ioc_hmac_secret.strip():
+        logger.warning(
+            "IOC_HMAC_SECRET is not explicitly configured in production; using domain-separated "
+            "HMAC fallback key. Provision a dedicated IOC_HMAC_SECRET (>= 16 chars) in env."
+        )
     app = FastAPI(
         title=cfg.app_name,
         version=cfg.app_version,
@@ -206,10 +215,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     data_dir = Path(__file__).resolve().parent / "data"
-    repo = CaseRepository(cfg.sqlite_path, default_ttl_minutes=cfg.block_rule_ttl_minutes)
+    repo = CaseRepository(
+        cfg.sqlite_path,
+        default_ttl_minutes=cfg.block_rule_ttl_minutes,
+        ioc_hmac_secret=cfg.resolved_ioc_hmac_secret,
+        app_env=cfg.app_env,
+    )
     repo.init_db()
     repo.seed_if_empty(
-        str(data_dir / "seed_iocs.json"),
+        None if cfg.app_env == "production" else str(data_dir / "seed_iocs.json"),
         protected_iocs=PROTECTED_SAFE_DEMO_IOCS,
     )
 

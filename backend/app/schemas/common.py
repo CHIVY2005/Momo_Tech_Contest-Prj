@@ -17,6 +17,7 @@ ReceiptVerificationStatus = Literal[
     "BENEFICIARY_MISMATCH",
 ]
 QrKind = Literal["VALID_VIETQR", "INVALID_CRC_VIETQR", "URL_QR", "TEXT_QR"]
+OcrStatus = Literal["ok", "empty", "timeout", "unavailable", "error", "skipped"]
 
 SCAM_LABELS: tuple[str, ...] = (
     "SAFE_NORMAL",

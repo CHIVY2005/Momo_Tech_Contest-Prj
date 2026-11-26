@@ -44,6 +44,25 @@ class ResetBlockRulesRequest(BaseModel):
     analyst_pin: str = Field(min_length=4, max_length=64)
 
 
+class RadarAuditEvent(BaseModel):
+    """PII-free audit log record for privileged /radar rule mutations."""
+
+    audit_id: str
+    created_at: str
+    action: Literal[
+        "create_rule",
+        "revoke_rule",
+        "reset_rules",
+        "auth_failed",
+        "protected_ioc_blocked",
+    ]
+    outcome: Literal["allowed", "denied"]
+    ioc_type: IocType | None = None
+    masked_target: str | None = None
+    rule_id: str | None = None
+    detail: str
+
+
 class RadarNode(BaseModel):
     """Anonymized node in the Fraud Ops IOC threat graph."""
 
@@ -53,6 +72,7 @@ class RadarNode(BaseModel):
     hit_count: int = Field(default=1, ge=1)
     risk_level: VerdictLevel = "HIGH_RISK"
     blocked: bool = False
+    is_demo: bool = False
 
 
 class RadarEdge(BaseModel):
@@ -75,6 +95,10 @@ class EmergingCampaign(BaseModel):
     primary_ioc_hash: str = Field(pattern=r"^[0-9a-fA-F]{64}$")
     recommended_action: str
     already_blocked: bool = False
+    is_demo: bool = False
+    risk_level: VerdictLevel = "CRITICAL_SCAM"
+    total_ioc_count: int = Field(default=1, ge=1)
+    blocked_ioc_count: int = Field(default=0, ge=0)
 
 
 class RadarGraphResponse(BaseModel):
@@ -85,3 +109,6 @@ class RadarGraphResponse(BaseModel):
     campaigns: list[EmergingCampaign] = Field(default_factory=list)
     active_block_rules: list[BlockRule] = Field(default_factory=list)
     stats: dict[str, int] = Field(default_factory=dict)
+    data_scope: Literal["live", "mixed_with_demo", "demo_only"] = "live"
+    app_env: str = "development"
+    recent_audit_logs: list[RadarAuditEvent] = Field(default_factory=list)

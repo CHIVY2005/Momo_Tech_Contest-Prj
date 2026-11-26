@@ -177,6 +177,7 @@ def _synthesize_fallback_result(
     llm_provider: str = "none",
     llm_latency_ms: int | None = None,
     llm_error: str | None = None,
+    ocr_incomplete: bool = False,
 ) -> LLMReasoningResult:
     reasons: list[str] = []
     tactics: list[str] = []
@@ -211,7 +212,7 @@ def _synthesize_fallback_result(
             "biên lai chuyển khoản có dấu hiệu bất thường, bị dùng lại hoặc sai số tài khoản nhận"
         )
 
-    if guardrails.safety_advisory_detected and not reasons:
+    if guardrails.safety_advisory_detected and not reasons and not ocr_incomplete:
         return LLMReasoningResult(
             degraded_mode=True,
             ai_score=None,
@@ -246,6 +247,12 @@ def _synthesize_fallback_result(
         summary = (
             f"Kết quả phân tích nhanh nội bộ: Nội dung có dấu hiệu tương tự kịch bản "
             f"'{matched_playbooks[0]['name_vi']}'."
+        )
+    elif ocr_incomplete:
+        summary = (
+            "Kết quả phân tích nhanh nội bộ: Không thể đọc được đầy đủ văn bản từ hình ảnh "
+            "đính kèm nên chưa thể kết luận an toàn. Bạn nên chụp ảnh rõ nét hơn hoặc tự xác minh "
+            "qua kênh chính thức trước khi giao dịch."
         )
     else:
         summary = (
@@ -284,7 +291,10 @@ async def run_gemini_reasoning(
     image_mime: str = "image/jpeg",
     audio_bytes: bytes | None = None,
     audio_mime: str = "audio/wav",
+    images: list[tuple[bytes, str]] | None = None,
+    audios: list[tuple[bytes, str]] | None = None,
     local_transcript: str | None = None,
+    ocr_incomplete: bool = False,
     force_fail_llm: bool = False,
     _generate_override: Callable[[str, str, list[Any]], Awaitable[Any]] | None = None,
 ) -> LLMReasoningResult:
@@ -333,6 +343,7 @@ async def run_gemini_reasoning(
             active_block_rule_hit=active_block_rule_hit,
             llm_provider=provider,
             llm_error="FORCED_FAIL" if force_fail_llm else "NO_API_KEY",
+            ocr_incomplete=ocr_incomplete,
         )
 
     if _generate_override is not None:
@@ -380,9 +391,10 @@ async def run_gemini_reasoning(
             llm_provider=provider,
             llm_latency_ms=int((time.perf_counter() - t0) * 1000),
             llm_error="SAFETY_OR_OVERRIDE_NULL",
+            ocr_incomplete=ocr_incomplete,
         )
 
-    has_non_audio = bool(text.strip() or image_bytes is not None or local_transcript)
+    has_non_audio = bool(text.strip() or image_bytes is not None or images or local_transcript)
     try:
         outcome = await execute_llm_call(
             settings=settings,
@@ -392,6 +404,8 @@ async def run_gemini_reasoning(
             audio_bytes=audio_bytes,
             audio_mime=audio_mime,
             has_non_audio_evidence=has_non_audio,
+            images=images,
+            audios=audios,
         )
     except Exception as exc:
         logger.warning("Unexpected LLM adapter error (%s) — degrading to Tier 1.", type(exc).__name__)
@@ -408,6 +422,7 @@ async def run_gemini_reasoning(
             active_block_rule_hit=active_block_rule_hit,
             llm_provider=provider,
             llm_error=f"ADAPTER_{type(exc).__name__.upper()}",
+            ocr_incomplete=ocr_incomplete,
         )
     if outcome.parsed is not None:
         p = outcome.parsed
@@ -442,6 +457,7 @@ async def run_gemini_reasoning(
         llm_provider=outcome.provider,
         llm_latency_ms=outcome.latency_ms,
         llm_error=outcome.error_code,
+        ocr_incomplete=ocr_incomplete,
     )
     return fb.model_copy(
         update={

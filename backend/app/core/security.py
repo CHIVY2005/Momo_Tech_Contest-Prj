@@ -19,8 +19,35 @@ import httpx
 from PIL import Image, UnidentifiedImageError
 
 MAX_DECOMPRESSED_PIXELS: Final[int] = 25_000_000
+MAX_IMAGE_DIMENSION: Final[int] = 10_000
 MAX_DECODED_AUDIO_SAMPLES: Final[int] = 48_000 * 600  # Max 10 minutes at 48kHz
 MAX_AUDIO_CHANNELS: Final[int] = 8
+
+_ALLOWED_IMAGE_MIMES: Final[frozenset[str]] = frozenset(
+    {
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/webp",
+        "image/gif",
+        "application/octet-stream",
+    }
+)
+_ALLOWED_AUDIO_MIMES: Final[frozenset[str]] = frozenset(
+    {
+        "audio/wav",
+        "audio/x-wav",
+        "audio/wave",
+        "audio/mpeg",
+        "audio/mp3",
+        "audio/mp4",
+        "audio/x-m4a",
+        "audio/m4a",
+        "audio/ogg",
+        "audio/webm",
+        "application/octet-stream",
+    }
+)
 
 _BLOCKED_IPV4_NETS: Final[tuple[ipaddress.IPv4Network, ...]] = (
     ipaddress.IPv4Network("0.0.0.0/8"),
@@ -326,14 +353,22 @@ def validate_upload_bytes(
     data: bytes,
     max_bytes: int,
     kind: Literal["image", "audio"],
+    declared_mime: str | None = None,
 ) -> None:
-    """Enforce upload byte ceiling, non-empty check, full pixel/frame decoding, and bomb cap."""
+    """Enforce upload byte ceiling, MIME/magic checks, full pixel/frame decoding, and bomb caps."""
     if not data:
         raise InvalidMediaError(f"Empty {kind} payload.")
     if len(data) > max_bytes:
         raise UploadTooLargeError(
             f"Upload size {len(data)} bytes exceeds limit of {max_bytes} bytes."
         )
+
+    if declared_mime:
+        clean_mime = declared_mime.split(";", 1)[0].strip().lower()
+        if clean_mime:
+            allowed_mimes = _ALLOWED_IMAGE_MIMES if kind == "image" else _ALLOWED_AUDIO_MIMES
+            if clean_mime not in allowed_mimes:
+                raise InvalidMediaError(f"Unsupported declared MIME type for {kind}: {clean_mime}.")
 
     if kind == "audio":
         _verify_decodable_audio(data)
@@ -351,7 +386,13 @@ def validate_upload_bytes(
             warnings.simplefilter("error", Image.DecompressionBombWarning)
             with Image.open(io.BytesIO(data)) as img:
                 width, height = img.size
-                if width <= 0 or height <= 0 or (width * height) > MAX_DECOMPRESSED_PIXELS:
+                if (
+                    width <= 0
+                    or height <= 0
+                    or width > MAX_IMAGE_DIMENSION
+                    or height > MAX_IMAGE_DIMENSION
+                    or (width * height) > MAX_DECOMPRESSED_PIXELS
+                ):
                     raise InvalidMediaError(
                         "Image dimensions invalid or exceed pixel-bomb threshold."
                     )

@@ -254,6 +254,9 @@ Thumbs.db
 # Agent scratch, training scratch & submission build outputs
 .superpowers/
 /graphify-out/
+backend/.ocr_cache/
+.bench_mineru_venv/
+evaluation/ocr_benchmark/dataset/
 training/.venv/
 training/data/
 submission/dist/

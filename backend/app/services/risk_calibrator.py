@@ -70,6 +70,8 @@ def calibrate_risk(
     active_block_rule_hit: bool,
     in_active_call: bool,
     has_visual_bill_anomaly: bool = False,
+    ocr_failed: bool = False,
+    ocr_unreadable_image_only: bool = False,
 ) -> CalibrationResult:
     """Fuse Tier-1, Dual-Head ONNX, and Gemini signals while enforcing hard safety invariants."""
     t1 = max(0, min(100, tier1_score))
@@ -113,8 +115,11 @@ def calibrate_risk(
         and (ai_score is None or llm_val < 45)
     )
 
+    ocr_incomplete_without_vision = (ocr_failed or ocr_unreadable_image_only) and not llm_avail
+
     advisory_overridden_by_signals = bool(
         in_active_call
+        or ocr_incomplete_without_vision
         or (onnx_avail and classifier is not None and classifier.scam_probability >= 0.75)
         or (
             onnx_avail
@@ -178,6 +183,13 @@ def calibrate_risk(
 
         if has_visual_bill_anomaly:
             fused = max(fused, 45)
+
+        if ocr_incomplete_without_vision:
+            floor_val = 32 if ocr_failed else 30
+            if fused < floor_val:
+                fused = floor_val
+            if not hard_threat and fused < 70:
+                confidence = min(confidence, 0.45)
 
     final_score = max(0, min(100, fused))
     verdict = score_to_verdict(final_score)

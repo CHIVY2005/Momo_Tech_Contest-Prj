@@ -23,6 +23,7 @@ services:
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-https://verishield.joiboi.app}
       - APP_ENV=${APP_ENV:-development}
       - ANALYST_PIN=${ANALYST_PIN:-}
+      - IOC_HMAC_SECRET=${IOC_HMAC_SECRET:-}
       - BLOCK_RULE_TTL_MINUTES=${BLOCK_RULE_TTL_MINUTES:-30}
       - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:3000","https://verishield.joiboi.app"]}
     volumes:

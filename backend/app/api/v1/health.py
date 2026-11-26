@@ -19,6 +19,10 @@ async def get_health(request: Request) -> dict[str, Any]:
     settings = request.app.state.settings
     repo: CaseRepository = request.app.state.repo
     stt_ready = is_local_stt_ready(settings.enable_local_stt)
+    ocr_orch = getattr(pipeline, "ocr_orchestrator", None)
+    ocr_ready = (
+        bool(ocr_orch.is_local_ready()) if ocr_orch is not None else settings.enable_local_ocr
+    )
     raw_tg_url = settings.telegram_bot_url.strip()
     safe_tg_url = raw_tg_url if raw_tg_url.startswith("https://t.me/") else None
     return {
@@ -28,6 +32,8 @@ async def get_health(request: Request) -> dict[str, Any]:
         "sqlite_wal_ready": repo.is_wal_ready(),
         "onnx_classifier_loaded": pipeline.classifier.is_available,
         "local_ocr_enabled": settings.enable_local_ocr,
+        "local_ocr_ready": ocr_ready,
+        "ocr_provider": ocr_orch.primary_name if ocr_orch is not None else settings.ocr_provider,
         "local_stt_enabled": stt_ready,
         "local_stt_ready": stt_ready,
         "gemini_configured": bool(

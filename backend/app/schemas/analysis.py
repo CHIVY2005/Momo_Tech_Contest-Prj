@@ -20,6 +20,7 @@ from app.schemas.forensics import (
     UrlFinding,
     VietQRInfo,
 )
+from app.schemas.radar import BlockRule
 
 
 class ScamClassifierOutput(BaseModel):
@@ -87,6 +88,8 @@ class AnalysisReport(BaseModel):
     safety_advisory_detected: bool = False
     prompt_injection_detected: bool = False
     active_block_rule_hit: bool = False
+    matched_block_rules: list[BlockRule] = Field(default_factory=list)
+    is_simulation: bool = False
     receipt_verification_status: ReceiptVerificationStatus = "NOT_APPLICABLE"
     summary_vi: str
     transcript: str | None = None
@@ -99,6 +102,7 @@ class AnalysisReport(BaseModel):
     url_findings: list[UrlFinding] = Field(default_factory=list)
     sandbox: SandboxInspection | None = None
     image_forensics: ImageForensicsResult | None = None
+    image_forensics_list: list[ImageForensicsResult] = Field(default_factory=list)
     receipt_logic: ReceiptLogicResult | None = None
     evidence: list[EvidenceItem] = Field(default_factory=list)
     actions: ActionBundle

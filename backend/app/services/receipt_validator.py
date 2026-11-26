@@ -39,10 +39,17 @@ def build_trusted_merchant_summary(
     receipt_status: ReceiptVerificationStatus,
     has_qr_beneficiary_mismatch: bool = False,
     has_ocr_beneficiary_mismatch: bool = False,
+    ocr_incomplete: bool = False,
 ) -> str:
     """Generate merchant receipt settlement conclusions strictly from trusted forensic status."""
     cleaned = raw_summary.strip()
     if receipt_status == "UNVERIFIED_SCREENSHOT":
+        if ocr_incomplete:
+            return (
+                "Không thể đọc được đầy đủ nội dung văn bản từ ảnh chụp biên lai nên chưa thể "
+                "kết luận an toàn. Chỉ giao hàng sau khi kiểm tra trực tiếp biến động số dư "
+                "trên ứng dụng ngân hàng hoặc loa thông báo nhận tiền."
+            )
         return (
             "Ảnh chụp biên lai chưa ghi nhận dấu hiệu chỉnh sửa, nhưng hệ thống không thể xác nhận "
             "tiền đã vào tài khoản chỉ từ ảnh chụp. Chỉ giao hàng sau khi kiểm tra trực tiếp biến động "
@@ -85,7 +92,10 @@ def build_trusted_merchant_summary(
 _RECEIPT_KEYWORD_RE: Final[re.Pattern[str]] = re.compile(
     r"(?:chuyen\s*(?:tien|khoan)\s*thanh\s*cong|giao\s*dich\s*thanh\s*cong|"
     r"ma\s*(?:gd|giao\s*dich)|so\s*tham\s*chieu|bien\s*lai\s*chuyen\s*tien|"
-    r"stk\s*nhan\s*:?\s*\d{6,19})",
+    r"stk\s*nhan\s*:?\s*\d{6,19}|"
+    r"transfer\s+successful|transaction\s+successful|"
+    r"transaction\s+(?:id|no\.?|ref)|beneficiary\s+account|"
+    r"reference\s+(?:no\.?|number|code)|remittance\s+advice)",
     re.IGNORECASE,
 )
 
@@ -187,14 +197,28 @@ def validate_receipt_logic(
 ) -> ReceiptLogicResult:
     """Validate Vietnamese banking receipt logic and enforce the Merchant Honesty Guardrail."""
     cleaned = fold_vi_ascii(ocr_text.strip())
-    is_candidate = bool(_RECEIPT_KEYWORD_RE.search(cleaned)) or is_replayed_hash
+    bank_detected = _detect_bank_name(cleaned)
+    has_structural_receipt = bool(
+        bank_detected
+        and (
+            _STANDALONE_FT_RE.search(cleaned)
+            or _REF_CODE_RE.search(cleaned)
+            or (
+                _AMOUNT_CANDIDATE_RE.search(cleaned)
+                and (
+                    _parse_vn_timestamp(cleaned)[0] is not None
+                    or EXPLICIT_RECIPIENT_SPAN_RE.search(cleaned) is not None
+                )
+            )
+        )
+    )
+    is_candidate = bool(_RECEIPT_KEYWORD_RE.search(cleaned)) or has_structural_receipt or is_replayed_hash
     if not is_candidate:
         return ReceiptLogicResult(
             is_receipt_candidate=False,
             verification_status="NOT_APPLICABLE",
         )
 
-    bank_detected = _detect_bank_name(cleaned)
     reasons: list[str] = []
     risk = 0
 

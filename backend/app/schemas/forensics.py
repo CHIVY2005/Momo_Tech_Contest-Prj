@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, Field
 
-from app.schemas.common import QrKind, ReceiptVerificationStatus
+from app.schemas.common import OcrStatus, QrKind, ReceiptVerificationStatus
 
 
 class VietQRInfo(BaseModel):
@@ -72,6 +72,9 @@ class ImageForensicsResult(BaseModel):
     qr_payloads: list[str] = Field(default_factory=list)
     ocr_text: str = ""
     ocr_height_cv: float = Field(default=0.0, ge=0.0)
+    ocr_provider: str | None = None
+    ocr_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    ocr_status: OcrStatus = "skipped"
     reasons: list[str] = Field(default_factory=list)
 
 

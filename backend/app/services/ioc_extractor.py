@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import re
 import unicodedata
 from typing import Final
@@ -199,6 +200,7 @@ _EXPLICIT_RECIPIENT_LABEL_PAT: Final[str] = (
     r"(?:s[ốo][ \t]*)?(?:\bstk|\btk|t[àa]i[ \t]*kho[ảa]n)[ \t]*"
     r"(?:nh[ậa]n|th[ụu][ \t]*h[ưởu][ởo]ng|[đd][ếe]n|[đd][íi]ch|ng[ườu][ờo]i[ \t]*nh[ậa]n)"
     r"|(?:t[ớo]i|[đd][ếe]n)[ \t]+(?:s[ốo][ \t]*)?(?:stk|tk|t[àa]i[ \t]*kho[ảa]n)"
+    r"|\b(?:beneficiary|recipient)[ \t]+account(?:[ \t]*(?:no\.?|number))?"
 )
 _EXPLICIT_ACCOUNT_LABEL_PAT: Final[str] = (
     rf"(?:{_EXPLICIT_RECIPIENT_LABEL_PAT})"
@@ -319,10 +321,12 @@ def normalize_ioc_value(ioc_type: str, value: str) -> str:
     return cleaned.lower()
 
 
-def hash_ioc(ioc_type: str, value: str) -> str:
-    """Compute deterministic SHA-256 hex digest over normalized IOC."""
+def hash_ioc(ioc_type: str, value: str, *, hmac_key: str | None = None) -> str:
+    """Compute keyed HMAC-SHA256 (when hmac_key is provided) or SHA-256 over normalized IOC."""
     canonical = normalize_ioc_value(ioc_type, value)
     payload = f"{ioc_type.strip().lower()}:{canonical}".encode()
+    if hmac_key:
+        return hmac.new(hmac_key.encode("utf-8"), payload, hashlib.sha256).hexdigest()
     return hashlib.sha256(payload).hexdigest()
 
 
