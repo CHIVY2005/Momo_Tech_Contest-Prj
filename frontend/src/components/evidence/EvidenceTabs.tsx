@@ -15,6 +15,7 @@ import { VietQrCard } from "./VietQrCard";
 interface EvidenceTabsProps {
   report: AnalysisReport;
   originalPreviewUrl: string | null;
+  originalPreviewUrls?: string[];
 }
 
 type EvidenceTabKey = "all" | "ela" | "receipt" | "vietqr" | "url";
@@ -27,11 +28,26 @@ const SEVERITY_STYLES: Record<SeverityLevel, string> = {
   INFO: "bg-surface-elevated text-ink-secondary border-border-strong",
 };
 
-export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) {
+export function EvidenceTabs({
+  report,
+  originalPreviewUrl,
+  originalPreviewUrls = [],
+}: EvidenceTabsProps) {
   const [activeTab, setActiveTab] = useState<EvidenceTabKey>("all");
+  const [selectedImageIdx, setSelectedImageIdx] = useState<number>(0);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const showReceiptCard = shouldShowReceiptCard(report);
+  const allForensics =
+    report.image_forensics_list && report.image_forensics_list.length > 0
+      ? report.image_forensics_list
+      : report.image_forensics
+        ? [report.image_forensics]
+        : [];
+  const safeImageIdx = Math.min(selectedImageIdx, Math.max(0, allForensics.length - 1));
+  const activeForensics = allForensics[safeImageIdx] ?? report.image_forensics ?? null;
+  const activePreviewUrl =
+    originalPreviewUrls[safeImageIdx] ?? (safeImageIdx === 0 ? originalPreviewUrl : null);
 
   const tabs: Array<{
     id: EvidenceTabKey;
@@ -48,7 +64,7 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
     {
       id: "ela",
       label: "Tính xác thực hình ảnh",
-      count: report.image_forensics ? 1 : 0,
+      count: allForensics.length,
       Icon: ImageIcon,
     },
     {
@@ -175,11 +191,39 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
         )}
 
         {activeTab === "ela" &&
-          (report.image_forensics ? (
-            <ElaCompareView
-              forensics={report.image_forensics}
-              originalPreviewUrl={originalPreviewUrl}
-            />
+          (activeForensics ? (
+            <div className="space-y-3">
+              {allForensics.length > 1 && (
+                <div
+                  role="group"
+                  aria-label="Chọn hình ảnh để xem chi tiết"
+                  className="flex flex-wrap gap-1.5"
+                >
+                  {allForensics.map((imgItem, idx) => (
+                    <button
+                      key={`${imgItem.dhash_hex}-${idx}`}
+                      type="button"
+                      aria-pressed={idx === safeImageIdx}
+                      onClick={() => setSelectedImageIdx(idx)}
+                      className={`inline-flex min-h-[34px] cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+                        idx === safeImageIdx
+                          ? "border-amber-400 bg-amber-500/15 text-amber-200"
+                          : "border-border-subtle bg-surface-subtle text-ink-secondary hover:border-border-strong hover:text-ink"
+                      }`}
+                    >
+                      <span>Ảnh {idx + 1}</span>
+                      <span className="tabular-num font-mono text-[10px] text-ink-muted">
+                        ({imgItem.tamper_score}/100)
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <ElaCompareView
+                forensics={activeForensics}
+                originalPreviewUrl={activePreviewUrl}
+              />
+            </div>
           ) : (
             <p className="text-xs text-ink-muted">
               Chưa có hình ảnh nào được tải lên trong lượt kiểm tra này.

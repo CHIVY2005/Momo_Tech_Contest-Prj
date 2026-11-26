@@ -246,10 +246,21 @@ export function ElaCompareView({ forensics, originalPreviewUrl }: ElaCompareView
               {forensics.exif_software ?? "Không có"}
             </dd>
           </div>
+          {forensics.ocr_provider && (
+            <div>
+              <dt className="text-ink-muted">Bộ máy trích xuất OCR</dt>
+              <dd className="tabular-num mt-0.5 font-mono text-ink">
+                {forensics.ocr_provider}
+                {typeof forensics.ocr_confidence === "number" && forensics.ocr_confidence > 0
+                  ? ` (${Math.round(forensics.ocr_confidence * 100)}%)`
+                  : ""}
+              </dd>
+            </div>
+          )}
         </dl>
         <p className="mt-2 text-ink-muted">
           Kỹ thuật áp dụng: Error Level Analysis (ELA), đối chiếu metadata EXIF và trích xuất ký tự
-          nội bộ (RapidOCR).
+          ONNX (RapidOCR PP-OCRv5 Latin).
         </p>
       </details>
     </div>

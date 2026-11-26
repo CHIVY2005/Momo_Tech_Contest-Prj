@@ -70,15 +70,10 @@ export default function RootLayout({
 
         <footer className="mt-12 border-t border-border-subtle/80 bg-surface-deep py-6">
           <div className="mx-auto max-w-7xl space-y-3 px-4 text-xs text-ink-muted sm:px-6 lg:px-8">
-            <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-baseline">
-              <p className="text-ink-secondary">
-                <strong className="font-semibold text-ink">{BRAND_COPY.name}</strong> —{" "}
-                {BRAND_COPY.footerSummary}
-              </p>
-              <span className="tabular-num shrink-0 font-mono text-[11px] text-ink-muted">
-                Phiên bản {BRAND_COPY.version}
-              </span>
-            </div>
+            <p className="text-ink-secondary">
+              <strong className="font-semibold text-ink">{BRAND_COPY.name}</strong> —{" "}
+              {BRAND_COPY.footerSummary}
+            </p>
 
             <div className="space-y-1 text-[11px] leading-relaxed text-ink-muted">
               <p>{BRAND_COPY.footerLimitation}</p>

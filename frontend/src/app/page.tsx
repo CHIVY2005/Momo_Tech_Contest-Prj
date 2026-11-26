@@ -12,23 +12,22 @@ import { InputWorkbench, type WorkbenchFormState } from "@/components/workbench/
 import { LiveTracePanel } from "@/components/workbench/LiveTracePanel";
 import { VerdictDashboard } from "@/components/workbench/VerdictDashboard";
 import { analyzeStream, fetchDemos, fetchHealth } from "@/lib/api";
+import { inferAnalyzeMode } from "@/lib/composerUtils";
 import { BRAND_COPY } from "@/lib/copy";
 import type { AnalysisReport, DemoScenario, SystemHealthResponse, TraceStep } from "@/lib/types";
 
 const INITIAL_FORM: WorkbenchFormState = {
-  mode: "personal",
   text: "",
-  url: "",
   inActiveCall: false,
   transferAmount: "",
   expectedMerchantAccount: "",
-  imageFile: null,
-  audioFile: null,
+  imageFiles: [],
+  audioFiles: [],
 };
 
 interface SubmittedSnapshot {
   report: AnalysisReport;
-  imageFile: File | null;
+  imageFiles: File[];
   transferAmount: string;
 }
 
@@ -39,7 +38,7 @@ export default function HomePage() {
   const [activeDemo, setActiveDemo] = useState<DemoScenario | null>(null);
   const [traceSteps, setTraceSteps] = useState<TraceStep[]>([]);
   const [submittedSnapshot, setSubmittedSnapshot] = useState<SubmittedSnapshot | null>(null);
-  const [submittedPreviewUrl, setSubmittedPreviewUrl] = useState<string | null>(null);
+  const [submittedPreviewUrls, setSubmittedPreviewUrls] = useState<string[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isFormCollapsed, setIsFormCollapsed] = useState(false);
@@ -58,14 +57,18 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    const file = submittedSnapshot?.imageFile ?? null;
-    if (!file) {
-      setSubmittedPreviewUrl(null);
+    const files = submittedSnapshot?.imageFiles ?? [];
+    if (files.length === 0) {
+      setSubmittedPreviewUrls([]);
       return;
     }
-    const objUrl = URL.createObjectURL(file);
-    setSubmittedPreviewUrl(objUrl);
-    return () => URL.revokeObjectURL(objUrl);
+    const createdUrls = files.map((file) => URL.createObjectURL(file));
+    setSubmittedPreviewUrls(createdUrls);
+    return () => {
+      for (const u of createdUrls) {
+        URL.revokeObjectURL(u);
+      }
+    };
   }, [submittedSnapshot]);
 
   async function executeAnalysis(overrideDemo?: DemoScenario) {
@@ -79,14 +82,12 @@ export default function HomePage() {
     setIsAnalyzing(true);
     setIsFormCollapsed(true);
 
-    const capturedImageFile = !overrideDemo && !activeDemo ? form.imageFile : null;
+    const capturedImageFiles = !overrideDemo && !activeDemo ? [...form.imageFiles] : [];
     const capturedAmount = overrideDemo
       ? overrideDemo.transfer_amount !== null && overrideDemo.transfer_amount !== undefined
         ? String(overrideDemo.transfer_amount)
         : ""
-      : form.mode !== "merchant"
-        ? form.transferAmount
-        : "";
+      : form.transferAmount;
 
     const fd = new FormData();
     if (overrideDemo) {
@@ -94,21 +95,28 @@ export default function HomePage() {
       fd.append("mode", overrideDemo.mode);
     } else if (activeDemo) {
       fd.append("demo_id", activeDemo.demo_id);
-      fd.append("mode", form.mode);
+      fd.append("mode", activeDemo.mode);
     } else {
-      fd.append("mode", form.mode);
+      const resolvedMode = inferAnalyzeMode({
+        expectedMerchantAccount: form.expectedMerchantAccount,
+        transferAmount: form.transferAmount,
+        inActiveCall: form.inActiveCall,
+      });
+      fd.append("mode", resolvedMode);
       fd.append("text", form.text);
-      if (form.url.trim()) fd.append("url", form.url.trim());
       fd.append("in_active_call", String(form.inActiveCall));
-      if (form.mode === "merchant") {
-        if (form.expectedMerchantAccount.trim()) {
-          fd.append("expected_merchant_account", form.expectedMerchantAccount.trim());
-        }
-      } else if (form.transferAmount.trim()) {
+      if (form.expectedMerchantAccount.trim()) {
+        fd.append("expected_merchant_account", form.expectedMerchantAccount.trim());
+      }
+      if (form.transferAmount.trim()) {
         fd.append("transfer_amount", form.transferAmount.trim());
       }
-      if (form.imageFile) fd.append("image", form.imageFile);
-      if (form.audioFile) fd.append("audio", form.audioFile);
+      for (const imgFile of form.imageFiles) {
+        fd.append("images", imgFile);
+      }
+      for (const audFile of form.audioFiles) {
+        fd.append("audios", audFile);
+      }
     }
 
     try {
@@ -126,7 +134,7 @@ export default function HomePage() {
             if (abortRef.current !== controller) return;
             setSubmittedSnapshot({
               report: res,
-              imageFile: capturedImageFile,
+              imageFiles: capturedImageFiles,
               transferAmount: capturedAmount,
             });
           },
@@ -136,7 +144,7 @@ export default function HomePage() {
       if (abortRef.current === controller) {
         setSubmittedSnapshot({
           report: finalReport,
-          imageFile: capturedImageFile,
+          imageFiles: capturedImageFiles,
           transferAmount: capturedAmount,
         });
       }
@@ -158,15 +166,17 @@ export default function HomePage() {
 
   function handleSelectDemo(demo: DemoScenario) {
     setActiveDemo(demo);
+    const demoText =
+      demo.url && !demo.text.includes(demo.url)
+        ? `${demo.text}\n${demo.url}`.trim()
+        : demo.text;
     setForm({
-      mode: demo.mode,
-      text: demo.text,
-      url: demo.url ?? "",
+      text: demoText,
       inActiveCall: demo.in_active_call,
       transferAmount: demo.transfer_amount ? String(demo.transfer_amount) : "",
       expectedMerchantAccount: demo.expected_merchant_account ?? "",
-      imageFile: null,
-      audioFile: null,
+      imageFiles: [],
+      audioFiles: [],
     });
     void executeAnalysis(demo);
   }
@@ -212,10 +222,7 @@ export default function HomePage() {
                 role="status"
                 className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300"
               >
-                <span
-                  aria-hidden="true"
-                  className="h-2 w-2 rounded-full bg-emerald-400"
-                />
+                <span aria-hidden="true" className="h-2 w-2 rounded-full bg-emerald-400" />
                 <span>Hệ thống đang hoạt động</span>
               </div>
             )}
@@ -301,7 +308,11 @@ export default function HomePage() {
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
             <div className="xl:col-span-7">
-              <EvidenceTabs report={report} originalPreviewUrl={submittedPreviewUrl} />
+              <EvidenceTabs
+                report={report}
+                originalPreviewUrl={submittedPreviewUrls[0] ?? null}
+                originalPreviewUrls={submittedPreviewUrls}
+              />
             </div>
             <div className="xl:col-span-5">
               <ActionCopilotPanel report={report} />

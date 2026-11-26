@@ -4,6 +4,7 @@ export type SeverityLevel = "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type TraceStatus = "running" | "done" | "warning" | "skipped";
 export type IocType = "phone" | "bank_account" | "domain";
 export type QrKind = "VALID_VIETQR" | "INVALID_CRC_VIETQR" | "URL_QR" | "TEXT_QR";
+export type OcrStatus = "ok" | "empty" | "timeout" | "unavailable" | "error" | "skipped";
 
 export type ReceiptVerificationStatus =
   | "NOT_APPLICABLE"
@@ -95,6 +96,9 @@ export interface ImageForensicsResult {
   qr_payloads: string[];
   ocr_text: string;
   ocr_height_cv: number;
+  ocr_provider?: string | null;
+  ocr_confidence?: number;
+  ocr_status?: OcrStatus;
   reasons: string[];
 }
 
@@ -174,6 +178,8 @@ export interface AnalysisReport {
   safety_advisory_detected: boolean;
   prompt_injection_detected: boolean;
   active_block_rule_hit: boolean;
+  matched_block_rules?: BlockRule[];
+  is_simulation?: boolean;
   receipt_verification_status: ReceiptVerificationStatus;
   summary_vi: string;
   transcript?: string | null;
@@ -186,6 +192,7 @@ export interface AnalysisReport {
   url_findings: UrlFinding[];
   sandbox?: SandboxInspection | null;
   image_forensics?: ImageForensicsResult | null;
+  image_forensics_list?: ImageForensicsResult[];
   receipt_logic?: ReceiptLogicResult | null;
   evidence: EvidenceItem[];
   actions: ActionBundle;
@@ -217,6 +224,22 @@ export interface CreateBlockRuleRequest {
   ttl_minutes?: number | null;
 }
 
+export interface RadarAuditEvent {
+  audit_id: string;
+  created_at: string;
+  action:
+    | "create_rule"
+    | "revoke_rule"
+    | "reset_rules"
+    | "auth_failed"
+    | "protected_ioc_blocked";
+  outcome: "allowed" | "denied";
+  ioc_type?: IocType | null;
+  masked_target?: string | null;
+  rule_id?: string | null;
+  detail: string;
+}
+
 export interface RadarNode {
   node_id: string;
   kind: "phone" | "bank_account" | "domain" | "campaign";
@@ -224,6 +247,7 @@ export interface RadarNode {
   hit_count: number;
   risk_level: VerdictLevel;
   blocked: boolean;
+  is_demo?: boolean;
 }
 
 export interface RadarEdge {
@@ -242,6 +266,10 @@ export interface EmergingCampaign {
   primary_ioc_hash: string;
   recommended_action: string;
   already_blocked: boolean;
+  is_demo?: boolean;
+  risk_level?: VerdictLevel;
+  total_ioc_count?: number;
+  blocked_ioc_count?: number;
 }
 
 export interface RadarGraphResponse {
@@ -250,6 +278,9 @@ export interface RadarGraphResponse {
   campaigns: EmergingCampaign[];
   active_block_rules: BlockRule[];
   stats: Record<string, number>;
+  data_scope?: "live" | "mixed_with_demo" | "demo_only";
+  app_env?: string;
+  recent_audit_logs?: RadarAuditEvent[];
 }
 
 export interface SystemHealthResponse {
@@ -259,6 +290,8 @@ export interface SystemHealthResponse {
   sqlite_wal_ready?: boolean;
   onnx_classifier_loaded: boolean;
   local_ocr_enabled?: boolean;
+  local_ocr_ready?: boolean;
+  ocr_provider?: string;
   local_stt_enabled?: boolean;
   gemini_configured: boolean;
   llm_provider?: string;

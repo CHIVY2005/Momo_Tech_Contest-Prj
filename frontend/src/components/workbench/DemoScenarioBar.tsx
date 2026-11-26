@@ -7,7 +7,6 @@ import {
   Image as ImageIcon,
   QrCode,
   ShieldAlert,
-  ShieldCheck,
 } from "lucide-react";
 
 import type { DemoScenario } from "@/lib/types";
@@ -29,9 +28,6 @@ function pickScenarioIcon(demo: DemoScenario) {
   if (demo.image_filename) {
     return ImageIcon;
   }
-  if (demo.expected_verdict === "SAFE") {
-    return ShieldCheck;
-  }
   return ShieldAlert;
 }
 
@@ -41,7 +37,8 @@ export function DemoScenarioBar({
   isAnalyzing,
   onSelectDemo,
 }: DemoScenarioBarProps) {
-  if (demos.length === 0) {
+  const visibleDemos = demos.filter((demo) => demo.expected_verdict !== "SAFE");
+  if (visibleDemos.length === 0) {
     return null;
   }
 
@@ -59,11 +56,10 @@ export function DemoScenarioBar({
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        {demos.map((demo) => {
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+        {visibleDemos.map((demo) => {
           const Icon = pickScenarioIcon(demo);
           const isSelected = activeDemoId === demo.demo_id;
-          const isSafeControl = demo.expected_verdict === "SAFE";
 
           return (
             <button
@@ -80,19 +76,8 @@ export function DemoScenarioBar({
             >
               <div>
                 <div className="mb-2 flex items-center gap-1.5">
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium ${
-                      isSafeControl
-                        ? "border border-emerald-500/35 bg-emerald-500/12 text-emerald-300"
-                        : "border border-border-strong bg-surface text-ink-secondary"
-                    }`}
-                  >
-                    <Icon
-                      className={`h-3 w-3 shrink-0 ${
-                        isSafeControl ? "text-emerald-400" : "text-amber-400"
-                      }`}
-                      aria-hidden="true"
-                    />
+                  <span className="inline-flex items-center gap-1 rounded-md border border-border-strong bg-surface px-2 py-0.5 text-[11px] font-medium text-ink-secondary">
+                    <Icon className="h-3 w-3 shrink-0 text-amber-400" aria-hidden="true" />
                     <span>{demo.category_badge}</span>
                   </span>
                 </div>

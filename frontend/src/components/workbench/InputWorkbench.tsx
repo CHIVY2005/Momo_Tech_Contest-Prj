@@ -3,32 +3,25 @@
 import {
   ChevronDown,
   ChevronUp,
-  Link2,
-  Loader2,
-  MessageSquareText,
+  FileAudio,
+  Image as ImageIcon,
   PhoneCall,
-  ReceiptText,
   RotateCcw,
-  ScanSearch,
-  Wallet,
+  SlidersHorizontal,
 } from "lucide-react";
-import { type FormEvent, type KeyboardEvent, useRef } from "react";
+import { type FormEvent, useState } from "react";
 
-import { MODE_COPY } from "@/lib/copy";
 import { formatVndInputDisplay, parseRawAmountDigits } from "@/lib/formatters";
-import type { AnalyzeMode } from "@/lib/types";
 
-import { MediaUploadZone } from "./MediaUploadZone";
+import { MultimodalComposer } from "./MultimodalComposer";
 
 export interface WorkbenchFormState {
-  mode: AnalyzeMode;
   text: string;
-  url: string;
   inActiveCall: boolean;
   transferAmount: string;
   expectedMerchantAccount: string;
-  imageFile: File | null;
-  audioFile: File | null;
+  imageFiles: File[];
+  audioFiles: File[];
 }
 
 interface InputWorkbenchProps {
@@ -43,32 +36,6 @@ interface InputWorkbenchProps {
   onClearDemo: () => void;
 }
 
-const MODE_OPTIONS: Array<{
-  id: AnalyzeMode;
-  label: string;
-  hint: string;
-  Icon: typeof MessageSquareText;
-}> = [
-  {
-    id: "personal",
-    label: MODE_COPY.personal.label,
-    hint: MODE_COPY.personal.hint,
-    Icon: MessageSquareText,
-  },
-  {
-    id: "merchant",
-    label: MODE_COPY.merchant.label,
-    hint: MODE_COPY.merchant.hint,
-    Icon: ReceiptText,
-  },
-  {
-    id: "wallet_transfer",
-    label: MODE_COPY.wallet_transfer.label,
-    hint: MODE_COPY.wallet_transfer.hint,
-    Icon: Wallet,
-  },
-];
-
 export function InputWorkbench({
   value,
   isAnalyzing,
@@ -80,7 +47,14 @@ export function InputWorkbench({
   onSubmit,
   onClearDemo,
 }: InputWorkbenchProps) {
-  const radioRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const [extraOpen, setExtraOpen] = useState(false);
+
+  const extraFieldsCount =
+    (value.transferAmount.trim() ? 1 : 0) +
+    (value.expectedMerchantAccount.trim() ? 1 : 0) +
+    (value.inActiveCall ? 1 : 0);
+
+  const isExtraExpanded = extraOpen || extraFieldsCount > 0;
 
   function updateField<K extends keyof WorkbenchFormState>(
     key: K,
@@ -94,33 +68,12 @@ export function InputWorkbench({
     onSubmit();
   }
 
-  function handleRadioKeyDown(ev: KeyboardEvent<HTMLButtonElement>, idx: number) {
-    let nextIdx = idx;
-    if (ev.key === "ArrowRight" || ev.key === "ArrowDown") {
-      nextIdx = (idx + 1) % MODE_OPTIONS.length;
-    } else if (ev.key === "ArrowLeft" || ev.key === "ArrowUp") {
-      nextIdx = (idx - 1 + MODE_OPTIONS.length) % MODE_OPTIONS.length;
-    } else {
-      return;
-    }
-    ev.preventDefault();
-    const target = MODE_OPTIONS[nextIdx];
-    if (target) {
-      updateField("mode", target.id);
-      radioRefs.current[nextIdx]?.focus();
-    }
-  }
-
-  const activeModeMeta = MODE_OPTIONS.find((m) => m.id === value.mode) ?? MODE_OPTIONS[0];
-  const ActiveModeIcon = activeModeMeta?.Icon ?? MessageSquareText;
-
   if (collapsed && onToggleCollapsed) {
     const snippetSource =
       activeDemoTitle ??
       (value.text.trim() ||
-        value.url.trim() ||
-        value.imageFile?.name ||
-        value.audioFile?.name ||
+        value.imageFiles[0]?.name ||
+        value.audioFiles[0]?.name ||
         "Phiên kiểm tra hiện tại");
     const snippet =
       snippetSource.length > 92 ? `${snippetSource.slice(0, 90)}…` : snippetSource;
@@ -131,11 +84,6 @@ export function InputWorkbench({
         className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border-subtle bg-surface/95 px-4 py-3 shadow-md"
       >
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-xs">
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/15 px-2.5 py-1 font-semibold text-amber-200">
-            <ActiveModeIcon className="h-3.5 w-3.5 text-amber-300" aria-hidden="true" />
-            <span>{activeModeMeta?.label ?? value.mode}</span>
-          </span>
-
           <span className="truncate font-medium text-ink">{snippet}</span>
 
           {value.inActiveCall && (
@@ -144,14 +92,24 @@ export function InputWorkbench({
               <span>Đang nghe điện thoại</span>
             </span>
           )}
-          {value.imageFile && (
-            <span className="shrink-0 rounded-md border border-border-strong bg-surface-subtle px-2 py-0.5 font-mono text-[11px] text-ink-secondary">
-              Ảnh: {value.imageFile.name}
+          {value.imageFiles.length > 0 && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border-strong bg-surface-subtle px-2 py-0.5 font-mono text-[11px] text-ink-secondary">
+              <ImageIcon className="h-3 w-3 text-amber-400" aria-hidden="true" />
+              <span>
+                {value.imageFiles.length === 1
+                  ? value.imageFiles[0]?.name
+                  : `${value.imageFiles.length} hình ảnh`}
+              </span>
             </span>
           )}
-          {value.audioFile && (
-            <span className="shrink-0 rounded-md border border-border-strong bg-surface-subtle px-2 py-0.5 font-mono text-[11px] text-ink-secondary">
-              Ghi âm: {value.audioFile.name}
+          {value.audioFiles.length > 0 && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border-strong bg-surface-subtle px-2 py-0.5 font-mono text-[11px] text-ink-secondary">
+              <FileAudio className="h-3 w-3 text-sky-400" aria-hidden="true" />
+              <span>
+                {value.audioFiles.length === 1
+                  ? value.audioFiles[0]?.name
+                  : `${value.audioFiles.length} bản ghi âm`}
+              </span>
             </span>
           )}
         </div>
@@ -186,13 +144,8 @@ export function InputWorkbench({
       onSubmit={handleFormSubmit}
       className="rounded-2xl border border-border-subtle bg-surface/95 p-4 shadow-lg sm:p-5"
     >
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-base font-bold text-ink">Công cụ kiểm tra lừa đảo</h2>
-          <p className="text-xs text-ink-muted">
-            Chọn mục đích kiểm tra, dán nội dung hoặc tải tệp đính kèm.
-          </p>
-        </div>
+      <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-bold text-ink">Gửi nội dung cần kiểm tra</h2>
 
         <div className="flex flex-wrap items-center gap-2">
           {activeDemoTitle && (
@@ -222,209 +175,147 @@ export function InputWorkbench({
         </div>
       </div>
 
-      <div
-        role="radiogroup"
-        aria-label="Mục đích kiểm tra"
-        className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3"
-      >
-        {MODE_OPTIONS.map(({ id, label, hint, Icon }, idx) => {
-          const selected = value.mode === id;
-          return (
-            <button
-              key={id}
-              ref={(el) => {
-                radioRefs.current[idx] = el;
-              }}
-              type="button"
-              role="radio"
-              tabIndex={selected ? 0 : -1}
-              aria-checked={selected}
-              onClick={() => updateField("mode", id)}
-              onKeyDown={(ev) => handleRadioKeyDown(ev, idx)}
-              className={`min-h-[60px] cursor-pointer rounded-xl border p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400 ${
-                selected
-                  ? "border-amber-400 bg-amber-500/15 text-ink"
-                  : "border-border-subtle bg-surface-subtle text-ink-secondary hover:border-border-strong hover:bg-surface-elevated"
-              }`}
-            >
-              <div className="flex items-center gap-2 text-xs font-semibold">
-                <Icon
-                  className={`h-4 w-4 shrink-0 ${selected ? "text-amber-300" : "text-ink-muted"}`}
-                  aria-hidden="true"
-                />
-                <span>{label}</span>
-              </div>
-              <p className="mt-1 text-[11px] leading-snug text-ink-muted">{hint}</p>
-            </button>
-          );
-        })}
-      </div>
+      <div className="space-y-3.5">
+        <MultimodalComposer
+          text={value.text}
+          imageFiles={value.imageFiles}
+          audioFiles={value.audioFiles}
+          isAnalyzing={isAnalyzing}
+          onTextChange={(nextText) => updateField("text", nextText)}
+          onAttachmentsChange={(nextImages, nextAudios) =>
+            onChange({ ...value, imageFiles: nextImages, audioFiles: nextAudios })
+          }
+        />
 
-      <div className="space-y-4">
-        <div>
-          <label
-            htmlFor="wb-text-input"
-            className="mb-1.5 block text-xs font-semibold text-ink-secondary"
+        {/* Collapsible Additional Transaction Details area */}
+        <div className="rounded-xl border border-border-subtle bg-surface-subtle/85">
+          <button
+            type="button"
+            aria-expanded={isExtraExpanded}
+            aria-controls="wb-extra-transaction-panel"
+            onClick={() => setExtraOpen((prev) => !prev)}
+            className="flex min-h-[42px] w-full cursor-pointer items-center justify-between gap-2 rounded-xl px-3.5 py-2 text-left text-xs font-semibold text-ink-secondary transition-colors hover:text-ink"
           >
-            Nội dung cần kiểm tra
-          </label>
-          <textarea
-            id="wb-text-input"
-            rows={4}
-            value={value.text}
-            onChange={(e) => updateField("text", e.target.value)}
-            placeholder="Dán tin nhắn, cuộc trò chuyện hoặc mô tả giao dịch..."
-            className="w-full rounded-xl border border-border-strong bg-surface-subtle px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:border-amber-400"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label
-              htmlFor="wb-url-input"
-              className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-ink-secondary"
-            >
-              <Link2 className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
-              <span>Đường dẫn (tùy chọn)</span>
-            </label>
-            <input
-              id="wb-url-input"
-              type="text"
-              value={value.url}
-              onChange={(e) => updateField("url", e.target.value)}
-              placeholder="https://example.com"
-              className="w-full rounded-xl border border-border-strong bg-surface-subtle px-3 py-2.5 font-mono text-xs text-ink placeholder:text-ink-muted focus:border-amber-400"
-            />
-          </div>
-
-          {value.mode === "merchant" ? (
-            <div>
-              <label
-                htmlFor="wb-merchant-stk"
-                className="mb-1.5 block text-xs font-semibold text-amber-300"
-              >
-                Số tài khoản nhận (tùy chọn)
-              </label>
-              <input
-                id="wb-merchant-stk"
-                type="text"
-                value={value.expectedMerchantAccount}
-                onChange={(e) => updateField("expectedMerchantAccount", e.target.value)}
-                placeholder="Ví dụ: 190311112222"
-                className="tabular-num w-full rounded-xl border border-amber-500/45 bg-surface-subtle px-3 py-2.5 font-mono text-xs text-ink placeholder:text-ink-muted focus:border-amber-400"
-              />
-            </div>
-          ) : (
-            <div>
-              <label
-                htmlFor="wb-transfer-amount"
-                className="mb-1.5 block text-xs font-semibold text-ink-secondary"
-              >
-                Số tiền dự kiến chuyển (tùy chọn)
-              </label>
-              <div className="relative">
-                <input
-                  id="wb-transfer-amount"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  value={formatVndInputDisplay(value.transferAmount)}
-                  onChange={(e) => updateField("transferAmount", parseRawAmountDigits(e.target.value))}
-                  placeholder="Ví dụ: 15.000.000"
-                  className="tabular-num w-full rounded-xl border border-border-strong bg-surface-subtle py-2.5 pr-12 pl-3 font-mono text-xs text-ink placeholder:text-ink-muted focus:border-amber-400"
-                />
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 font-mono text-[11px] text-ink-muted"
-                >
-                  VND
+            <span className="inline-flex items-center gap-2">
+              <SlidersHorizontal className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
+              <span>Thông tin giao dịch bổ sung (tùy chọn)</span>
+              {extraFieldsCount > 0 && (
+                <span className="tabular-num rounded-md border border-amber-500/40 bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] text-amber-200">
+                  {extraFieldsCount} mục
                 </span>
+              )}
+            </span>
+            {isExtraExpanded ? (
+              <ChevronUp className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+            )}
+          </button>
+
+          {isExtraExpanded && (
+            <div
+              id="wb-extra-transaction-panel"
+              className="space-y-3 border-t border-border-subtle px-3.5 pt-3 pb-3.5"
+            >
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="wb-transfer-amount"
+                    className="mb-1.5 block text-xs font-semibold text-ink-secondary"
+                  >
+                    Số tiền dự kiến chuyển (tùy chọn)
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="wb-transfer-amount"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={formatVndInputDisplay(value.transferAmount)}
+                      onChange={(e) =>
+                        updateField("transferAmount", parseRawAmountDigits(e.target.value))
+                      }
+                      placeholder="Ví dụ: 15.000.000"
+                      className="tabular-num w-full rounded-xl border border-border-strong bg-surface py-2.5 pr-12 pl-3 font-mono text-xs text-ink placeholder:text-ink-muted focus:border-amber-400"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 font-mono text-[11px] text-ink-muted"
+                    >
+                      VND
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="wb-merchant-stk"
+                    className="mb-1.5 block text-xs font-semibold text-amber-300"
+                  >
+                    Số tài khoản nhận của cửa hàng (khi đối chiếu biên lai)
+                  </label>
+                  <input
+                    id="wb-merchant-stk"
+                    type="text"
+                    value={value.expectedMerchantAccount}
+                    onChange={(e) => updateField("expectedMerchantAccount", e.target.value)}
+                    placeholder="Ví dụ: 190311112222"
+                    className="tabular-num w-full rounded-xl border border-amber-500/45 bg-surface px-3 py-2.5 font-mono text-xs text-ink placeholder:text-ink-muted focus:border-amber-400"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-subtle bg-surface px-3.5 py-2.5">
+                <div className="flex items-start gap-2.5">
+                  <PhoneCall
+                    className={`mt-0.5 h-4 w-4 shrink-0 ${
+                      value.inActiveCall ? "text-rose-400" : "text-ink-muted"
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <div>
+                    <span id="wb-active-call-label" className="text-xs font-semibold text-ink">
+                      Tôi đang nghe điện thoại khi chuẩn bị chuyển tiền
+                    </span>
+                    <p className="mt-0.5 text-[11px] text-ink-muted">
+                      Tăng mức cảnh báo và bật nhắc tạm dừng 30 giây nếu đang có người thúc giục qua
+                      điện thoại.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  id="wb-active-call-toggle"
+                  type="button"
+                  role="switch"
+                  aria-checked={value.inActiveCall}
+                  aria-labelledby="wb-active-call-label"
+                  onClick={() => updateField("inActiveCall", !value.inActiveCall)}
+                  className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg px-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
+                >
+                  <span
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors ${
+                      value.inActiveCall
+                        ? "border-rose-400/70 bg-rose-500/85"
+                        : "border-border-strong bg-surface-elevated"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                        value.inActiveCall ? "translate-x-5" : "translate-x-1"
+                      }`}
+                    />
+                  </span>
+                </button>
               </div>
             </div>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-subtle bg-surface-subtle px-3.5 py-2.5">
-          <div className="flex items-start gap-2.5">
-            <PhoneCall
-              className={`mt-0.5 h-4 w-4 shrink-0 ${value.inActiveCall ? "text-rose-400" : "text-ink-muted"}`}
-              aria-hidden="true"
-            />
-            <div>
-              <span id="wb-active-call-label" className="text-xs font-semibold text-ink">
-                Tôi đang nghe điện thoại khi chuẩn bị chuyển tiền
-              </span>
-              <p className="mt-0.5 text-[11px] text-ink-muted">
-                Tăng mức cảnh báo và bật nhắc tạm dừng 30 giây để kiểm tra lại nếu đang có người
-                thúc giục qua điện thoại.
-              </p>
-            </div>
-          </div>
-
-          <button
-            id="wb-active-call-toggle"
-            type="button"
-            role="switch"
-            aria-checked={value.inActiveCall}
-            aria-labelledby="wb-active-call-label"
-            onClick={() => updateField("inActiveCall", !value.inActiveCall)}
-            className="inline-flex min-h-[44px] min-w-[44px] cursor-pointer items-center justify-center rounded-lg px-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
-          >
-            <span
-              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors ${
-                value.inActiveCall
-                  ? "border-rose-400/70 bg-rose-500/85"
-                  : "border-border-strong bg-surface-elevated"
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                  value.inActiveCall ? "translate-x-5" : "translate-x-1"
-                }`}
-              />
-            </span>
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-          <MediaUploadZone
-            kind="image"
-            label="Ảnh màn hình, biên lai hoặc mã QR"
-            file={value.imageFile}
-            isUploading={isAnalyzing}
-            onFileChange={(file) => updateField("imageFile", file)}
-          />
-          <MediaUploadZone
-            kind="audio"
-            label="Tệp ghi âm cuộc gọi"
-            file={value.audioFile}
-            isUploading={isAnalyzing}
-            onFileChange={(file) => updateField("audioFile", file)}
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-          <p className="text-[11px] text-ink-muted">
-            Số điện thoại và số tài khoản được che giấu trước khi lưu hồ sơ.
-          </p>
-          <button
-            type="submit"
-            disabled={isAnalyzing}
-            className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-bold text-slate-950 shadow-md transition-colors hover:bg-amber-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isAnalyzing ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                <span>Đang kiểm tra...</span>
-              </>
-            ) : (
-              <>
-                <ScanSearch className="h-4 w-4" aria-hidden="true" />
-                <span>Kiểm tra ngay</span>
-              </>
-            )}
-          </button>
-        </div>
+        <p className="text-[11px] text-ink-muted">
+          Số điện thoại và số tài khoản được che giấu trước khi lưu hồ sơ; dữ liệu tải lên gửi trực
+          tiếp qua multipart/form-data và không lưu bản gốc trong cơ sở dữ liệu.
+        </p>
       </div>
     </form>
   );

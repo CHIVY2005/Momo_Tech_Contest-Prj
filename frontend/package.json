@@ -9,7 +9,7 @@
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/lib/__tests__/sse.test.ts src/lib/__tests__/radarLayout.test.ts src/lib/__tests__/auditRegressions.test.ts"
+    "test": "node --test src/lib/__tests__/sse.test.ts src/lib/__tests__/radarLayout.test.ts src/lib/__tests__/auditRegressions.test.ts src/lib/__tests__/composerUtils.test.ts"
   },
   "dependencies": {
     "lucide-react": "^0.511.0",

@@ -184,6 +184,32 @@ function isValidUrlFindingsArray(val: unknown): boolean {
   );
 }
 
+function isValidImageForensicsRecord(val: unknown): boolean {
+  return (
+    isObjectRecord(val) &&
+    typeof val.filename === "string" &&
+    typeof val.format === "string" &&
+    typeof val.dhash_hex === "string" &&
+    typeof val.ocr_text === "string" &&
+    isNullableString(val.exif_software) &&
+    isNullableString(val.ela_heatmap_base64) &&
+    typeof val.width === "number" &&
+    Number.isFinite(val.width) &&
+    typeof val.height === "number" &&
+    Number.isFinite(val.height) &&
+    typeof val.tamper_score === "number" &&
+    Number.isFinite(val.tamper_score) &&
+    typeof val.ocr_height_cv === "number" &&
+    Number.isFinite(val.ocr_height_cv) &&
+    isNullableString(val.ocr_provider) &&
+    (val.ocr_confidence === undefined ||
+      (typeof val.ocr_confidence === "number" && Number.isFinite(val.ocr_confidence))) &&
+    (val.ocr_status === undefined || typeof val.ocr_status === "string") &&
+    isStringArray(val.qr_payloads) &&
+    isStringArray(val.reasons)
+  );
+}
+
 export function isValidTraceStep(st: unknown): st is TraceStep {
   return (
     isObjectRecord(st) &&
@@ -242,28 +268,15 @@ export function isValidAnalysisReport(data: unknown): data is AnalysisReport {
       return false;
     }
   }
-  if (data.image_forensics != null) {
-    if (
-      !isObjectRecord(data.image_forensics) ||
-      typeof data.image_forensics.filename !== "string" ||
-      typeof data.image_forensics.format !== "string" ||
-      typeof data.image_forensics.dhash_hex !== "string" ||
-      typeof data.image_forensics.ocr_text !== "string" ||
-      !isNullableString(data.image_forensics.exif_software) ||
-      !isNullableString(data.image_forensics.ela_heatmap_base64) ||
-      typeof data.image_forensics.width !== "number" ||
-      !Number.isFinite(data.image_forensics.width) ||
-      typeof data.image_forensics.height !== "number" ||
-      !Number.isFinite(data.image_forensics.height) ||
-      typeof data.image_forensics.tamper_score !== "number" ||
-      !Number.isFinite(data.image_forensics.tamper_score) ||
-      typeof data.image_forensics.ocr_height_cv !== "number" ||
-      !Number.isFinite(data.image_forensics.ocr_height_cv) ||
-      !isStringArray(data.image_forensics.qr_payloads) ||
-      !isStringArray(data.image_forensics.reasons)
-    ) {
-      return false;
-    }
+  if (data.image_forensics != null && !isValidImageForensicsRecord(data.image_forensics)) {
+    return false;
+  }
+  if (
+    data.image_forensics_list !== undefined &&
+    (!Array.isArray(data.image_forensics_list) ||
+      !data.image_forensics_list.every((item) => isValidImageForensicsRecord(item)))
+  ) {
+    return false;
   }
   if (data.receipt_logic != null) {
     if (

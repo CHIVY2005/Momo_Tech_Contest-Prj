@@ -153,6 +153,7 @@ const EVIDENCE_SOURCE_COPY: Record<string, string> = {
   receipt_validator: "Đối chiếu biên lai chuyển khoản",
   fraud_ops_radar: "Danh sách chặn rủi ro hệ thống",
   guardrails: "Kiểm tra an toàn nội dung",
+  ocr_engine: "Trích xuất văn bản từ hình ảnh (OCR)",
   gemini_vision: "Phân tích ngữ cảnh AI",
   pipeline: "Hệ thống tổng hợp",
 };
