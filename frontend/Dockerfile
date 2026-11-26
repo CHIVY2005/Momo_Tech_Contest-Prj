@@ -5,7 +5,9 @@ RUN npm ci --no-audit --no-fund
 
 FROM node:22-alpine AS builder
 WORKDIR /app
+ARG NEXT_PUBLIC_APP_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1 \
+    NEXT_PUBLIC_APP_ENV=${NEXT_PUBLIC_APP_ENV} \
     BACKEND_INTERNAL_URL=http://backend:8000
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

@@ -23,7 +23,7 @@ _DNS_LABEL_RE: Final[re.Pattern[str]] = re.compile(
     r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$",
     re.IGNORECASE,
 )
-_NON_DOMAIN_FILE_EXTS: Final[frozenset[str]] = frozenset(
+_NON_TLD_FILE_EXTS: Final[frozenset[str]] = frozenset(
     {
         "apk",
         "pdf",
@@ -36,7 +36,6 @@ _NON_DOMAIN_FILE_EXTS: Final[frozenset[str]] = frozenset(
         "m4a",
         "ogg",
         "json",
-        "zip",
         "exe",
         "doc",
         "docx",
@@ -46,8 +45,106 @@ _NON_DOMAIN_FILE_EXTS: Final[frozenset[str]] = frozenset(
         "csv",
     }
 )
+_AMBIGUOUS_TLD_FILE_EXTS: Final[frozenset[str]] = frozenset({"zip", "mov"})
+_FILENAME_CONTEXT_RE: Final[re.Pattern[str]] = re.compile(
+    r"(?:tệp(?:\s+tin)?|tập\s+tin|file|ảnh|hình|tài\s+liệu|đính\s+kèm|"
+    r"nén|giải\s+nén|archive|attachment|document)[\s:.\-\"'\u00ab]*$",
+    re.IGNORECASE,
+)
 _MULTI_PART_PUBLIC_SUFFIXES: Final[frozenset[str]] = frozenset(
     {"com.vn", "gov.vn", "net.vn", "org.vn", "edu.vn", "int.vn", "ac.vn", "co.uk", "org.uk", "com.sg"}
+)
+RECOGNIZED_DISPLAY_PUBLIC_SUFFIXES: Final[frozenset[str]] = frozenset(
+    {
+        "com",
+        "net",
+        "org",
+        "edu",
+        "gov",
+        "int",
+        "mil",
+        "info",
+        "biz",
+        "pro",
+        "vn",
+        "us",
+        "uk",
+        "sg",
+        "au",
+        "ca",
+        "de",
+        "fr",
+        "jp",
+        "kr",
+        "cn",
+        "hk",
+        "tw",
+        "eu",
+        "id",
+        "th",
+        "my",
+        "ph",
+        "la",
+        "kh",
+        "in",
+        "nz",
+        "nl",
+        "ch",
+        "top",
+        "vip",
+        "xyz",
+        "site",
+        "online",
+        "click",
+        "shop",
+        "store",
+        "app",
+        "dev",
+        "io",
+        "ai",
+        "co",
+        "me",
+        "tv",
+        "cc",
+        "gg",
+        "asia",
+        "club",
+        "live",
+        "link",
+        "tech",
+        "cloud",
+        "space",
+        "work",
+        "fun",
+        "icu",
+        "buzz",
+        "lat",
+        "cfd",
+        "sbs",
+        "quest",
+        "cyou",
+        "life",
+        "world",
+        "today",
+        "news",
+        "media",
+        "email",
+        "finance",
+        "support",
+        "services",
+        "solutions",
+        "center",
+        "digital",
+        "network",
+        "systems",
+        "security",
+        "banking",
+        "pay",
+        "zip",
+        "mov",
+        "example",
+        *_MULTI_PART_PUBLIC_SUFFIXES,
+    }
 )
 _TRAILING_PUNCT: Final[str] = ".,!?;:)'\"»]"
 
@@ -55,37 +152,77 @@ _VN_PHONE_RE: Final[re.Pattern[str]] = re.compile(
     r"(?<!\d)(?:\+?84[\s.\-]?|0)(?P<body_head>[35789])(?P<body_rest>(?:[\s.\-]?\d){8})(?!\d)"
 )
 
-_BANK_CONTEXT_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?:"
-    r"\bstk(?:\s*(?:nhận|thụ\s*hưởng|tạm\s*giữ|cá\s*nhân|ngân\s*hàng|đích))?\b|"
-    r"số\s*(?:tk|tài\s*khoản)(?:\s*(?:nhận|thụ\s*hưởng|tạm\s*giữ))?|"
-    r"tài\s*khoản(?:\s*(?:nhận|thụ\s*hưởng|tạm\s*giữ|đến|đích))?|"
-    r"\btk(?:\s*(?:nhận|tạm\s*giữ))?\b|"
-    r"account(?:\s*no|\s*number)?|vietcombank|techcombank|mbbank|mb\s*bank|bidv|"
-    r"vietinbank|agribank|acb|vpbank|tpbank|sacombank|vib|shb|hdbank"
-    r")"
-    r"[\s:.\-–—]{0,20}(?P<acct>\d{8,16})(?!\d)",
-    re.IGNORECASE,
-)
-
 # Only match grouped currency numbers starting with 1-9 (never touches 0-prefixed or +84 phones)
 _CURRENCY_AMOUNT_RE: Final[re.Pattern[str]] = re.compile(
     r"(?<![+\d])[1-9]\d{0,2}(?:[.,]\d{3})+(?:\s*(?:đ|vnđ|vnd|đồng))?(?!\d)",
     re.IGNORECASE,
 )
+_STRICT_CURRENCY_SYMBOL_AFTER_RE: Final[re.Pattern[str]] = re.compile(
+    r"^[ \t]*(?:vnđ|vnd|đ)(?!\w)",
+    re.IGNORECASE,
+)
+_BANK_CURRENCY_WORD_AFTER_RE: Final[re.Pattern[str]] = re.compile(
+    r"^[ \t]*(?:vnđ|vnd|đ(?!\w)|đồng(?!\w)(?![ \t]+(?:phạm|bọn|thời|ý|chí|loạt|hành|tình|đội|nghiệp)\b))",
+    re.IGNORECASE,
+)
 
-_RAW_DIGIT_ACCOUNT_SCRUB_RE: Final[re.Pattern[str]] = re.compile(r"(?<!\d)\d{8,16}(?!\d)")
+_RAW_DIGIT_ACCOUNT_SCRUB_RE: Final[re.Pattern[str]] = re.compile(r"(?<!\d)\d{8,19}(?!\d)")
 _LEGACY_8DIGIT_MASK_RE: Final[re.Pattern[str]] = re.compile(
     r"(?<!\d)(\d{2})\d{2}\*{4}\d{2}(\d{2})(?!\d)"
 )
 _GROUPED_ACCOUNT_SCRUB_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?<![+\d.,])\d{3,4}(?:[\s\-–—]\d{3,4}){2,3}(?![\d.,])"
+    r"(?<![+\d.,])\d{3,4}(?:[\s\-–—]\d{3,5}){2,4}(?![\d.,])"
 )
-_LABELED_GROUPED_ACCOUNT_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?P<prefix>(?:\bstk|\btk|số\s*tài\s*khoản|tài\s*khoản)[\s:.\-–—]{1,12})"
-    r"(?P<acct>\d{2,4}(?:[.\s\-–—]\d{2,4}){2,4})(?!\d)",
+_DATE_LIKE_SPAN_RE: Final[re.Pattern[str]] = re.compile(
+    r"^\d{1,2}[.\-]\d{1,2}[.\-](?:19|20)\d{2}$"
+)
+
+# Intra-account separators ONLY: horizontal spaces/tabs or tight single '.'/'-' between digits
+# (never bridges clause delimiters such as ' - ', ' — ', or '. ').
+_ACCT_SPAN_PAT: Final[str] = r"(?P<acct>\d+(?:(?:[ \t]+|[.\-])\d+)*)(?!\d|[ \t]+\d|[.\-]\d)"
+_LABEL_SEP_PAT: Final[str] = r"(?:[ \t:.\-\u2013\u2014]{1,16}|[ \t:.\-\u2013\u2014]{0,12}\r?\n[ \t]{0,12})"
+
+_EXPLICIT_RECIPIENT_LABEL_PAT: Final[str] = (
+    r"(?:số[ \t]*)?(?:\bstk|\btk|tài[ \t]*khoản)[ \t]*"
+    r"(?:nhận|thụ[ \t]*hưởng|đến|đích|người[ \t]*nhận)"
+    r"|(?:tới|đến)[ \t]+(?:số[ \t]*)?(?:stk|tk|tài[ \t]*khoản)"
+)
+_EXPLICIT_ACCOUNT_LABEL_PAT: Final[str] = (
+    rf"(?:{_EXPLICIT_RECIPIENT_LABEL_PAT})"
+    r"|(?:số[ \t]*)?(?:\bstk|\btk|tài[ \t]*khoản)"
+    r"(?:[ \t]*(?:tạm[ \t]*giữ|cá[ \t]*nhân|ngân[ \t]*hàng))?"
+    r"|\baccount(?:[ \t]*no\.?|[ \t]*number)?"
+)
+_BANK_NAME_LABEL_PAT: Final[str] = (
+    r"\b(?:vietcombank|techcombank|mbbank|mb[ \t]*bank|bidv|vietinbank|"
+    r"agribank|acb|vpbank|tpbank|sacombank|vib|shb|hdbank)\b"
+)
+
+EXPLICIT_RECIPIENT_SPAN_RE: Final[re.Pattern[str]] = re.compile(
+    rf"(?P<prefix>(?:{_EXPLICIT_RECIPIENT_LABEL_PAT}){_LABEL_SEP_PAT}){_ACCT_SPAN_PAT}",
     re.IGNORECASE,
 )
+
+LABELED_ACCOUNT_SPAN_RE: Final[re.Pattern[str]] = re.compile(
+    rf"(?P<prefix>(?:(?P<explicit_label>{_EXPLICIT_ACCOUNT_LABEL_PAT})"
+    rf"|(?P<bank_label>{_BANK_NAME_LABEL_PAT})){_LABEL_SEP_PAT}){_ACCT_SPAN_PAT}",
+    re.IGNORECASE,
+)
+
+
+def is_labeled_account_match(text: str, match: re.Match[str]) -> bool:
+    raw_tok = match.group("acct")
+    tail = text[match.end("acct") :]
+    if match.group("explicit_label") is not None:
+        return not _STRICT_CURRENCY_SYMBOL_AFTER_RE.match(tail)
+    if _BANK_CURRENCY_WORD_AFTER_RE.match(tail):
+        return False
+    if _DATE_LIKE_SPAN_RE.fullmatch(raw_tok):
+        return False
+    return not _CURRENCY_AMOUNT_RE.fullmatch(raw_tok)
+
+
+_is_labeled_account_match = is_labeled_account_match
 
 _BRAND_PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
     ("Vietcombank", re.compile(r"\b(?:vietcombank|vcb)\b", re.IGNORECASE)),
@@ -172,7 +309,7 @@ def mask_ioc(ioc_type: IocType, value: str) -> str:
             return f"{norm[:2]}****{norm[-2:]}"
         return "****"
     parts = [lbl for lbl in norm.split(".") if lbl]
-    if len(parts) >= 2:
+    if len(parts) >= 2 and all(_DNS_LABEL_RE.match(lbl) for lbl in parts):
         last_two = f"{parts[-2]}.{parts[-1]}"
         if len(parts) >= 3 and last_two in _MULTI_PART_PUBLIC_SUFFIXES:
             suffix = last_two
@@ -182,10 +319,16 @@ def mask_ioc(ioc_type: IocType, value: str) -> str:
             suffix = parts[-1]
             core = parts[-2]
             has_subdomain = len(parts) > 2
-        visible_core = core[:2] if len(core) > 2 else core[:1]
-        masked_core = f"{visible_core}****"
+        if suffix not in RECOGNIZED_DISPLAY_PUBLIC_SUFFIXES:
+            return f"dom_{hash_ioc('domain', value)[:6]}****"
+        alnum_head = re.sub(r"[^a-z0-9]", "", core.lower())[:2]
+        if not alnum_head or alnum_head.isdigit():
+            return f"dom_{hash_ioc('domain', value)[:6]}****"
+        if re.search(r"\d{6,}", core) and any(ch.isdigit() for ch in alnum_head):
+            return f"dom_{hash_ioc('domain', value)[:6]}****"
+        masked_core = f"{alnum_head}****"
         return f"*.{masked_core}.{suffix}" if has_subdomain else f"{masked_core}.{suffix}"
-    return f"{norm[:2]}****"
+    return f"dom_{hash_ioc('domain', value)[:6]}****"
 
 
 def _build_spaced_digits_pattern(digits: str) -> re.Pattern[str] | None:
@@ -230,11 +373,16 @@ def scrub_free_text_pii(
         rest = re.sub(r"\D", "", m.group("body_rest"))
         return mask_ioc("phone", f"0{m.group('body_head')}{rest}")
 
+    def _replace_labeled_acct(m: re.Match[str]) -> str:
+        if not _is_labeled_account_match(m.string, m):
+            return m.group(0)
+        digits = re.sub(r"\D", "", m.group("acct"))
+        if 6 <= len(digits) <= 24:
+            return f"{m.group('prefix')}{mask_ioc('bank_account', digits)}"
+        return m.group(0)
+
     out = _VN_PHONE_RE.sub(_replace_phone, out)
-    out = _LABELED_GROUPED_ACCOUNT_RE.sub(
-        lambda m: f"{m.group('prefix')}{mask_ioc('bank_account', m.group('acct'))}",
-        out,
-    )
+    out = LABELED_ACCOUNT_SPAN_RE.sub(_replace_labeled_acct, out)
     out = _GROUPED_ACCOUNT_SCRUB_RE.sub(
         lambda m: mask_ioc("bank_account", m.group(0)),
         out,
@@ -270,8 +418,13 @@ def extract_candidate_urls(text: str) -> list[str]:
         has_url_suffix = bool(
             (parts.path and parts.path != "/") or parts.query or parts.fragment or parts.port
         )
-        if not has_url_suffix and tld in _NON_DOMAIN_FILE_EXTS and not host.startswith("www."):
-            continue
+        if not has_url_suffix and not host.startswith("www."):
+            if tld in _NON_TLD_FILE_EXTS:
+                continue
+            if tld in _AMBIGUOUS_TLD_FILE_EXTS:
+                prefix_ctx = without_http[max(0, sm.start() - 32) : sm.start()]
+                if _FILENAME_CONTEXT_RE.search(prefix_ctx):
+                    continue
         found.append(f"https://{token}")
     return _dedupe_preserve_order(found)
 
@@ -297,15 +450,16 @@ def extract_iocs(text: str, extra_urls: list[str] | None = None) -> ExtractedIOC
     scrubbed = _SCHEMELESS_TOKEN_RE.sub(" ", scrubbed)
 
     raw_accounts: list[str] = []
-    account_spans: list[tuple[int, int]] = []
-    for match in _BANK_CONTEXT_RE.finditer(scrubbed):
-        raw_accounts.append(match.group("acct"))
-        account_spans.append(match.span("acct"))
-
     chars = list(scrubbed)
-    for start, end in account_spans:
-        for idx in range(start, end):
-            chars[idx] = " "
+    for match in LABELED_ACCOUNT_SPAN_RE.finditer(scrubbed):
+        if not _is_labeled_account_match(scrubbed, match):
+            continue
+        digits = re.sub(r"\D", "", match.group("acct"))
+        if 6 <= len(digits) <= 19:
+            raw_accounts.append(digits)
+            start, end = match.span("acct")
+            for idx in range(start, end):
+                chars[idx] = " "
     without_accounts = "".join(chars)
 
     phones: list[str] = []

@@ -40,6 +40,7 @@ export interface VietQRInfo {
   raw: string;
   kind: QrKind;
   crc_valid: boolean;
+  tlv_valid?: boolean;
   bank_bin?: string | null;
   bank_name?: string | null;
   account_number?: string | null;
@@ -110,6 +111,7 @@ export interface ReceiptLogicResult {
   geometry_anomaly: boolean;
   beneficiary_checked?: boolean;
   beneficiary_mismatch: boolean;
+  extracted_recipient_account?: string | null;
   replay_checked?: boolean;
   is_replayed: boolean;
   verification_status: ReceiptVerificationStatus;

@@ -176,25 +176,34 @@ def parse_structured_llm_json(raw_content: Any) -> GeminiStructuredSchema:
     return GeminiStructuredSchema.model_validate(loaded)
 
 
+def _parse_retry_after_sec(retry_after_header: str | None) -> float | None:
+    """Parse numeric or HTTP-date Retry-After header into seconds, or None if absent/invalid."""
+    if not retry_after_header:
+        return None
+    raw_hdr = retry_after_header.strip()
+    parsed_sec: float | None = None
+    try:
+        parsed_sec = float(raw_hdr)
+    except ValueError:
+        try:
+            dt = parsedate_to_datetime(raw_hdr)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            parsed_sec = max(0.0, (dt - datetime.now(UTC)).total_seconds())
+        except (TypeError, ValueError):
+            parsed_sec = None
+    if parsed_sec is not None and math.isfinite(parsed_sec):
+        return max(0.0, parsed_sec)
+    return None
+
+
 def _compute_backoff_sec(retry_idx: int, retry_after_header: str | None) -> float | None:
     """Compute retry delay; return None when Retry-After exceeds interactive request budget."""
-    if retry_after_header:
-        raw_hdr = retry_after_header.strip()
-        parsed_sec: float | None = None
-        try:
-            parsed_sec = float(raw_hdr)
-        except ValueError:
-            try:
-                dt = parsedate_to_datetime(raw_hdr)
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=UTC)
-                parsed_sec = max(0.0, (dt - datetime.now(UTC)).total_seconds())
-            except (TypeError, ValueError):
-                parsed_sec = None
-        if parsed_sec is not None and math.isfinite(parsed_sec):
-            if parsed_sec > MAX_INTERACTIVE_RETRY_WAIT_SEC:
-                return None
-            return max(0.02, parsed_sec)
+    parsed_sec = _parse_retry_after_sec(retry_after_header)
+    if parsed_sec is not None:
+        if parsed_sec > MAX_INTERACTIVE_RETRY_WAIT_SEC:
+            return None
+        return max(0.02, parsed_sec)
 
     base_delay: float = min(5.0, 0.5 * (2**retry_idx))
     jitter: float = random.uniform(0.01, 0.15)  # noqa: S311
@@ -235,6 +244,7 @@ async def _call_openai_key(
     audio_bytes: bytes | None,
     audio_mime: str,
     has_non_audio_evidence: bool = True,
+    failover_cooldown_out: list[float] | None = None,
 ) -> tuple[GeminiStructuredSchema | None, str | None, int, str | None]:
     attempts = 0
     use_json_format = True
@@ -364,12 +374,21 @@ async def _call_openai_key(
 
             if resp.status_code in RETRYABLE_HTTP_STATUSES:
                 last_err = f"HTTP_{resp.status_code}"
+                ra_sec = _parse_retry_after_sec(resp.headers.get("Retry-After"))
+                if ra_sec is not None and ra_sec > MAX_INTERACTIVE_RETRY_WAIT_SEC:
+                    return None, None, attempts, f"{last_err}_RETRY_AFTER_EXCEEDED"
                 if retry_idx < max_retries:
-                    delay = _compute_backoff_sec(retry_idx, resp.headers.get("Retry-After"))
+                    delay = (
+                        max(0.02, ra_sec)
+                        if ra_sec is not None
+                        else _compute_backoff_sec(retry_idx, None)
+                    )
                     if delay is not None:
                         await asyncio.sleep(delay)
                         continue
                     return None, None, attempts, f"{last_err}_RETRY_AFTER_EXCEEDED"
+                if ra_sec is not None and ra_sec > 0 and failover_cooldown_out is not None:
+                    failover_cooldown_out.append(ra_sec)
                 return None, None, attempts, last_err
 
             if not resp.is_success:
@@ -542,7 +561,14 @@ async def execute_llm_call(
                 error_code="INVALID_BASE_URL",
             )
 
+        pending_cooldown: list[float] = []
         for key_idx, key in enumerate(keys):
+            if key_idx > 0 and pending_cooldown:
+                wait_sec = pending_cooldown.pop()
+                pending_cooldown.clear()
+                if wait_sec > MAX_INTERACTIVE_RETRY_WAIT_SEC:
+                    break
+                await asyncio.sleep(wait_sec)
             parsed, actual_model, used_attempts, err = await _call_openai_key(
                 endpoint=endpoint,
                 api_key=key,
@@ -555,6 +581,7 @@ async def execute_llm_call(
                 audio_bytes=audio_bytes,
                 audio_mime=audio_mime,
                 has_non_audio_evidence=has_non_audio_evidence,
+                failover_cooldown_out=pending_cooldown,
             )
             total_attempts += used_attempts
             if parsed is not None:
@@ -569,7 +596,9 @@ async def execute_llm_call(
                 )
             if err:
                 last_error = err
-                if err in ("SAFETY_BLOCKED", "UNSUPPORTED_AUDIO_INPUT"):
+                if err in ("SAFETY_BLOCKED", "UNSUPPORTED_AUDIO_INPUT") or err.endswith(
+                    "_RETRY_AFTER_EXCEEDED"
+                ):
                     break
     else:
         for key_idx, key in enumerate(keys):

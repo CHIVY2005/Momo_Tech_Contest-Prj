@@ -1,4 +1,4 @@
-import type { AnalysisReport, VerdictLevel } from "./types";
+import type { AnalysisReport, TraceStep, VerdictLevel } from "./types";
 
 const VALID_VERDICTS = new Set<VerdictLevel>([
   "SAFE",
@@ -61,6 +61,10 @@ function isNullableString(val: unknown): boolean {
   return val === undefined || val === null || typeof val === "string";
 }
 
+function isOptionalBoolean(val: unknown): boolean {
+  return val === undefined || typeof val === "boolean";
+}
+
 function isValidEvidenceArray(val: unknown): boolean {
   return (
     Array.isArray(val) &&
@@ -85,6 +89,7 @@ function isValidVietQrArray(val: unknown): boolean {
         typeof qr.raw === "string" &&
         typeof qr.kind === "string" &&
         typeof qr.crc_valid === "boolean" &&
+        isOptionalBoolean(qr.tlv_valid) &&
         isNullableString(qr.bank_bin) &&
         isNullableString(qr.bank_name) &&
         isNullableString(qr.account_number) &&
@@ -117,19 +122,22 @@ function isValidUrlFindingsArray(val: unknown): boolean {
   );
 }
 
-function isValidTraceArray(val: unknown): boolean {
+export function isValidTraceStep(st: unknown): st is TraceStep {
   return (
-    Array.isArray(val) &&
-    val.every(
-      (st) =>
-        isObjectRecord(st) &&
-        typeof st.step_id === "string" &&
-        typeof st.title === "string" &&
-        typeof st.status === "string" &&
-        typeof st.detail === "string" &&
-        typeof st.duration_ms === "number",
-    )
+    isObjectRecord(st) &&
+    typeof st.step_id === "string" &&
+    Boolean(st.step_id) &&
+    typeof st.title === "string" &&
+    typeof st.status === "string" &&
+    ["running", "done", "warning", "skipped"].includes(st.status) &&
+    typeof st.detail === "string" &&
+    typeof st.duration_ms === "number" &&
+    Number.isFinite(st.duration_ms)
   );
+}
+
+function isValidTraceArray(val: unknown): boolean {
+  return Array.isArray(val) && val.every((st) => isValidTraceStep(st));
 }
 
 /**
@@ -162,6 +170,10 @@ export function isValidAnalysisReport(data: unknown): data is AnalysisReport {
       !isNullableString(data.sandbox.page_title) ||
       !isNullableString(data.sandbox.impersonated_brand) ||
       !isNullableString(data.sandbox.screenshot_base64) ||
+      typeof data.sandbox.blocked_ssrf !== "boolean" ||
+      typeof data.sandbox.has_password_field !== "boolean" ||
+      typeof data.sandbox.has_otp_field !== "boolean" ||
+      typeof data.sandbox.has_apk_download !== "boolean" ||
       typeof data.sandbox.risk_points !== "number" ||
       !isStringArray(data.sandbox.reasons)
     ) {
@@ -177,7 +189,14 @@ export function isValidAnalysisReport(data: unknown): data is AnalysisReport {
       typeof data.image_forensics.ocr_text !== "string" ||
       !isNullableString(data.image_forensics.exif_software) ||
       !isNullableString(data.image_forensics.ela_heatmap_base64) ||
+      typeof data.image_forensics.width !== "number" ||
+      !Number.isFinite(data.image_forensics.width) ||
+      typeof data.image_forensics.height !== "number" ||
+      !Number.isFinite(data.image_forensics.height) ||
       typeof data.image_forensics.tamper_score !== "number" ||
+      !Number.isFinite(data.image_forensics.tamper_score) ||
+      typeof data.image_forensics.ocr_height_cv !== "number" ||
+      !Number.isFinite(data.image_forensics.ocr_height_cv) ||
       !isStringArray(data.image_forensics.qr_payloads) ||
       !isStringArray(data.image_forensics.reasons)
     ) {
@@ -190,7 +209,18 @@ export function isValidAnalysisReport(data: unknown): data is AnalysisReport {
       typeof data.receipt_logic.is_receipt_candidate !== "boolean" ||
       !isNullableString(data.receipt_logic.bank_detected) ||
       !isNullableString(data.receipt_logic.reference_code) ||
+      !isNullableString(data.receipt_logic.extracted_recipient_account) ||
       typeof data.receipt_logic.reference_valid !== "boolean" ||
+      !isOptionalBoolean(data.receipt_logic.timestamp_checked) ||
+      typeof data.receipt_logic.timestamp_anomaly !== "boolean" ||
+      !isOptionalBoolean(data.receipt_logic.amount_checked) ||
+      typeof data.receipt_logic.amount_format_anomaly !== "boolean" ||
+      !isOptionalBoolean(data.receipt_logic.geometry_checked) ||
+      typeof data.receipt_logic.geometry_anomaly !== "boolean" ||
+      !isOptionalBoolean(data.receipt_logic.beneficiary_checked) ||
+      typeof data.receipt_logic.beneficiary_mismatch !== "boolean" ||
+      !isOptionalBoolean(data.receipt_logic.replay_checked) ||
+      typeof data.receipt_logic.is_replayed !== "boolean" ||
       typeof data.receipt_logic.verification_status !== "string" ||
       typeof data.receipt_logic.logic_risk_points !== "number" ||
       !isStringArray(data.receipt_logic.reasons)
@@ -215,10 +245,22 @@ export function isValidAnalysisReport(data: unknown): data is AnalysisReport {
   }
   if (!isObjectRecord(data.actions.pre_transfer)) return false;
   const pre = data.actions.pre_transfer;
-  return (
-    typeof pre.should_hold_transfer === "boolean" &&
-    typeof pre.cooling_off_seconds === "number" &&
-    (pre.warning_headline === undefined || typeof pre.warning_headline === "string") &&
-    isStringArray(pre.verification_questions)
-  );
+  if (
+    typeof pre.should_hold_transfer !== "boolean" ||
+    typeof pre.cooling_off_seconds !== "number" ||
+    (pre.blocked_by_ops_rule !== undefined && typeof pre.blocked_by_ops_rule !== "boolean") ||
+    (pre.warning_headline !== undefined && typeof pre.warning_headline !== "string") ||
+    !isStringArray(pre.verification_questions)
+  ) {
+    return false;
+  }
+  if (data.active_block_rule_hit === true) {
+    if (pre.blocked_by_ops_rule !== true || pre.should_hold_transfer !== true) {
+      return false;
+    }
+  }
+  if (data.active_block_rule_hit !== undefined && typeof data.active_block_rule_hit !== "boolean") {
+    return false;
+  }
+  return typeof pre.blocked_by_ops_rule === "boolean";
 }

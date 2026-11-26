@@ -14,6 +14,10 @@ from app.schemas import EvidenceItem, VietQRInfo
 NAPAS_GUID: Final[str] = "A000000727"
 SUPPORTED_NAPAS_SERVICES: Final[frozenset[str]] = frozenset({"QRIBFTTA", "QRIBFTTC"})
 
+VALID_VIETQR_AMOUNT_RE: Final[re.Pattern[str]] = re.compile(
+    r"^(?:0(?:\.\d{1,2})?|[1-9]\d{0,12}(?:\.\d{1,2})?)$"
+)
+
 _RECEIVE_SCAM_RE: Final[re.Pattern[str]] = re.compile(
     r"(?:quét\s+(?:mã\s+)?(?:qr\s+)?(?:này\s+)?để\s+(?:nhận|hoàn|lấy)|"
     r"nhận\s+(?:tiền\s+hoàn|khoản\s+hoàn|tiền\s+thưởng|lại\s+tiền)|"
@@ -130,30 +134,66 @@ def parse_qr_payload(
                 snippet=frame_tag,
             )
         )
-        return VietQRInfo(raw=cleaned, kind="INVALID_CRC_VIETQR", crc_valid=False), evidence
+        return (
+            VietQRInfo(raw=frame_tag, kind="INVALID_CRC_VIETQR", crc_valid=False, tlv_valid=False),
+            evidence,
+        )
 
     declared_crc = cleaned[-4:].upper()
     computed_crc = crc16_ccitt_false(cleaned[:-4].encode("ascii"))
+    crc_ok = declared_crc == computed_crc
     top_fields, tlv_ok = read_tlv(cleaned)
     last_key = next(reversed(top_fields.keys()), "") if top_fields else ""
+    struct_ok = tlv_ok and last_key == "63" and len(top_fields.get("63", "")) == 4
 
-    if declared_crc != computed_crc or not tlv_ok or last_key != "63" or len(top_fields.get("63", "")) != 4:
+    if not crc_ok:
         evidence.append(
             EvidenceItem(
                 source="vietqr_parser",
                 severity="HIGH",
-                title="Mã kiểm tra CRC-16 hoặc cấu trúc TLV VietQR không hợp lệ",
+                title="Mã kiểm tra CRC-16 VietQR không hợp lệ",
                 detail=(
-                    f"Chữ ký CRC-16 trong mã ({declared_crc} vs {computed_crc}) hoặc trường TLV trùng/hỏng "
+                    f"Chữ ký CRC-16 trong mã ({declared_crc} vs {computed_crc}) không khớp "
                     "— dấu hiệu chuỗi QR bị chỉnh sửa thủ công."
                 ),
                 snippet=frame_tag,
             )
         )
-        return VietQRInfo(raw=cleaned, kind="INVALID_CRC_VIETQR", crc_valid=False), evidence
+        return (
+            VietQRInfo(
+                raw=frame_tag,
+                kind="INVALID_CRC_VIETQR",
+                crc_valid=False,
+                tlv_valid=struct_ok,
+            ),
+            evidence,
+        )
+
+    if not struct_ok:
+        evidence.append(
+            EvidenceItem(
+                source="vietqr_parser",
+                severity="HIGH",
+                title="Cấu trúc TLV của mã VietQR không hợp lệ",
+                detail=(
+                    "Chữ ký CRC-16 hợp lệ nhưng khung EMVCo TLV bị trùng thẻ, sai độ dài hoặc "
+                    "thiếu trường 63 kết thúc — dấu hiệu mã QR bị giả mạo cấu trúc."
+                ),
+                snippet=frame_tag,
+            )
+        )
+        return (
+            VietQRInfo(
+                raw=frame_tag,
+                kind="INVALID_CRC_VIETQR",
+                crc_valid=True,
+                tlv_valid=False,
+            ),
+            evidence,
+        )
 
     if "38" not in top_fields:
-        return VietQRInfo(raw=cleaned, kind="TEXT_QR", crc_valid=True), evidence
+        return VietQRInfo(raw=frame_tag, kind="TEXT_QR", crc_valid=True), evidence
 
     sub38, ok38 = read_tlv(top_fields["38"])
     if not ok38:
@@ -162,35 +202,74 @@ def parse_qr_payload(
                 source="vietqr_parser",
                 severity="HIGH",
                 title="Trường định danh tài khoản NAPAS (Tag 38) bị hỏng",
-                detail="Cấu trúc TLV bên trong Tag 38 không hợp lệ.",
+                detail="Cấu trúc TLV bên trong Tag 38 không hợp lệ dù chữ ký CRC-16 hợp lệ.",
                 snippet=frame_tag,
             )
         )
-        return VietQRInfo(raw=cleaned, kind="INVALID_CRC_VIETQR", crc_valid=False), evidence
+        return (
+            VietQRInfo(raw=frame_tag, kind="INVALID_CRC_VIETQR", crc_valid=True, tlv_valid=False),
+            evidence,
+        )
 
     if sub38.get("00") != NAPAS_GUID or "01" not in sub38:
-        return VietQRInfo(raw=cleaned, kind="TEXT_QR", crc_valid=True), evidence
+        return VietQRInfo(raw=frame_tag, kind="TEXT_QR", crc_valid=True), evidence
 
     service_code = sub38.get("02")
     acct_tlv, ok_acct = read_tlv(sub38["01"])
-    bank_bin = acct_tlv.get("00") if ok_acct else None
-    account_number = acct_tlv.get("01") if ok_acct else None
+    if not ok_acct:
+        evidence.append(
+            EvidenceItem(
+                source="vietqr_parser",
+                severity="HIGH",
+                title="Trường tài khoản thụ hưởng NAPAS (Tag 38.01) bị hỏng hoặc trùng thẻ",
+                detail=(
+                    "Cấu trúc TLV bên trong Tag 38.01 không hợp lệ dù chữ ký CRC-16 hợp lệ "
+                    "— dấu hiệu chèn trùng tài khoản thụ hưởng."
+                ),
+                snippet=frame_tag,
+            )
+        )
+        return (
+            VietQRInfo(raw=frame_tag, kind="INVALID_CRC_VIETQR", crc_valid=True, tlv_valid=False),
+            evidence,
+        )
+
+    bank_bin = acct_tlv.get("00")
+    account_number = acct_tlv.get("01")
 
     if (
-        not ok_acct
-        or not bank_bin
+        not bank_bin
         or not (bank_bin.isdigit() and len(bank_bin) == 6)
         or not account_number
         or service_code not in SUPPORTED_NAPAS_SERVICES
     ):
-        return VietQRInfo(raw=cleaned, kind="TEXT_QR", crc_valid=True), evidence
+        return VietQRInfo(raw=frame_tag, kind="TEXT_QR", crc_valid=True), evidence
 
     act_digits = re.sub(r"\D", "", account_number)
     if service_code == "QRIBFTTA":
         if not account_number.isdigit() or not (6 <= len(account_number) <= 19):
-            return VietQRInfo(raw=cleaned, kind="TEXT_QR", crc_valid=True), evidence
+            return VietQRInfo(raw=frame_tag, kind="TEXT_QR", crc_valid=True), evidence
     elif not account_number.isdigit() or not (12 <= len(account_number) <= 19):
-        return VietQRInfo(raw=cleaned, kind="TEXT_QR", crc_valid=True), evidence
+        return VietQRInfo(raw=frame_tag, kind="TEXT_QR", crc_valid=True), evidence
+
+    amount = top_fields.get("54")
+    if amount is not None and not VALID_VIETQR_AMOUNT_RE.fullmatch(amount):
+        evidence.append(
+            EvidenceItem(
+                source="vietqr_parser",
+                severity="HIGH",
+                title="Trường số tiền VietQR (Tag 54) sai định dạng chuẩn EMVCo",
+                detail=(
+                    "Trường số tiền (Tag 54) không tuân thủ định dạng số EMVCo chuẩn "
+                    "— dấu hiệu mã QR bị chỉnh sửa cấu trúc."
+                ),
+                snippet=frame_tag,
+            )
+        )
+        return (
+            VietQRInfo(raw=frame_tag, kind="INVALID_CRC_VIETQR", crc_valid=True, tlv_valid=False),
+            evidence,
+        )
 
     bank_name = _load_bin_map().get(bank_bin, f"BIN {bank_bin}")
 
@@ -200,7 +279,6 @@ def parse_qr_payload(
         if ok62:
             note = sub62.get("08")
 
-    amount = top_fields.get("54")
     is_dynamic = top_fields.get("01") == "12" or amount is not None
 
     receive_scam = bool(accompanying_text and _RECEIVE_SCAM_RE.search(accompanying_text))

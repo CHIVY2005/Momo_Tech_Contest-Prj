@@ -50,11 +50,11 @@ function StatusRow({
 }
 
 export function ReceiptCheckCard({ receipt }: ReceiptCheckCardProps) {
-  const refState: CheckState = !receipt.reference_code
-    ? "unchecked"
-    : receipt.reference_valid
+  const refState: CheckState = !receipt.reference_valid
+    ? "fail"
+    : receipt.reference_code
       ? "pass"
-      : "fail";
+      : "unchecked";
   const timestampState: CheckState = receipt.timestamp_anomaly
     ? "fail"
     : receipt.timestamp_checked

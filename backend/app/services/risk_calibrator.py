@@ -167,18 +167,29 @@ def calibrate_risk(
     final_score = max(0, min(100, fused))
     verdict = score_to_verdict(final_score)
 
-    # Derive ReceiptVerificationStatus strictly from receipt-specific forensic evidence
+    # Derive ReceiptVerificationStatus strictly from receipt & payment-QR forensic evidence
+    has_qr_beneficiary_mismatch = any(v.beneficiary_mismatch for v in vietqr_findings)
+    has_qr_payment_anomaly = any(
+        v.receive_scam_detected or v.kind == "INVALID_CRC_VIETQR" for v in vietqr_findings
+    )
     has_receipt_specific_anomaly = bool(
         (image_forensics is not None and image_forensics.tamper_score >= 35)
         or (receipt_logic is not None and receipt_logic.logic_risk_points > 0)
         or has_visual_bill_anomaly
+        or (mode == "merchant" and has_qr_payment_anomaly)
     )
     receipt_status: ReceiptVerificationStatus = "NOT_APPLICABLE"
-    if receipt_logic and receipt_logic.is_receipt_candidate:
+    if receipt_logic and receipt_logic.is_replayed:
+        receipt_status = "REPLAYED_RECEIPT"
+    elif (receipt_logic and receipt_logic.beneficiary_mismatch) or (
+        mode == "merchant" and has_qr_beneficiary_mismatch
+    ):
+        receipt_status = "BENEFICIARY_MISMATCH"
+    elif receipt_logic and receipt_logic.is_receipt_candidate:
         receipt_status = receipt_logic.verification_status
         if receipt_status == "UNVERIFIED_SCREENSHOT" and has_receipt_specific_anomaly:
             receipt_status = "TAMPER_OR_LOGIC_ANOMALY"
-    elif mode == "merchant" and image_forensics is not None:
+    elif mode == "merchant" and (image_forensics is not None or bool(vietqr_findings)):
         receipt_status = (
             "TAMPER_OR_LOGIC_ANOMALY" if has_receipt_specific_anomaly else "UNVERIFIED_SCREENSHOT"
         )

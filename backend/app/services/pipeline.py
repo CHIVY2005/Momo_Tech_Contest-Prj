@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 import time
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Final
+from typing import Any
 
 from app.config import Settings
 from app.core.security import InvalidMediaError, validate_upload_bytes
@@ -22,7 +21,6 @@ from app.schemas import (
     EvidenceItem,
     ImageForensicsResult,
     ReceiptLogicResult,
-    ReceiptVerificationStatus,
     SandboxInspection,
     TraceStep,
     UrlFinding,
@@ -37,66 +35,18 @@ from app.services.knowledge_base import KnowledgeBaseRetriever
 from app.services.local_ocr import run_local_ocr
 from app.services.local_stt import run_local_stt
 from app.services.phishing_detonator import detonate_url_in_sandbox
-from app.services.receipt_validator import validate_receipt_logic
+from app.services.receipt_validator import build_trusted_merchant_summary, validate_receipt_logic
 from app.services.risk_calibrator import calibrate_risk
 from app.services.scam_classifier import ScamClassifier
 from app.services.url_inspector import inspect_url
 from app.services.vietqr_parser import parse_qr_payload
-
-_FALSE_SETTLEMENT_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?<!không\s)(?<!chưa\s)(?:"
-    r"tiền\s+đã\s+(?:vào|về|chuyển\s+vào)|"
-    r"đã\s+(?:nhận\s+(?:được\s+)?tiền|ghi\s+có|thanh\s+toán\s+xong|hoàn\s+tất\s+thanh\s+toán)|"
-    r"số\s+dư\s+đã\s+(?:được\s+)?(?:ghi\s+có|cập\s+nhật|tăng)|"
-    r"có\s+thể\s+giao\s+hàng|"
-    r"giao\s+hàng\s+ngay|"
-    r"giao\s+dịch\s+đã\s+hoàn\s+tất\s+an\s+toàn"
-    r")",
-    re.IGNORECASE,
-)
 
 
 class UnknownDemoError(KeyError):
     """Raised when a requested demo_id does not exist."""
 
 
-def _guard_merchant_summary(
-    raw_summary: str,
-    mode: AnalyzeMode,
-    receipt_status: ReceiptVerificationStatus,
-) -> str:
-    """Generate merchant receipt settlement conclusions strictly from trusted forensic status."""
-    cleaned = raw_summary.strip()
-    if receipt_status == "UNVERIFIED_SCREENSHOT":
-        return (
-            "Ảnh chụp biên lai không ghi nhận dấu hiệu cắt ghép kỹ thuật, nhưng trạng thái thanh toán "
-            "CHƯA ĐƯỢC XÁC MINH từ ngân hàng (UNVERIFIED_SCREENSHOT). Chỉ giao hàng sau khi trực tiếp "
-            "kiểm tra biến động số dư thực tế trên ứng dụng ngân hàng hoặc Loa thông báo."
-        )
-    if receipt_status == "REPLAYED_RECEIPT":
-        return (
-            "CẢNH BÁO ĐỎ: Ảnh biên lai hoặc mã tham chiếu trùng khớp với giao dịch cũ đã gửi trước đó "
-            "(REPLAYED_RECEIPT — chưa xác minh thanh toán mới). Tuyệt đối chưa giao hàng và kiểm tra "
-            "trực tiếp biến động số dư ngân hàng."
-        )
-    if receipt_status == "BENEFICIARY_MISMATCH":
-        return (
-            "CẢNH BÁO ĐỎ: Số tài khoản thụ hưởng trên biên lai KHÔNG KHỚP với tài khoản của cửa hàng "
-            "(BENEFICIARY_MISMATCH — tiền chưa được xác minh vào tài khoản chủ shop). Tuyệt đối dừng "
-            "giao hàng và đối chiếu số dư thực tế."
-        )
-    if receipt_status == "TAMPER_OR_LOGIC_ANOMALY":
-        return (
-            "CẢNH BÁO: Phát hiện dấu hiệu chỉnh sửa ảnh hoặc bất thường logic nghiệp vụ trên biên lai "
-            "(TAMPER_OR_LOGIC_ANOMALY — chưa xác minh thanh toán). Tuyệt đối chưa giao hàng trước khi "
-            "kiểm tra biến động số dư thực tế hoặc Loa thông báo."
-        )
-    if mode == "merchant" and _FALSE_SETTLEMENT_RE.search(cleaned):
-        return (
-            "Chưa xác minh tiền đã vào tài khoản — vui lòng kiểm tra trực tiếp biến động số dư "
-            "ngân hàng hoặc Loa thông báo trước khi giao hàng."
-        )
-    return cleaned
+_guard_merchant_summary = build_trusted_merchant_summary
 
 
 class AnalysisPipeline:
@@ -366,9 +316,8 @@ class AnalysisPipeline:
                 is_replayed_hash=False,
                 replay_checked=False,
             )
-            has_replay_probe = bool(
-                (img_forensics and img_forensics.dhash_hex) or prelim.reference_code
-            )
+            replay_ref = prelim.reference_code if prelim.reference_valid else None
+            has_replay_probe = bool((img_forensics and img_forensics.dhash_hex) or replay_ref)
             replay_lookup_ran = (not is_demo) and has_replay_probe
             replayed = (
                 False
@@ -376,7 +325,7 @@ class AnalysisPipeline:
                 else self.repo.claim_receipt_replay(
                     img_forensics.dhash_hex if img_forensics else None,
                     prelim.bank_detected,
-                    prelim.reference_code,
+                    replay_ref,
                     register_if_new=prelim.is_receipt_candidate,
                 )
             )
@@ -388,6 +337,26 @@ class AnalysisPipeline:
                 is_replayed_hash=replayed,
                 replay_checked=replay_lookup_ran,
             )
+            if (
+                receipt_logic.extracted_recipient_account
+                and receipt_logic.extracted_recipient_account not in iocs.bank_accounts
+            ):
+                iocs.bank_accounts.append(receipt_logic.extracted_recipient_account)
+                if not block_hit:
+                    rcpt_rules = self.repo.match_active_block_rules(iocs)
+                    if rcpt_rules:
+                        block_hit = True
+                        evidence.append(
+                            EvidenceItem(
+                                source="fraud_ops_radar",
+                                severity="CRITICAL",
+                                title="Trùng khớp Danh sách Chặn Khẩn cấp trên biên lai (/radar)",
+                                detail=(
+                                    f"Tài khoản nhận {rcpt_rules[0].masked_value} trên biên lai "
+                                    "đang bị khóa bởi Fraud Ops."
+                                ),
+                            )
+                        )
             for r_reason in receipt_logic.reasons:
                 evidence.append(
                     EvidenceItem(
@@ -517,6 +486,10 @@ class AnalysisPipeline:
             llm_res.summary_vi,
             mode=mode,
             receipt_status=cal.receipt_verification_status,
+            has_qr_beneficiary_mismatch=any(v.beneficiary_mismatch for v in vietqr_list),
+            has_ocr_beneficiary_mismatch=bool(
+                receipt_logic and receipt_logic.beneficiary_mismatch
+            ),
         )
 
         llm_badge = (

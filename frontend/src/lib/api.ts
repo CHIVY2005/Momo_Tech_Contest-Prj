@@ -1,5 +1,9 @@
-import { isValidAnalysisReport, sanitizeValidationErrorDetail } from "./formatters";
-import { consumeUtf8SseStream } from "./sse";
+import {
+  isValidAnalysisReport,
+  isValidTraceStep,
+  sanitizeValidationErrorDetail,
+} from "./formatters.ts";
+import { consumeUtf8SseStream } from "./sse.ts";
 import type {
   AnalysisReport,
   BlockRule,
@@ -10,7 +14,12 @@ import type {
   TraceStep,
 } from "./types";
 
-export { isValidAnalysisReport, maskDisplayIoc, sanitizeValidationErrorDetail } from "./formatters";
+export {
+  isValidAnalysisReport,
+  isValidTraceStep,
+  maskDisplayIoc,
+  sanitizeValidationErrorDetail,
+} from "./formatters.ts";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/+$/, "");
 
@@ -96,8 +105,10 @@ export async function analyzeStream(
 
   let finalReport: AnalysisReport | null = null;
   await consumeUtf8SseStream(res.body, (ev) => {
-    if (ev.event === "trace" && ev.data && typeof ev.data === "object" && !Array.isArray(ev.data)) {
-      handlers.onTrace?.(ev.data as TraceStep);
+    if (ev.event === "trace") {
+      if (isValidTraceStep(ev.data)) {
+        handlers.onTrace?.(ev.data);
+      }
     } else if (ev.event === "result") {
       if (!isValidAnalysisReport(ev.data)) {
         throw new Error("Khung kết quả SSE không hợp lệ.");

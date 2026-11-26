@@ -432,7 +432,7 @@ async def run_gemini_reasoning(
         update={
             "llm_attempts": outcome.attempts,
             "llm_failed_attempts": (
-                0 if outcome.error_code == "NO_API_KEY" else max(1, outcome.attempts)
+                0 if outcome.error_code == "NO_API_KEY" else outcome.attempts
             ),
         }
     )

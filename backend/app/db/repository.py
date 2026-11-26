@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -17,14 +18,101 @@ from app.schemas import (
     RadarEdge,
     RadarGraphResponse,
     RadarNode,
+    score_to_verdict,
 )
-from app.services.ioc_extractor import hash_ioc, mask_ioc, scrub_free_text_pii
+from app.services.action_copilot import MERCHANT_HONESTY_BANNER
+from app.services.ioc_extractor import (
+    RECOGNIZED_DISPLAY_PUBLIC_SUFFIXES,
+    hash_ioc,
+    mask_ioc,
+    scrub_free_text_pii,
+)
+from app.services.receipt_validator import build_trusted_merchant_summary
+from app.services.vietqr_parser import VALID_VIETQR_AMOUNT_RE
 
 MAX_CASE_GRAPH_IOCS = 20
 
 
 class ProtectedDemoIocError(ValueError):
     """Raised when attempting to create a block rule against a protected SAFE demo IOC (HTTP 409)."""
+
+
+def _parse_optional_nonneg_int(val: object) -> int:
+    if val is None:
+        return 0
+    if isinstance(val, bool):
+        raise ValueError("Boolean is not a valid numeric score")
+    if isinstance(val, int):
+        return val
+    if isinstance(val, str):
+        return int(val.strip())
+    raise ValueError(f"Unsupported score type: {type(val).__name__}")
+
+
+def _parse_and_upgrade_stored_report(raw_json: str) -> AnalysisReport | None:
+    """Upgrade recognized legacy merchant fields before strict schema validation, or return None."""
+    try:
+        data = json.loads(raw_json)
+        if not isinstance(data, dict):
+            return None
+
+        mode = data.get("mode")
+        img = data.get("image_forensics")
+        rl = data.get("receipt_logic")
+        vqr = data.get("vietqr_findings")
+        is_merchant_receipt = mode == "merchant" and (
+            img is not None or (isinstance(rl, dict) and bool(rl.get("is_receipt_candidate")))
+        )
+        if is_merchant_receipt:
+            risk_val = data.get("risk_score")
+            verdict = data.get("verdict")
+            if (
+                isinstance(risk_val, int)
+                and not isinstance(risk_val, bool)
+                and 0 <= risk_val <= 100
+                and verdict is None
+            ):
+                verdict = score_to_verdict(risk_val)
+                data["verdict"] = verdict
+            cur_status = data.get("receipt_verification_status")
+            if verdict == "SAFE":
+                data["receipt_verification_status"] = "UNVERIFIED_SCREENSHOT"
+            elif cur_status in (None, "", "NOT_APPLICABLE"):
+                rl_status = rl.get("verification_status") if isinstance(rl, dict) else None
+                has_qr_mismatch = isinstance(vqr, list) and any(
+                    isinstance(v, dict) and bool(v.get("beneficiary_mismatch")) for v in vqr
+                )
+                has_tamper = isinstance(img, dict) and (
+                    _parse_optional_nonneg_int(img.get("tamper_score")) >= 35
+                    or bool(img.get("editing_software_detected"))
+                )
+                has_logic_anomaly = isinstance(rl, dict) and (
+                    rl_status == "TAMPER_OR_LOGIC_ANOMALY"
+                    or _parse_optional_nonneg_int(rl.get("logic_risk_points")) > 0
+                )
+                if isinstance(rl, dict) and (
+                    bool(rl.get("is_replayed")) or rl_status == "REPLAYED_RECEIPT"
+                ):
+                    data["receipt_verification_status"] = "REPLAYED_RECEIPT"
+                elif has_qr_mismatch or (
+                    isinstance(rl, dict)
+                    and (
+                        bool(rl.get("beneficiary_mismatch"))
+                        or rl_status == "BENEFICIARY_MISMATCH"
+                    )
+                ):
+                    data["receipt_verification_status"] = "BENEFICIARY_MISMATCH"
+                elif has_logic_anomaly or has_tamper:
+                    data["receipt_verification_status"] = "TAMPER_OR_LOGIC_ANOMALY"
+                else:
+                    data["receipt_verification_status"] = "UNVERIFIED_SCREENSHOT"
+            actions = data.get("actions")
+            if isinstance(actions, dict):
+                actions["merchant_balance_warning"] = MERCHANT_HONESTY_BANNER
+
+        return AnalysisReport.model_validate(data)
+    except Exception:
+        return None
 
 
 def _normalize_public_account_mask(acct: str) -> str:
@@ -46,11 +134,22 @@ def redact_report_pii(report: AnalysisReport, strip_visual_blobs: bool = False) 
     raw_phones = list(report.iocs.phones)
     raw_accounts = list(report.iocs.bank_accounts)
     for v in report.vietqr_findings:
-        if v.account_number and "****" not in v.account_number:
+        if v.account_number and "****" not in v.account_number and v.account_number not in raw_accounts:
             raw_accounts.append(v.account_number)
+    if (
+        report.receipt_logic is not None
+        and report.receipt_logic.extracted_recipient_account
+        and "****" not in report.receipt_logic.extracted_recipient_account
+        and report.receipt_logic.extracted_recipient_account not in raw_accounts
+    ):
+        raw_accounts.append(report.receipt_logic.extracted_recipient_account)
 
     masked_phones = [ph if "****" in ph else mask_ioc("phone", ph) for ph in report.iocs.phones]
-    masked_accounts = [_normalize_public_account_mask(acct) for acct in report.iocs.bank_accounts]
+    masked_accounts: list[str] = []
+    for acct in raw_accounts:
+        m_val = _normalize_public_account_mask(acct)
+        if m_val not in masked_accounts:
+            masked_accounts.append(m_val)
 
     def _scrub(val: str | None) -> str | None:
         if val is None:
@@ -63,19 +162,40 @@ def redact_report_pii(report: AnalysisReport, strip_visual_blobs: bool = False) 
         for d in report.iocs.domains
     ]
 
+    known_numeric_iocs = {
+        re.sub(r"\D", "", raw_val)
+        for raw_val in (*raw_accounts, *raw_phones)
+        if raw_val and "****" not in raw_val
+    }
     masked_vqr = []
     for v in report.vietqr_findings:
         m_acct = _normalize_public_account_mask(v.account_number) if v.account_number else None
+        raw_trimmed = v.raw.strip()
+        is_payment_frame = (
+            v.kind in ("VALID_VIETQR", "INVALID_CRC_VIETQR") or raw_trimmed.startswith("000201")
+        )
         redacted_raw = (
             f"[VIETQR_REDACTED:{v.bank_bin or 'NAPAS'}:{m_acct or 'N/A'}]"
-            if v.kind in ("VALID_VIETQR", "INVALID_CRC_VIETQR")
+            if is_payment_frame
             else (_scrub(v.raw) or v.raw)
         )
+        if v.amount is None:
+            safe_amount: str | None = None
+        else:
+            amt_trimmed = v.amount.strip()
+            if (
+                VALID_VIETQR_AMOUNT_RE.fullmatch(amt_trimmed)
+                and amt_trimmed not in known_numeric_iocs
+            ):
+                safe_amount = amt_trimmed
+            else:
+                safe_amount = _scrub(v.amount)
         masked_vqr.append(
             v.model_copy(
                 update={
                     "raw": redacted_raw,
                     "account_number": m_acct,
+                    "amount": safe_amount,
                     "note": _scrub(v.note),
                 }
             )
@@ -134,6 +254,11 @@ def redact_report_pii(report: AnalysisReport, strip_visual_blobs: bool = False) 
     scrubbed_receipt = (
         report.receipt_logic.model_copy(
             update={
+                "extracted_recipient_account": (
+                    _normalize_public_account_mask(report.receipt_logic.extracted_recipient_account)
+                    if report.receipt_logic.extracted_recipient_account
+                    else None
+                ),
                 "reference_code": _scrub(report.receipt_logic.reference_code),
                 "reasons": [_scrub(r) or r for r in report.receipt_logic.reasons],
             }
@@ -153,11 +278,18 @@ def redact_report_pii(report: AnalysisReport, strip_visual_blobs: bool = False) 
         for ev in report.evidence
     ]
 
+    raw_warn = report.actions.merchant_balance_warning
+    if report.mode == "merchant" or report.receipt_verification_status != "NOT_APPLICABLE":
+        scrubbed_warn: str | None = MERCHANT_HONESTY_BANNER
+    else:
+        scrubbed_warn = _scrub(raw_warn) if raw_warn is not None else None
+
     scrubbed_actions = report.actions.model_copy(
         update={
             "counter_replies": [_scrub(r) or r for r in report.actions.counter_replies],
             "family_shield_message": _scrub(report.actions.family_shield_message) or "",
             "urgent_steps": [_scrub(s) or s for s in report.actions.urgent_steps],
+            "merchant_balance_warning": scrubbed_warn,
             "pre_transfer": report.actions.pre_transfer.model_copy(
                 update={
                     "warning_headline": _scrub(report.actions.pre_transfer.warning_headline) or "",
@@ -173,9 +305,19 @@ def redact_report_pii(report: AnalysisReport, strip_visual_blobs: bool = False) 
         st.model_copy(update={"detail": _scrub(st.detail) or st.detail}) for st in report.trace
     ]
 
+    trusted_summary = build_trusted_merchant_summary(
+        _scrub(report.summary_vi) or report.summary_vi,
+        mode=report.mode,
+        receipt_status=report.receipt_verification_status,
+        has_qr_beneficiary_mismatch=any(v.beneficiary_mismatch for v in report.vietqr_findings),
+        has_ocr_beneficiary_mismatch=bool(
+            report.receipt_logic and report.receipt_logic.beneficiary_mismatch
+        ),
+    )
+
     return report.model_copy(
         update={
-            "summary_vi": _scrub(report.summary_vi) or report.summary_vi,
+            "summary_vi": trusted_summary,
             "transcript": _scrub(report.transcript),
             "matched_playbooks": [_scrub(p) or p for p in report.matched_playbooks],
             "manipulation_tactics": [_scrub(t) or t for t in report.manipulation_tactics],
@@ -200,10 +342,17 @@ def redact_report_pii(report: AnalysisReport, strip_visual_blobs: bool = False) 
     )
 
 
+_STRICT_ACCOUNT_MASK_RE = re.compile(r"^(?:\d{2}\*{4}\d{2}|stk_[0-9a-f]{6}\*{4})$")
+_STRICT_PHONE_MASK_RE = re.compile(r"^(?:\d{3}\*{4}\d{3}|\d{2}\*{4}\d|tel_[0-9a-f]{6}\*{4})$")
+_STRICT_DOMAIN_LABEL_RE = re.compile(r"^[a-z0-9]{1,2}\*{4}$", re.IGNORECASE)
+
+
 def _sanitize_legacy_radar_label(ioc_type: str, masked_value: str, ioc_hash: str) -> str:
-    """Rewrite legacy stored radar labels that could expose full 8-digit accounts or subdomains."""
+    """Rewrite legacy stored radar labels that could expose full accounts or subdomains."""
     raw = masked_value.strip()
     if ioc_type == "domain":
+        if re.match(r"^dom_[0-9a-f]{6}\*{4}$", raw):
+            return raw
         had_wildcard = raw.startswith("*.")
         labels = [p for p in raw.split(".") if p and p != "*"]
         if len(labels) >= 2:
@@ -225,27 +374,33 @@ def _sanitize_legacy_radar_label(ioc_type: str, masked_value: str, ioc_hash: str
                 core = labels[-3]
                 has_sub = had_wildcard or len(labels) > 3
             else:
-                suffix = labels[-1]
+                suffix = labels[-1].lower()
                 core = labels[-2]
                 has_sub = had_wildcard or len(labels) > 2
-            masked_core = core if "****" in core else f"{core[:2]}****"
+            if suffix not in RECOGNIZED_DISPLAY_PUBLIC_SUFFIXES:
+                return f"dom_{ioc_hash[:6]}****"
+            if _STRICT_DOMAIN_LABEL_RE.match(core) and not core[:2].isdigit():
+                masked_core = core
+            else:
+                alnum_head = re.sub(r"[^a-z0-9]", "", core.lower())[:2]
+                if not alnum_head or alnum_head.isdigit():
+                    return f"dom_{ioc_hash[:6]}****"
+                if re.search(r"\d{6,}", core) and any(ch.isdigit() for ch in alnum_head):
+                    return f"dom_{ioc_hash[:6]}****"
+                masked_core = f"{alnum_head}****"
             return f"*.{masked_core}.{suffix}" if has_sub else f"{masked_core}.{suffix}"
         return f"dom_{ioc_hash[:6]}****"
 
     if ioc_type == "bank_account":
-        is_old_8digit_leak = (
-            len(raw) == 12
-            and raw[4:8] == "****"
-            and raw[:4].isdigit()
-            and raw[8:].isdigit()
-        )
-        if "****" not in raw or is_old_8digit_leak:
-            return f"stk_{ioc_hash[:6]}****"
-        return raw
+        if _STRICT_ACCOUNT_MASK_RE.match(raw):
+            return raw
+        return f"stk_{ioc_hash[:6]}****"
 
-    if ioc_type == "phone" and "****" not in raw:
+    if ioc_type == "phone":
+        if _STRICT_PHONE_MASK_RE.match(raw):
+            return raw
         return f"tel_{ioc_hash[:6]}****"
-    return raw
+    return f"ioc_{ioc_hash[:6]}****"
 
 
 class CaseRepository:
@@ -348,18 +503,50 @@ class CaseRepository:
             if "lease_expires_at" not in cols:
                 conn.execute("ALTER TABLE telegram_updates ADD COLUMN lease_expires_at TEXT;")
 
-            # Migrate any pre-remediation stored rows in-place on DB open
-            for row in conn.execute("SELECT case_id, report_json FROM cases").fetchall():
-                try:
-                    parsed = AnalysisReport.model_validate_json(str(row["report_json"]))
-                    clean_json = redact_report_pii(parsed, strip_visual_blobs=True).model_dump_json()
+            # Migrate any pre-remediation stored rows & rotate legacy predictable vs_tg_* IDs
+            for row in conn.execute(
+                "SELECT case_id, created_at, verdict, risk_score, report_json FROM cases"
+            ).fetchall():
+                old_cid = str(row["case_id"])
+                parsed = _parse_and_upgrade_stored_report(str(row["report_json"]))
+                if parsed is None:
+                    conn.execute("DELETE FROM cases WHERE case_id = ?", (old_cid,))
+                    conn.execute(
+                        "UPDATE telegram_updates SET case_id = NULL WHERE case_id = ?",
+                        (old_cid,),
+                    )
+                    continue
+                if old_cid.startswith("vs_tg_"):
+                    rotated_cid = f"vs_{uuid.uuid4().hex[:12]}"
+                    redacted_rot = redact_report_pii(
+                        parsed.model_copy(update={"case_id": rotated_cid}),
+                        strip_visual_blobs=True,
+                    )
+                    conn.execute(
+                        "INSERT INTO cases (case_id, created_at, verdict, risk_score, report_json) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (
+                            rotated_cid,
+                            redacted_rot.created_at,
+                            redacted_rot.verdict,
+                            redacted_rot.risk_score,
+                            redacted_rot.model_dump_json(),
+                        ),
+                    )
+                    conn.execute("DELETE FROM cases WHERE case_id = ?", (old_cid,))
+                    conn.execute(
+                        "UPDATE telegram_updates SET case_id = ? WHERE case_id = ?",
+                        (rotated_cid, old_cid),
+                    )
+                else:
+                    clean_rep = redact_report_pii(parsed, strip_visual_blobs=True)
+                    clean_json = clean_rep.model_dump_json()
                     if clean_json != str(row["report_json"]):
                         conn.execute(
-                            "UPDATE cases SET report_json = ? WHERE case_id = ?",
-                            (clean_json, str(row["case_id"])),
+                            "UPDATE cases SET verdict = ?, risk_score = ?, report_json = ? "
+                            "WHERE case_id = ?",
+                            (clean_rep.verdict, clean_rep.risk_score, clean_json, old_cid),
                         )
-                except Exception:  # noqa: S110
-                    pass
 
             for s_row in conn.execute(
                 "SELECT ioc_hash, ioc_type, masked_value FROM ioc_sightings"
@@ -393,13 +580,24 @@ class CaseRepository:
             for b_row in conn.execute(
                 "SELECT rule_id, ioc_hash, ioc_type, masked_value, reason FROM block_rules"
             ).fetchall():
+                b_hash = str(b_row["ioc_hash"])
+                b_type = str(b_row["ioc_type"])
                 b_masked = str(b_row["masked_value"])
                 b_reason = str(b_row["reason"])
-                clean_bm = _sanitize_legacy_radar_label(
-                    str(b_row["ioc_type"]),
-                    b_masked,
-                    str(b_row["ioc_hash"]),
-                )
+                trusted_camp = conn.execute(
+                    "SELECT primary_ioc_masked FROM campaigns WHERE primary_ioc_hash = ? LIMIT 1",
+                    (b_hash,),
+                ).fetchone()
+                trusted_sight = conn.execute(
+                    "SELECT masked_value FROM ioc_sightings WHERE ioc_hash = ? LIMIT 1",
+                    (b_hash,),
+                ).fetchone()
+                if trusted_camp is not None:
+                    clean_bm = str(trusted_camp["primary_ioc_masked"])
+                elif trusted_sight is not None:
+                    clean_bm = str(trusted_sight["masked_value"])
+                else:
+                    clean_bm = _sanitize_legacy_radar_label(b_type, b_masked, b_hash)
                 clean_br = scrub_free_text_pii(b_reason)
                 if clean_bm != b_masked or clean_br != b_reason:
                     conn.execute(
@@ -616,7 +814,11 @@ class CaseRepository:
                         "INSERT OR IGNORE INTO receipt_hashes (fingerprint, created_at) VALUES (?, ?)",
                         (f"dhash:{receipt_dhash}", now_iso),
                     )
-                if report.receipt_logic and report.receipt_logic.reference_code:
+                if (
+                    report.receipt_logic
+                    and report.receipt_logic.reference_valid
+                    and report.receipt_logic.reference_code
+                ):
                     bank_lbl = report.receipt_logic.bank_detected or ""
                     ref_fp = f"ref:{bank_lbl}:{report.receipt_logic.reference_code}"
                     conn.execute(
@@ -647,7 +849,9 @@ class CaseRepository:
             ).fetchone()
         if not row:
             return None
-        parsed = AnalysisReport.model_validate_json(str(row["report_json"]))
+        parsed = _parse_and_upgrade_stored_report(str(row["report_json"]))
+        if parsed is None:
+            return None
         return redact_report_pii(parsed, strip_visual_blobs=True)
 
     def claim_telegram_update(
@@ -935,6 +1139,7 @@ class CaseRepository:
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(ioc_hash) DO UPDATE SET
                     rule_id = excluded.rule_id,
+                    masked_value = excluded.masked_value,
                     reason = excluded.reason,
                     created_at = excluded.created_at,
                     expires_at = excluded.expires_at

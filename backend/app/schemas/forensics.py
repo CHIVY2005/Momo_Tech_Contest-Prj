@@ -11,6 +11,7 @@ class VietQRInfo(BaseModel):
     raw: str
     kind: QrKind
     crc_valid: bool
+    tlv_valid: bool = True
     bank_bin: str | None = None
     bank_name: str | None = None
     account_number: str | None = None
@@ -89,6 +90,7 @@ class ReceiptLogicResult(BaseModel):
     geometry_anomaly: bool = False
     beneficiary_checked: bool = False
     beneficiary_mismatch: bool = False
+    extracted_recipient_account: str | None = None
     replay_checked: bool = False
     is_replayed: bool = False
     verification_status: ReceiptVerificationStatus = "NOT_APPLICABLE"

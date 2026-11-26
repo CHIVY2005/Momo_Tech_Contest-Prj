@@ -8,11 +8,81 @@ from typing import Final
 
 import numpy as np
 
-from app.schemas import ReceiptLogicResult, ReceiptVerificationStatus
-from app.services.ioc_extractor import mask_ioc
+from app.schemas import AnalyzeMode, ReceiptLogicResult, ReceiptVerificationStatus
+from app.services.ioc_extractor import (
+    EXPLICIT_RECIPIENT_SPAN_RE,
+    LABELED_ACCOUNT_SPAN_RE,
+    is_labeled_account_match,
+    mask_ioc,
+)
 from app.services.local_ocr import OcrBox
 
 VN_TZ: Final[timezone] = timezone(timedelta(hours=7))
+
+_FALSE_SETTLEMENT_RE: Final[re.Pattern[str]] = re.compile(
+    r"(?<!không\s)(?<!chưa\s)(?:"
+    r"tiền\s+đã\s+(?:vào|về|chuyển\s+vào)|"
+    r"đã\s+(?:nhận\s+(?:được\s+|đủ\s+)?tiền|ghi\s+có|thanh\s+toán\s+xong|hoàn\s+tất\s+thanh\s+toán)|"
+    r"số\s+dư\s+đã\s+(?:được\s+)?(?:ghi\s+có|cập\s+nhật|tăng)|"
+    r"có\s+thể\s+giao\s+hàng|"
+    r"giao\s+hàng\s+ngay|"
+    r"giao\s+dịch\s+đã\s+hoàn\s+tất\s+an\s+toàn"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def build_trusted_merchant_summary(
+    raw_summary: str,
+    mode: AnalyzeMode,
+    receipt_status: ReceiptVerificationStatus,
+    has_qr_beneficiary_mismatch: bool = False,
+    has_ocr_beneficiary_mismatch: bool = False,
+) -> str:
+    """Generate merchant receipt settlement conclusions strictly from trusted forensic status."""
+    cleaned = raw_summary.strip()
+    if receipt_status == "UNVERIFIED_SCREENSHOT":
+        return (
+            "Ảnh chụp biên lai không ghi nhận dấu hiệu cắt ghép kỹ thuật, nhưng trạng thái thanh toán "
+            "CHƯA ĐƯỢC XÁC MINH từ ngân hàng (UNVERIFIED_SCREENSHOT). Chỉ giao hàng sau khi trực tiếp "
+            "kiểm tra biến động số dư thực tế trên ứng dụng ngân hàng hoặc Loa thông báo."
+        )
+    if receipt_status == "REPLAYED_RECEIPT":
+        return (
+            "CẢNH BÁO ĐỎ: Ảnh biên lai hoặc mã tham chiếu trùng khớp với giao dịch cũ đã gửi trước đó "
+            "(REPLAYED_RECEIPT — chưa xác minh thanh toán mới). Tuyệt đối chưa giao hàng và kiểm tra "
+            "trực tiếp biến động số dư ngân hàng."
+        )
+    if receipt_status == "BENEFICIARY_MISMATCH":
+        if has_qr_beneficiary_mismatch and not has_ocr_beneficiary_mismatch:
+            return (
+                "CẢNH BÁO ĐỎ: Mã thanh toán VietQR trỏ sang tài khoản thụ hưởng KHÁC với tài khoản "
+                "của cửa hàng (BENEFICIARY_MISMATCH — chưa xác minh tiền vào tài khoản chủ shop). "
+                "Tuyệt đối dừng giao hàng và kiểm tra số dư thực tế."
+            )
+        if has_qr_beneficiary_mismatch and has_ocr_beneficiary_mismatch:
+            return (
+                "CẢNH BÁO ĐỎ: Cả mã thanh toán VietQR và chữ in trên biên lai đều trỏ sang tài khoản "
+                "thụ hưởng KHÁC với tài khoản của cửa hàng (BENEFICIARY_MISMATCH). Tuyệt đối dừng "
+                "giao hàng và đối chiếu số dư thực tế."
+            )
+        return (
+            "CẢNH BÁO ĐỎ: Số tài khoản thụ hưởng in trên biên lai KHÔNG KHỚP với tài khoản của cửa hàng "
+            "(BENEFICIARY_MISMATCH — tiền chưa được xác minh vào tài khoản chủ shop). Tuyệt đối dừng "
+            "giao hàng và đối chiếu số dư thực tế."
+        )
+    if receipt_status == "TAMPER_OR_LOGIC_ANOMALY":
+        return (
+            "CẢNH BÁO: Phát hiện dấu hiệu chỉnh sửa ảnh hoặc bất thường logic nghiệp vụ trên biên lai "
+            "(TAMPER_OR_LOGIC_ANOMALY — chưa xác minh thanh toán). Tuyệt đối chưa giao hàng trước khi "
+            "kiểm tra biến động số dư thực tế hoặc Loa thông báo."
+        )
+    if mode == "merchant" and _FALSE_SETTLEMENT_RE.search(cleaned):
+        return (
+            "Chưa xác minh tiền đã vào tài khoản — vui lòng kiểm tra trực tiếp biến động số dư "
+            "ngân hàng hoặc Loa thông báo trước khi giao hàng."
+        )
+    return cleaned
 
 _RECEIPT_KEYWORD_RE: Final[re.Pattern[str]] = re.compile(
     r"(?:chuyển\s+(?:tiền|khoản)\s+thành\s+công|giao\s+dịch\s+thành\s+công|"
@@ -23,18 +93,27 @@ _RECEIPT_KEYWORD_RE: Final[re.Pattern[str]] = re.compile(
 _MIXED_AMOUNT_SEPARATOR_RE: Final[re.Pattern[str]] = re.compile(
     r"\b\d{1,3}(?:,\d{3}\.\d{3}|\.\d{3},\d{3})\b"
 )
-_ANY_AMOUNT_TOKEN_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?:\b\d{1,3}(?:[.,]\d{3})+(?:\s*(?:đ|vnđ|vnd|đồng))?\b|"
-    r"(?:số\s*tiền|thành\s*tiền|amount)[\s:.\-]{1,10}\d{4,15})",
+_AMOUNT_CANDIDATE_RE: Final[re.Pattern[str]] = re.compile(
+    r"(?:"
+    r"(?:số\s*tiền|thành\s*tiền|tổng\s*tiền|tiền\s*chuyển|amount|total)"
+    r"[\s:.\-\u2013\u2014]{1,12}(?P<labeled_amt>\d[\d.,]{2,18})"
+    r"|(?P<suffixed_amt>\b\d{1,3}(?:[.,]\d{3})+|\b\d{4,15})\s*(?:vnđ|vnd|đồng|đ)(?!\w)"
+    r"|(?:vnđ|vnd)\s*(?P<prefixed_amt>\d[\d.,]{2,18})"
+    r")",
     re.IGNORECASE,
 )
+
+MAX_REF_CODE_LEN: Final[int] = 24
 
 _REF_CODE_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?:mã\s*(?:gd|giao\s*dịch)|số\s*tham\s*chiếu|ref(?:\s*no)?)[\s:.\-]{1,6}([A-Z0-9#]{4,24})",
+    r"(?:mã\s*(?:gd|giao\s*dịch)|số\s*tham\s*chiếu|ref(?:\s*no)?)"
+    r"[\s:.\-]{1,6}([A-Z0-9#]{4,}(?:[-/_][A-Z0-9#]+)*)(?![A-Z0-9#]|[-/_][A-Z0-9#])",
     re.IGNORECASE,
 )
 
-_STANDALONE_FT_RE: Final[re.Pattern[str]] = re.compile(r"\b(FT\d{8,18}[A-Z0-9]*)\b")
+_STANDALONE_FT_RE: Final[re.Pattern[str]] = re.compile(
+    r"(?<![A-Z0-9#])(FT\d{8,18}[A-Z0-9]*(?:[-/_][A-Z0-9#]+)*)(?![A-Z0-9#]|[-/_][A-Z0-9#])"
+)
 
 _DATE_TIME_PATTERNS: Final[tuple[tuple[re.Pattern[str], str], ...]] = (
     (
@@ -45,19 +124,6 @@ _DATE_TIME_PATTERNS: Final[tuple[tuple[re.Pattern[str], str], ...]] = (
         re.compile(r"\b(\d{2}:\d{2}(?::\d{2})?\s+\d{2}/\d{2}/\d{4})\b"),
         "%H:%M %d/%m/%Y",
     ),
-)
-
-_EXPLICIT_RECIPIENT_ACCT_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?:"
-    r"(?:số\s*)?(?:stk|tài\s*khoản)\s*(?:nhận|thụ\s*hưởng|đến|người\s*nhận)|"
-    r"tới\s+(?:stk|tài\s*khoản)|đến\s+(?:stk|số\s*tài\s*khoản)"
-    r")[\s:.\-]{1,12}(\d+)(?!\d)",
-    re.IGNORECASE,
-)
-
-_GENERIC_NON_SENDER_STK_RE: Final[re.Pattern[str]] = re.compile(
-    r"\bstk(?!\s*(?:nguồn|chuyển|trích\s*nợ|gửi))\b[\s:.\-]{1,12}(\d{8,16})",
-    re.IGNORECASE,
 )
 
 _KNOWN_BANKS: Final[tuple[str, ...]] = (
@@ -139,8 +205,40 @@ def validate_receipt_logic(
             "Ảnh biên lai hoặc mã tham chiếu trùng với giao dịch cũ đã gửi trước đó (Bill Replay)."
         )
 
-    amount_anomaly = bool(_MIXED_AMOUNT_SEPARATOR_RE.search(cleaned))
-    amount_checked = amount_anomaly or bool(_ANY_AMOUNT_TOKEN_RE.search(cleaned))
+    amount_chars = list(cleaned)
+    for span_m in LABELED_ACCOUNT_SPAN_RE.finditer(cleaned):
+        s_idx, e_idx = span_m.span("acct")
+        digits = re.sub(r"\D", "", span_m.group("acct"))
+        if (
+            len(digits) >= 6
+            and not re.match(r"^,\d", cleaned[e_idx:])
+            and is_labeled_account_match(cleaned, span_m)
+        ):
+            for idx in range(s_idx, e_idx):
+                amount_chars[idx] = " "
+    for span_m in EXPLICIT_RECIPIENT_SPAN_RE.finditer(cleaned):
+        s_idx, e_idx = span_m.span("acct")
+        digits = re.sub(r"\D", "", span_m.group("acct"))
+        if (
+            len(digits) >= 6
+            and not re.match(r"^,\d", cleaned[e_idx:])
+            and not re.match(r"^[ \t]*(?:vnđ|vnd|đ)(?!\w)", cleaned[e_idx:], re.IGNORECASE)
+        ):
+            for idx in range(s_idx, e_idx):
+                amount_chars[idx] = " "
+    for pat in (_REF_CODE_RE, _STANDALONE_FT_RE):
+        for span_m in pat.finditer(cleaned):
+            s_idx, e_idx = span_m.span(1)
+            for idx in range(s_idx, e_idx):
+                amount_chars[idx] = " "
+    amount_scan_text = "".join(amount_chars)
+
+    amount_tokens = [
+        m.group("labeled_amt") or m.group("suffixed_amt") or m.group("prefixed_amt") or ""
+        for m in _AMOUNT_CANDIDATE_RE.finditer(amount_scan_text)
+    ]
+    amount_checked = bool(amount_tokens)
+    amount_anomaly = any(bool(_MIXED_AMOUNT_SEPARATOR_RE.search(tok)) for tok in amount_tokens)
     if amount_anomaly:
         risk += 30
         reasons.append(
@@ -151,19 +249,33 @@ def validate_receipt_logic(
     ref_valid = True
     ft_match = _STANDALONE_FT_RE.search(cleaned)
     ref_match = _REF_CODE_RE.search(cleaned)
+    raw_ref: str | None = None
     if ft_match:
-        ref_code = ft_match.group(1).upper()
+        raw_ref = ft_match.group(1).upper()
     elif ref_match:
-        ref_code = ref_match.group(1).upper()
+        raw_ref = ref_match.group(1).upper()
 
-    if ref_code is not None and (
-        len(ref_code) < 8 or "FAKE" in ref_code or "#" in ref_code or ref_code.isalpha()
-    ):
-        ref_valid = False
-        risk += 25
-        reasons.append(
-            f"Mã tham chiếu giao dịch '{ref_code}' không đúng chuẩn độ dài/cấu trúc ngân hàng VN."
-        )
+    if raw_ref is not None:
+        if len(raw_ref) > MAX_REF_CODE_LEN:
+            ref_valid = False
+            risk += 25
+            reasons.append(
+                f"Mã tham chiếu giao dịch vượt quá độ dài hỗ trợ (>{MAX_REF_CODE_LEN} ký tự) "
+                "nên không hợp lệ để đối soát."
+            )
+        else:
+            ref_code = raw_ref
+            if (
+                len(ref_code) < 8
+                or "FAKE" in ref_code
+                or "#" in ref_code
+                or not any(ch.isdigit() for ch in ref_code)
+            ):
+                ref_valid = False
+                risk += 25
+                reasons.append(
+                    f"Mã tham chiếu giao dịch '{ref_code}' không đúng chuẩn độ dài/cấu trúc ngân hàng VN."
+                )
 
     now_vn = (reference_now or datetime.now(UTC)).astimezone(VN_TZ)
     parsed_ts, malformed_ts = _parse_vn_timestamp(cleaned)
@@ -192,20 +304,25 @@ def validate_receipt_logic(
 
     beneficiary_checked = False
     beneficiary_mismatch = False
-    if expected_merchant_account:
-        exp_digits = re.sub(r"\D", "", expected_merchant_account)
-        acct_match = _EXPLICIT_RECIPIENT_ACCT_RE.search(cleaned)
-        if exp_digits and acct_match:
-            found_digits = re.sub(r"\D", "", acct_match.group(1))
-            if 6 <= len(found_digits) <= 19:
-                beneficiary_checked = True
-                if found_digits != exp_digits:
-                    beneficiary_mismatch = True
-                    risk += 75
-                    reasons.append(
-                        f"Số tài khoản nhận trên biên lai ({mask_ioc('bank_account', found_digits)}) "
-                        "không khớp với tài khoản của cửa hàng."
-                    )
+    extracted_recipient_account: str | None = None
+    acct_match = EXPLICIT_RECIPIENT_SPAN_RE.search(cleaned)
+    if acct_match:
+        candidate_digits = re.sub(r"\D", "", acct_match.group("acct"))
+        if len(candidate_digits) >= 6:
+            if len(candidate_digits) <= 19:
+                extracted_recipient_account = candidate_digits
+            if expected_merchant_account:
+                exp_digits = re.sub(r"\D", "", expected_merchant_account)
+                if exp_digits:
+                    beneficiary_checked = True
+                    if candidate_digits != exp_digits:
+                        beneficiary_mismatch = True
+                        risk += 75
+                        reasons.append(
+                            f"Số tài khoản nhận trên biên lai "
+                            f"({mask_ioc('bank_account', candidate_digits)}) "
+                            "không khớp với tài khoản của cửa hàng."
+                        )
 
     geometry_checked = bool(ocr_boxes and sum(1 for b in ocr_boxes if b.height > 2.0) >= 4)
     geometry_anomaly = _check_box_geometry_anomaly(ocr_boxes)
@@ -238,6 +355,7 @@ def validate_receipt_logic(
         geometry_anomaly=geometry_anomaly,
         beneficiary_checked=beneficiary_checked,
         beneficiary_mismatch=beneficiary_mismatch,
+        extracted_recipient_account=extracted_recipient_account,
         replay_checked=replay_checked or is_replayed_hash,
         is_replayed=is_replayed_hash,
         verification_status=status,

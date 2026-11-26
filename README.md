@@ -36,10 +36,10 @@ Phần lớn các vụ lừa đảo tài chính tại Việt Nam diễn ra ở *
                  │
                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ TẦNG 1: DETERMINISTIC CYBERSECURITY & CUSTOM ONNX (< 50ms nội bộ)      │
+│ TẦNG 1: DETERMINISTIC CYBERSECURITY & CUSTOM ONNX (ONNX P50 10ms / 14ms)│
 │ • Chống SSRF gắn chặt IP công cộng đến tầng socket (httpx + Playwright) │
 │ • Giải mã EMVCo VietQR CRC-16 · Pháp y ảnh ELA + EXIF + dHash + OCR     │
-│ • Mô hình riêng: pruned multilingual-e5-small INT8 ONNX (34.25 MB, 11ms)│
+│ • Mô hình riêng: pruned multilingual-e5-small INT8 ONNX (34.25 MB, 10ms)│
 │ • Guardrails nhận diện khuyến cáo chính thống & bẫy Prompt Injection     │
 └────────────────────────────────┬────────────────────────────────────────┘
                                  │ Dữ liệu bọc trong <UNTRUSTED_USER_CONTENT>

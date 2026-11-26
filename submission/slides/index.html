@@ -371,12 +371,12 @@
     </div>
     <div>
       <h2>Kiến Trúc Kết Hợp Luật Xác Định, Mô Hình ONNX Riêng &amp; LLM Cô Lập</h2>
-      <p class="subtitle">Đảm bảo tốc độ phản hồi nội bộ <strong>&lt;50ms</strong>, hạ cấp an toàn khi đứt kết nối Cloud AI và chặn thao túng phán quyết từ <span class="mono">Prompt Injection</span>.</p>
+      <p class="subtitle">Mô hình ONNX chạy CPU nội bộ đạt <strong>P50 {{ONNX_P50_MS}}ms / P95 {{ONNX_P95_MS}}ms</strong> trên bộ kiểm thử tổng hợp {{TOTAL_CASES}} ca, hạ cấp an toàn khi mất Cloud AI và chặn <span class="mono">Prompt Injection</span>.</p>
     </div>
     <div class="grid-3">
       <div class="card card-sky">
         <h3>Tầng 1: Deterministic &amp; ONNX</h3>
-        <p style="margin-bottom:8px; color:#7dd3fc;" class="mono">Chạy 100% nội bộ · CPU &lt; 50ms</p>
+        <p style="margin-bottom:8px; color:#7dd3fc;" class="mono">ONNX CPU: P50 {{ONNX_P50_MS}}ms · P95 {{ONNX_P95_MS}}ms ({{TOTAL_CASES}} ca)</p>
         <ul>
           <li>Chống SSRF gắn chặt IP công cộng đến tầng socket (<span class="mono">httpx</span> + <span class="mono">Playwright</span>).</li>
           <li>Giải mã EMVCo VietQR <span class="mono">CRC-16</span>, <span class="mono">ELA</span>, <span class="mono">dHash</span>, <span class="mono">RapidOCR</span>, <span class="mono">faster-whisper</span>.</li>
@@ -498,7 +498,7 @@
       <div class="card card-sky">
         <h3>Đồ Thị Chiến Dịch Ẩn Danh (`Zero Raw PII`)</h3>
         <ul>
-          <li>Mọi Số điện thoại và Số tài khoản trích xuất từ các ca rủi ro cao đều được băm <span class="mono">HMAC/SHA-256</span> chuẩn hóa và che dấu (<span class="mono">9998****7666</span>) trước khi ghi vào bảng đồ thị.</li>
+          <li>Mọi Số điện thoại và Số tài khoản trích xuất từ các ca rủi ro cao đều được băm <span class="mono">SHA-256</span> chuẩn hóa và che dấu (<span class="mono">9998****7666</span>) trước khi ghi vào bảng đồ thị.</li>
           <li>Tự động liên kết các thực thể đồng xuất hiện (<span class="mono">co_occurs</span>) để phát hiện sớm cụm tài khoản trung gian (Mule Ring) và tên miền chiến dịch.</li>
           <li>Khóa khẩn cấp 1-Click gửi trực tiếp mã băm <span class="mono">primary_ioc_hash</span> — trình duyệt không bao giờ nhìn thấy PII thô.</li>
         </ul>
@@ -621,7 +621,7 @@
       <div class="card card-amber" style="justify-content:space-between;">
         <div>
           <h3>Cổng Trải Nghiệm Dành Cho Ban Giám Khảo</h3>
-          <p style="margin-top:6px;">1. Mở <strong>Workbench Điều tra &amp; Ví 30s</strong> để thử 5 ca mẫu (SMS NAPAS Punycode, Fake Bill Zalo, VietQR Hoàn tiền, Giả danh Công an đang gọi, Tin khuyến cáo chính thống).</p>
+          <p style="margin-top:6px;">1. Mở <strong>Workbench Điều tra &amp; Ví 30s</strong> để thử 5 ca mẫu (SMS NAPAS tên miền .top giả mạo, Fake Bill Zalo, VietQR Hoàn tiền, Giả danh Công an đang gọi, Tin khuyến cáo chính thống).</p>
           <p style="margin-top:6px;">2. Mở <strong>Fraud Ops `/radar`</strong> (PIN điền sẵn: <span class="mono" style="color:#fbbf24;">2026</span>) để bấm Khóa 1-Click và kiểm chứng chặn tức thì trên API Playground.</p>
         </div>
         <div style="display:flex; align-items:center; gap:20px; margin-top:14px; padding-top:14px; border-top:1px solid #263349;">

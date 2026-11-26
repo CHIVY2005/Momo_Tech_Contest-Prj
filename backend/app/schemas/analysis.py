@@ -1,5 +1,7 @@
 """Analysis report, classifier output, action copilot, and demo scenario contracts."""
 
+import re
+
 from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.common import (
@@ -138,13 +140,17 @@ class AnalysisReport(BaseModel):
                 )
             w_low = warning.lower()
             negated_phrases = (
-                "không cần kiểm tra",
-                "khỏi kiểm tra",
-                "không phải kiểm tra",
                 "có thể giao hàng ngay",
                 "đã nhận đủ tiền",
+                "no need to check",
+                "no need to verify",
+                "do not check",
             )
-            if any(neg in w_low for neg in negated_phrases):
+            negated_check_re = (
+                r"(?:không|khỏi|miễn|chưa|đừng)\s+(?:cần\s+|phải\s+|nên\s+)?"
+                r"(?:kiểm\s*tra|đối\s*chiếu|xác\s*nhận|xem\s*lại|chờ)"
+            )
+            if re.search(negated_check_re, w_low) or any(neg in w_low for neg in negated_phrases):
                 raise ValueError(
                     "Merchant receipt warning must never negate balance verification"
                 )

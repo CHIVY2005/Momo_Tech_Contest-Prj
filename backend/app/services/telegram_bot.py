@@ -85,9 +85,12 @@ async def handle_telegram_update(
 
     raw_update_id = update.get("update_id")
     if raw_update_id is not None and (
-        isinstance(raw_update_id, bool) or not isinstance(raw_update_id, int)
+        isinstance(raw_update_id, bool)
+        or not isinstance(raw_update_id, int)
+        or raw_update_id < 0
+        or raw_update_id > 9_223_372_036_854_775_807
     ):
-        raise InvalidTelegramPayloadError("Telegram update_id must be an integer.")
+        raise InvalidTelegramPayloadError("Telegram update_id must be a valid 64-bit non-negative integer.")
     update_id: int | None = raw_update_id
 
     for field_name in ("message", "edited_message"):

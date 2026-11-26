@@ -51,17 +51,23 @@ export function VietQrCard({ items }: VietQrCardProps) {
               {isVietQrFrame ? (
                 <span
                   className={`inline-flex items-center gap-1 rounded px-2 py-0.5 font-[family-name:var(--font-mono)] text-[11px] font-semibold ${
-                    qr.crc_valid
+                    qr.crc_valid && qr.tlv_valid !== false && qr.kind === "VALID_VIETQR"
                       ? "bg-emerald-500/15 text-emerald-300"
                       : "bg-rose-500/20 text-rose-200"
                   }`}
                 >
-                  {qr.crc_valid ? (
+                  {qr.crc_valid && qr.tlv_valid !== false && qr.kind === "VALID_VIETQR" ? (
                     <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
                   ) : (
                     <AlertOctagon className="h-3.5 w-3.5" aria-hidden="true" />
                   )}
-                  <span>CRC-16/CCITT-FALSE: {qr.crc_valid ? "VALID" : "INVALID"}</span>
+                  <span>
+                    {!qr.crc_valid
+                      ? "CRC-16/CCITT-FALSE: INVALID"
+                      : qr.tlv_valid === false || qr.kind === "INVALID_CRC_VIETQR"
+                        ? "CRC-16 VALID · LỖI CẤU TRÚC TLV"
+                        : "CRC-16/CCITT-FALSE: VALID"}
+                  </span>
                 </span>
               ) : (
                 <span className="rounded bg-slate-800 px-2 py-0.5 font-[family-name:var(--font-mono)] text-[11px] text-slate-300">
@@ -100,7 +106,10 @@ export function VietQrCard({ items }: VietQrCardProps) {
                 <div className="rounded-lg bg-slate-900/90 p-2.5">
                   <dt className="text-[11px] text-slate-400">Mã Dịch vụ NAPAS</dt>
                   <dd className="mt-0.5 font-[family-name:var(--font-mono)] text-slate-200">
-                    {qr.service_code ?? qr.kind}
+                    {qr.service_code ??
+                      (qr.kind === "INVALID_CRC_VIETQR" && qr.crc_valid && qr.tlv_valid === false
+                        ? "LỖI CẤU TRÚC TLV"
+                        : qr.kind)}
                   </dd>
                 </div>
               </dl>
