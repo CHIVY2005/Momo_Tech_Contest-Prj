@@ -1,0 +1,46 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - SQLITE_PATH=/data/verishield.db
+      - MODEL_DIR=/app/app/data/models
+      - LLM_PROVIDER=${LLM_PROVIDER:-auto}
+      - GEMINI_BASE_URL=${GEMINI_BASE_URL:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_BACKUP_API_KEY=${GEMINI_BACKUP_API_KEY:-}
+      - LLM_TIMEOUT_SEC=${LLM_TIMEOUT_SEC:-35}
+      - LLM_MAX_RETRIES=${LLM_MAX_RETRIES:-2}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
+      - ANALYST_PIN=${ANALYST_PIN:-2026}
+      - BLOCK_RULE_TTL_MINUTES=${BLOCK_RULE_TTL_MINUTES:-30}
+      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:3000","https://verishield.joiboi.app"]}
+    volumes:
+      - verishield_data:/data
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - BACKEND_INTERNAL_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+volumes:
+  verishield_data:

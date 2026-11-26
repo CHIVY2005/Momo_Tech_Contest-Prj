@@ -1,18 +1,16 @@
-# Changelog
+# Changelog — VeriShield AI
 
-Tất cả các thay đổi đáng chú ý của dự án **VeriShield AI** (MoMo Tech Contest 2026) được ghi lại tại tệp này.
+## [2.0.0] — 2026-11-26
 
-## [0.1.0] - 2026-11-25
-
-### Đã thêm
-- Lưu trữ tài liệu đề bài ([docs/Brief.md](docs/Brief.md)) và cấu hình ignore cho tệp thể lệ tham khảo cục bộ.
-- Hoàn thiện Bản Đề xuất & Đặc tả Kỹ thuật **VeriShield AI** ([docs/PROPOSAL.md](docs/PROPOSAL.md)) với các trụ cột cốt lõi:
-  - **Kiến trúc Two-Stage Cascade:** Kết hợp mô hình **`VisoBERT` 7 lớp tự fine-tune & lượng tử hóa ONNX INT8 (`< 35ms` CPU)** cùng **Tầng An ninh mạng/Pháp y ảnh** và **Gemini 2.5 Flash Multimodal**.
-  - **Phát hiện Fake Bill 3 tầng:** Kết hợp Pháp y vật lý (ELA Heatmap + EXIF), Kiểm tra hình học/typography (VLM), và Xác thực logic nghiệp vụ ngân hàng Việt Nam (chống ảnh bị nén qua Zalo/Messenger).
-  - **Phòng thủ An ninh mạng & Chống báo động giả:** Lọc khuyến cáo an toàn chính thống, chặn Adversarial Prompt Injection, giải mã QR OpenCV, kiểm tra URL chống SSRF/DNS Rebinding và bắt giả mạo IDN Punycode/Homoglyph.
-  - **Đa điểm chạm Không Ma sát:** Web Workbench, **Telegram Bot Chuyển tiếp 1 chạm**, và **Mô phỏng Ví Điện Tử** tự động bật **Khóa làm nguội 30 giây** với tín hiệu ngữ cảnh cuộc gọi (`in_active_call`).
-  - **Không gian làm việc Fintech Khép kín (`/radar`):** Đồ thị IOC ẩn danh hóa và luồng chuyên viên duyệt chặn 1 chạm (`POST /api/v1/radar/block-rules`) bảo vệ toàn hệ thống tức thì.
-- Thiết lập Kế hoạch Triển khai 8 ngày ([docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)) chia luồng song song cho đội 2 thành viên (**AI & Multimodal Forensics Lead** + **Security & Web Fullstack Lead**) gồm 13 Task TDD và bộ Benchmark 40 ca tiếng Việt.
-
-### Đã cập nhật
-- Cập nhật `.gitignore` bổ sung các quy tắc loại trừ tệp build, biến môi trường và thư viện cho dự án Fullstack Python + Next.js (`node_modules/`, `.next/`, `out/`, `.env*.local`, `*.onnx` nháp nếu cần).
+### Added
+- **3-Tier Defense-in-Depth Backend (`FastAPI` + `SQLite WAL`):**
+  - Tier 1 deterministic cybersecurity & 4-layer document forensics: socket-pinned SSRF protection (`_PinnedPublicNetworkBackend` across both `httpx` and `Playwright` routes), EMVCo TLV + `CRC-16/CCITT-FALSE` NAPAS VietQR parser, Error Level Analysis (`ELA`) + `EXIF` + `dHash` replay detection + `RapidOCR` bounding-box geometry check + `faster-whisper` local STT fallback.
+  - Fine-tuned dual-head `intfloat/multilingual-e5-small` (`MIT`) pruned to `36,000` Vietnamese+English tokens and dynamically quantized to `scam_e5_int8.onnx` (`34.25 MB`, `P50 = 11ms` CPU latency, zero PyTorch runtime dependency) paired with 20 Vietnamese scam playbooks.
+  - Dual-protocol Tier-2 multimodal orchestrator supporting both OpenAI-compatible gateways (`CLIProxyAPI`) and official Google GenAI SDK with strict `<UNTRUSTED_USER_CONTENT>` prompt isolation, `HTTP 429 Retry-After` backoff, backup-key failover, and graceful Tier-1 degradation.
+  - Tier 3 3-signal risk calibrator, Merchant Receipt Honesty Guardrail (`UNVERIFIED_SCREENSHOT`), 30-second Pre-Transfer Cooling-Off intervention (`in_active_call`), Vietnamese Unicode PDF report generator (`DejaVuSans.ttf`), and Telegram 1-Tap Forward Bot webhook.
+- **Next.js 15 Standalone Web Workspace (`/` & `/radar`):**
+  - Multimodal Investigation Workbench with 5 one-click Vietnamese demo scenarios, live UTF-8 chunk-safe SSE pipeline trace, 5 forensic evidence tabs, interactive 30-second Wallet Pre-Transfer Simulator, and Action Copilot.
+  - Closed-Loop Fintech Fraud Ops workspace (`/radar`) featuring an interactive SVG anonymized IOC campaign graph (`SHA-256` hashed, PII masked), 1-click ecosystem block rules (`TTL 30m`, `HTTP 409` safe-IOC protection, 1-click reset), and embedded REST API Playground.
+- **Empirical Evaluation & Submission Suite:**
+  - Verified 40-case synthetic Vietnamese & Red-Team benchmark (`evaluation/results.json`: `40/40` passed, `F1 = 1.0000`, `Advisory FPR = 0.0000`, `Prompt Injection Block = 1.0000`).
+  - Automated Playwright PDF generator producing exact 10-page Finals Slide Deck (`VeriShield_AI_Slides_10p.pdf`), exact 1-page A4 Judge Guide (`VeriShield_AI_UserGuide_1p.pdf`), 3-minute demo video script, Docker + Caddy SSE production stack, and clean `.zip` packager.
