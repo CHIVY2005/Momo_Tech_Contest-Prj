@@ -7,7 +7,11 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from app.core.security import verify_secret
-from app.services.telegram_bot import TelegramDeliveryError, handle_telegram_update
+from app.services.telegram_bot import (
+    InvalidTelegramPayloadError,
+    TelegramDeliveryError,
+    handle_telegram_update,
+)
 
 router = APIRouter(prefix="/bot", tags=["telegram"])
 
@@ -25,5 +29,7 @@ async def post_telegram_webhook(
     pipeline = request.app.state.pipeline
     try:
         return await handle_telegram_update(update=update, pipeline=pipeline, settings=settings)
+    except InvalidTelegramPayloadError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except TelegramDeliveryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

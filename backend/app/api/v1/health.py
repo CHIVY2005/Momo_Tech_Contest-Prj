@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 
+from app.db.repository import CaseRepository
 from app.schemas import DemoScenario
 
 router = APIRouter(tags=["system"])
@@ -15,11 +16,15 @@ router = APIRouter(tags=["system"])
 async def get_health(request: Request) -> dict[str, Any]:
     pipeline = request.app.state.pipeline
     settings = request.app.state.settings
+    repo: CaseRepository = request.app.state.repo
     return {
         "status": "ok",
         "service": settings.app_name,
         "version": settings.app_version,
+        "sqlite_wal_ready": repo.is_wal_ready(),
         "onnx_classifier_loaded": pipeline.classifier.is_available,
+        "local_ocr_enabled": settings.enable_local_ocr,
+        "local_stt_enabled": settings.enable_local_stt,
         "gemini_configured": bool(
             settings.gemini_api_key.strip() or settings.gemini_backup_api_key.strip()
         ),

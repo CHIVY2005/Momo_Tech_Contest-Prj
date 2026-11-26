@@ -25,7 +25,8 @@ def test_extracts_vn_entities_and_preserves_phone_shaped_bank_accounts() -> None
 def test_mask_and_hash_ioc_protect_pii() -> None:
     assert mask_ioc("phone", "0912345678") == "091****678"
     assert mask_ioc("bank_account", "190384756201") == "1903****6201"
-    assert mask_ioc("domain", "sub.napas-diemthuong.top") == "sub.na****.top"
+    assert mask_ioc("domain", "sub.napas-diemthuong.top") == "*.na****.top"
+    assert mask_ioc("domain", "0912345678.napas-diemthuong.top") == "*.na****.top"
     h1 = hash_ioc("bank_account", "190384756201")
     h2 = hash_ioc("bank_account", " 190384756201 ")
     assert len(h1) == 64

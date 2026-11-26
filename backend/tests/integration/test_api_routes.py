@@ -10,9 +10,13 @@ def _make_test_client(tmp_path: Path) -> TestClient:
     cfg = Settings(
         _env_file=None,
         sqlite_path=str(tmp_path / "api_test.db"),
+        gemini_api_key="",
+        gemini_backup_api_key="",
+        telegram_bot_token="",
         enable_live_network_checks=False,
         enable_playwright_sandbox=False,
         enable_local_stt=False,
+        app_env="demo",
         analyst_pin="2026",
         telegram_webhook_secret="tg_secret_2026",
         rate_limit_per_minute=200,

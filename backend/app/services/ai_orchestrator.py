@@ -49,6 +49,8 @@ class LLMReasoningResult(BaseModel):
     llm_provider: str = "none"
     llm_model: str | None = None
     llm_latency_ms: int | None = None
+    llm_attempts: int = 0
+    llm_failed_attempts: int = 0
     llm_error: str | None = None
 
 
@@ -87,7 +89,7 @@ def _collect_trusted_signals(
         signals.append("URL_BRAND_SPOOF_DETECTED")
     if any(v.receive_scam_detected for v in vietqr_findings):
         signals.append("VIETQR_RECEIVE_REFUND_TRAP")
-    if any(v.beneficiary_mismatch or not v.crc_valid for v in vietqr_findings):
+    if any(v.beneficiary_mismatch or v.kind == "INVALID_CRC_VIETQR" for v in vietqr_findings):
         signals.append("VIETQR_CRC_OR_BENEFICIARY_ANOMALY")
     if sandbox and (sandbox.blocked_ssrf or sandbox.has_apk_download or sandbox.risk_points >= 40):
         signals.append("SANDBOX_PHISHING_OR_APK_TRAP")
@@ -180,7 +182,7 @@ def _synthesize_fallback_result(
     for v in vietqr_findings:
         if v.receive_scam_detected:
             reasons.append("dụ quét mã chuyển tiền VietQR dưới vỏ bọc nhận tiền hoàn")
-        elif v.beneficiary_mismatch or not v.crc_valid:
+        elif v.beneficiary_mismatch or v.kind == "INVALID_CRC_VIETQR":
             reasons.append("mã VietQR bất thường hoặc sai tài khoản nhận")
     if sandbox and (sandbox.blocked_ssrf or sandbox.has_apk_download or sandbox.risk_points >= 40):
         reasons.append("buồng cô lập trình duyệt phát hiện trang thu thập thông tin / phát tán APK")
@@ -365,14 +367,33 @@ async def run_gemini_reasoning(
             llm_error="SAFETY_OR_OVERRIDE_NULL",
         )
 
-    outcome = await execute_llm_call(
-        settings=settings,
-        prompt=prompt,
-        image_bytes=image_bytes,
-        image_mime=image_mime,
-        audio_bytes=audio_bytes,
-        audio_mime=audio_mime,
-    )
+    has_non_audio = bool(text.strip() or image_bytes is not None or local_transcript)
+    try:
+        outcome = await execute_llm_call(
+            settings=settings,
+            prompt=prompt,
+            image_bytes=image_bytes,
+            image_mime=image_mime,
+            audio_bytes=audio_bytes,
+            audio_mime=audio_mime,
+            has_non_audio_evidence=has_non_audio,
+        )
+    except Exception as exc:
+        logger.warning("Unexpected LLM adapter error (%s) — degrading to Tier 1.", type(exc).__name__)
+        return _synthesize_fallback_result(
+            guardrails=guardrails,
+            classifier=classifier,
+            url_findings=url_findings,
+            vietqr_findings=vietqr_findings,
+            sandbox=sandbox,
+            image_forensics=image_forensics,
+            receipt_logic=receipt_logic,
+            matched_playbooks=matched_playbooks,
+            local_transcript=local_transcript,
+            active_block_rule_hit=active_block_rule_hit,
+            llm_provider=provider,
+            llm_error=f"ADAPTER_{type(exc).__name__.upper()}",
+        )
     if outcome.parsed is not None:
         p = outcome.parsed
         return LLMReasoningResult(
@@ -388,9 +409,11 @@ async def run_gemini_reasoning(
             llm_provider=outcome.provider,
             llm_model=outcome.actual_model or settings.gemini_model,
             llm_latency_ms=outcome.latency_ms,
+            llm_attempts=outcome.attempts,
+            llm_failed_attempts=max(0, outcome.attempts - 1),
         )
 
-    return _synthesize_fallback_result(
+    fb = _synthesize_fallback_result(
         guardrails=guardrails,
         classifier=classifier,
         url_findings=url_findings,
@@ -404,4 +427,12 @@ async def run_gemini_reasoning(
         llm_provider=outcome.provider,
         llm_latency_ms=outcome.latency_ms,
         llm_error=outcome.error_code,
+    )
+    return fb.model_copy(
+        update={
+            "llm_attempts": outcome.attempts,
+            "llm_failed_attempts": (
+                0 if outcome.error_code == "NO_API_KEY" else max(1, outcome.attempts)
+            ),
+        }
     )

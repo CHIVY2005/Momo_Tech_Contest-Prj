@@ -61,8 +61,8 @@
   },
   {
     "demo_id": "demo_official_advisory",
-    "title_vi": "5. Tin khuyến cáo thật của Ngân hàng",
-    "subtitle_vi": "Chống báo động giả (0% FPR): Nhận diện thông báo an toàn chính thống (<= 20 điểm)",
+    "title_vi": "5. Mẫu tin khuyến cáo an toàn Ngân hàng",
+    "subtitle_vi": "Đối chứng chống báo động giả: Nhận diện thông báo an toàn chính thống (<= 20 điểm)",
     "category_badge": "Guardrail · Chống báo giả",
     "mode": "personal",
     "in_active_call": false,

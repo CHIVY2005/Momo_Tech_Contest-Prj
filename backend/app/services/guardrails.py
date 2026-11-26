@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
+from functools import lru_cache
+from pathlib import Path
 from typing import Final
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field
 
 from app.schemas import EvidenceItem
+from app.services.ioc_extractor import extract_candidate_urls
 
 _INVISIBLE_CHARS_RE: Final[re.Pattern[str]] = re.compile(
     r"[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]"
@@ -40,7 +44,7 @@ _PROMPT_INJECTION_PATTERNS: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
         "vi_ignore_rules",
         re.compile(
             r"(?:bỏ\s+qua|phớt\s+lờ|xóa\s+bỏ|ghi\s+đè).{0,45}"
-            r"(?:mọi\s+)?(?:quy\s+tắc|hướng\s+dẫn|chỉ\s+thị|lệnh)\s*(?:trước\s+đó|hệ\s+thống)?",
+            r"(?:mọi\s+|toàn\s+bộ\s+)?(?:quy\s+tắc|hướng\s+dẫn|chỉ\s+thị|lệnh)\s*(?:trước\s+đó|hệ\s+thống)?",
             re.IGNORECASE | re.DOTALL,
         ),
     ),
@@ -79,13 +83,13 @@ _ADVISORY_PROTECTIVE_CLAUSES: Final[tuple[re.Pattern[str], ...]] = (
         re.IGNORECASE | re.DOTALL,
     ),
     re.compile(
-        r"không\s+(?:bấm\s+vào\s+(?:đường\s+)?link\s+lạ|(?:tải|cài(?:\s+đặt)?).{0,40}\.apk|"
-        r"quét\s+mã\s+(?:qr|vietqr)\s+do\s+người\s+lạ)",
+        r"không\s+(?:bấm\s+vào\s+(?:đường\s+)?link\s+lạ|nhấn\s+vào\s+đường\s+link\s+lạ|"
+        r"(?:tải|cài(?:\s+đặt)?).{0,40}\.apk|quét\s+mã\s+(?:qr|vietqr)\s+do\s+người\s+lạ)",
         re.IGNORECASE | re.DOTALL,
     ),
 )
 
-_OFFICIAL_ADVISORY_DOMAIN_SUFFIXES: Final[tuple[str, ...]] = (
+_BASE_OFFICIAL_SUFFIXES: Final[tuple[str, ...]] = (
     ".gov.vn",
     "chinhphu.vn",
     "vietcombank.com.vn",
@@ -103,7 +107,7 @@ _OFFICIAL_ADVISORY_DOMAIN_SUFFIXES: Final[tuple[str, ...]] = (
 _ACTIONABLE_SCAM_DEMAND_RE: Final[re.Pattern[str]] = re.compile(
     r"(?:chuyển\s+(?:ngay|gấp|tiền|khoản)\s+(?:\d|vào\s+stk)|"
     r"stk\s+tạm\s+giữ|"
-    r"bấm\s+ngay\s+vào|truy\s+cập\s+ngay\s+http|"
+    r"bấm\s+ngay\s+vào|truy\s+cập\s+ngay\s+(?:http|www\.)|"
     r"gửi\s+mã\s+otp\s+của\s+bạn|"
     r"liên\s+hệ\s+zalo\s+\d)",
     re.IGNORECASE,
@@ -119,6 +123,20 @@ class GuardrailResult(BaseModel):
     normalized_text: str = ""
     matched_patterns: list[str] = Field(default_factory=list)
     evidence: list[EvidenceItem] = Field(default_factory=list)
+
+
+@lru_cache(maxsize=1)
+def _load_official_advisory_suffixes() -> tuple[str, ...]:
+    suffixes = list(_BASE_OFFICIAL_SUFFIXES)
+    kb_path = Path(__file__).resolve().parent.parent / "data" / "vn_scam_kb.json"
+    if kb_path.exists():
+        data = json.loads(kb_path.read_text(encoding="utf-8"))
+        for entry in data.get("official_brands", []):
+            for dom in entry.get("official_domains", []):
+                clean_dom = str(dom).strip().lower()
+                if clean_dom and clean_dom not in suffixes:
+                    suffixes.append(clean_dom)
+    return tuple(suffixes)
 
 
 def normalize_guardrail_text(text: str) -> tuple[str, bool]:
@@ -141,8 +159,8 @@ def detect_prompt_injection(normalized_text: str, had_invisible: bool = False) -
 
 
 def _has_non_official_url(text: str) -> bool:
-    for m in re.finditer(r"https?://\S+", text, re.IGNORECASE):
-        raw_url = m.group(0).rstrip(".,;:!?)>\"']")
+    official_suffixes = _load_official_advisory_suffixes()
+    for raw_url in extract_candidate_urls(text):
         try:
             parts = urlsplit(raw_url)
             port = parts.port
@@ -155,7 +173,7 @@ def _has_non_official_url(text: str) -> bool:
         host = parts.hostname.lower().rstrip(".")
         is_official = any(
             host == sfx.lstrip(".") or host.endswith(sfx if sfx.startswith(".") else f".{sfx}")
-            for sfx in _OFFICIAL_ADVISORY_DOMAIN_SUFFIXES
+            for sfx in official_suffixes
         )
         if not is_official:
             return True

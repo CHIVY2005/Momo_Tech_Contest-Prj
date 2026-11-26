@@ -16,6 +16,9 @@ def test_upload_limits_corrupt_media_ssrf_injection_telegram_auth_and_rate_limit
     cfg = Settings(
         _env_file=None,
         sqlite_path=str(tmp_path / "sec_test.db"),
+        gemini_api_key="",
+        gemini_backup_api_key="",
+        telegram_bot_token="",
         max_upload_bytes=4096,
         enable_live_network_checks=False,
         enable_playwright_sandbox=False,
@@ -95,6 +98,8 @@ async def test_streaming_envelope_limit_and_telegram_delivery_semantics(tmp_path
     cfg = Settings(
         _env_file=None,
         sqlite_path=str(tmp_path / "sec_stream.db"),
+        gemini_api_key="",
+        gemini_backup_api_key="",
         max_upload_bytes=2048,
         enable_live_network_checks=False,
         enable_playwright_sandbox=False,

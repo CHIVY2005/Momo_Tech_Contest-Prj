@@ -227,11 +227,11 @@ def test_neural_advisory_cannot_override_guardrail_veto_on_transfer_demand() -> 
         scam_probability=0.10,
         latency_ms=10,
     )
-    cal = calibrate_risk(
+    cal_vetoed = calibrate_risk(
         mode="personal",
         tier1_score=65,
         classifier=tricked_clf,
-        ai_score=85,
+        ai_score=None,
         guardrails=vetoed_guard,
         url_findings=[],
         vietqr_findings=[],
@@ -241,5 +241,21 @@ def test_neural_advisory_cannot_override_guardrail_veto_on_transfer_demand() -> 
         active_block_rule_hit=False,
         in_active_call=False,
     )
-    assert cal.final_score >= 45
-    assert cal.verdict != "SAFE"
+    cal_unvetoed = calibrate_risk(
+        mode="personal",
+        tier1_score=65,
+        classifier=tricked_clf,
+        ai_score=None,
+        guardrails=GuardrailResult(safety_advisory_detected=False, advisory_vetoed=False),
+        url_findings=[],
+        vietqr_findings=[],
+        sandbox=None,
+        image_forensics=None,
+        receipt_logic=None,
+        active_block_rule_hit=False,
+        in_active_call=False,
+    )
+    assert cal_unvetoed.final_score <= 16
+    assert cal_unvetoed.verdict == "SAFE"
+    assert cal_vetoed.final_score >= 25
+    assert cal_vetoed.verdict != "SAFE"

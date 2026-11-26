@@ -2,7 +2,7 @@
 
 import { AlertCircle, ArrowLeft, CheckCircle2, RefreshCw, ShieldAlert } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiPlaygroundCard } from "@/components/radar/ApiPlaygroundCard";
 import { BlockRuleManager } from "@/components/radar/BlockRuleManager";
@@ -12,34 +12,84 @@ import { createBlockRule, fetchRadarGraph, resetBlockRules } from "@/lib/api";
 import { getNextRuleExpiryDelayMs } from "@/lib/radarLayout";
 import type { EmergingCampaign, IocType, RadarGraphResponse } from "@/lib/types";
 
+const DEFAULT_DEMO_PIN =
+  process.env.NEXT_PUBLIC_APP_ENV === "demo"
+    ? (process.env.NEXT_PUBLIC_DEMO_ANALYST_PIN ?? "2026")
+    : (process.env.NEXT_PUBLIC_DEMO_ANALYST_PIN ?? "");
+
 export default function RadarPage() {
   const [graph, setGraph] = useState<RadarGraphResponse | null>(null);
-  const [analystPin, setAnalystPin] = useState("2026");
+  const [analystPin, setAnalystPin] = useState(DEFAULT_DEMO_PIN);
   const [busyCampaignId, setBusyCampaignId] = useState<string | null>(null);
   const [isMutating, setIsMutating] = useState(false);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const graphReqIdRef = useRef(0);
+  const retryTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
+  const graphAbortRef = useRef<AbortController | null>(null);
 
-  const loadGraph = useCallback(async () => {
+  const clearRetryTimer = useCallback(() => {
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+  }, []);
+
+  const loadGraph = useCallback(async (): Promise<boolean> => {
+    clearRetryTimer();
+    graphAbortRef.current?.abort();
+    const controller = new AbortController();
+    graphAbortRef.current = controller;
+    const reqId = ++graphReqIdRef.current;
     try {
-      const data = await fetchRadarGraph();
+      const data = await fetchRadarGraph(controller.signal);
+      if (!mountedRef.current || controller.signal.aborted || reqId !== graphReqIdRef.current) {
+        return false;
+      }
       setGraph(data);
       setNowMs(Date.now());
+      return true;
     } catch (e) {
+      if (!mountedRef.current || controller.signal.aborted || reqId !== graphReqIdRef.current) {
+        return false;
+      }
       setBanner({
         kind: "err",
         text: e instanceof Error ? e.message : "Không thể tải dữ liệu đồ thị Fraud Ops.",
       });
+      // Direct cancellable retry only while mounted on current generation
+      retryTimerRef.current = window.setTimeout(() => {
+        if (mountedRef.current && reqId === graphReqIdRef.current) {
+          void loadGraph();
+        }
+      }, 5000);
+      return false;
     }
-  }, []);
+  }, [clearRetryTimer]);
 
   useEffect(() => {
+    mountedRef.current = true;
     void loadGraph();
-  }, [loadGraph]);
+    return () => {
+      mountedRef.current = false;
+      graphReqIdRef.current += 1;
+      graphAbortRef.current?.abort();
+      clearRetryTimer();
+    };
+  }, [loadGraph, clearRetryTimer]);
+
+  // Keep UI remaining-TTL display ticking against wall-clock time while rules are active
+  useEffect(() => {
+    const activeCount = graph?.active_block_rules.length ?? 0;
+    if (activeCount === 0) return;
+    const tick = window.setInterval(() => setNowMs(Date.now()), 5000);
+    return () => window.clearInterval(tick);
+  }, [graph?.active_block_rules.length]);
 
   useEffect(() => {
     const activeRules = graph?.active_block_rules ?? [];
-    const delayMs = getNextRuleExpiryDelayMs(activeRules, nowMs);
+    const delayMs = getNextRuleExpiryDelayMs(activeRules, Date.now());
     if (delayMs === null) {
       return;
     }
@@ -47,24 +97,28 @@ export default function RadarPage() {
       void loadGraph();
     }, delayMs);
     return () => window.clearTimeout(timer);
-  }, [graph, nowMs, loadGraph]);
+  }, [graph, loadGraph]);
+
+  const anyWriteBusy = isMutating || busyCampaignId !== null;
 
   async function handleBlockCampaign(camp: EmergingCampaign) {
+    if (anyWriteBusy) return;
     setBusyCampaignId(camp.campaign_id);
     setBanner(null);
     try {
       const rule = await createBlockRule({
         ioc_type: camp.primary_ioc_type,
         ioc_hash: camp.primary_ioc_hash,
-        masked_value: camp.primary_ioc_masked,
         reason: camp.recommended_action,
         analyst_pin: analystPin,
       });
+      const refreshed = await loadGraph();
       setBanner({
-        kind: "ok",
-        text: `Đã kích hoạt lệnh chặn khẩn cấp cho ${rule.masked_value}! Hãy thử bấm kiểm định ở API Playground bên dưới.`,
+        kind: refreshed ? "ok" : "err",
+        text: refreshed
+          ? `Đã kích hoạt lệnh chặn khẩn cấp cho ${rule.masked_value}! Hãy thử bấm kiểm định ở API Playground bên dưới.`
+          : `Đã khóa ${rule.masked_value} trên máy chủ nhưng làm mới đồ thị tạm thời thất bại (tự động thử lại sau 5s).`,
       });
-      await loadGraph();
     } catch (e) {
       setBanner({
         kind: "err",
@@ -80,6 +134,7 @@ export default function RadarPage() {
     rawValue: string,
     reason: string,
   ): Promise<boolean> {
+    if (anyWriteBusy) return false;
     setIsMutating(true);
     setBanner(null);
     try {
@@ -89,11 +144,13 @@ export default function RadarPage() {
         reason,
         analyst_pin: analystPin,
       });
+      const refreshed = await loadGraph();
       setBanner({
-        kind: "ok",
-        text: `Đã mã hóa SHA-256 & khóa thực thể ${rule.masked_value} (TTL 30 phút).`,
+        kind: refreshed ? "ok" : "err",
+        text: refreshed
+          ? `Đã mã hóa SHA-256 & khóa thực thể ${rule.masked_value} (TTL 30 phút).`
+          : `Đã khóa ${rule.masked_value} trên máy chủ nhưng làm mới đồ thị tạm thời thất bại (tự động thử lại sau 5s).`,
       });
-      await loadGraph();
       return true;
     } catch (e) {
       setBanner({
@@ -107,15 +164,18 @@ export default function RadarPage() {
   }
 
   async function handleReset() {
+    if (anyWriteBusy) return;
     setIsMutating(true);
     setBanner(null);
     try {
       const res = await resetBlockRules(analystPin);
+      const refreshed = await loadGraph();
       setBanner({
-        kind: "ok",
-        text: `Đã khôi phục trạng thái Demo sạch (gỡ ${res.reset_count} lệnh chặn tạm thời).`,
+        kind: refreshed ? "ok" : "err",
+        text: refreshed
+          ? `Đã khôi phục trạng thái Demo sạch (gỡ ${res.cleared_rules} lệnh chặn tạm thời).`
+          : `Đã gỡ ${res.cleared_rules} lệnh chặn nhưng làm mới đồ thị tạm thời thất bại (tự động thử lại sau 5s).`,
       });
-      await loadGraph();
     } catch (e) {
       setBanner({
         kind: "err",
@@ -216,6 +276,7 @@ export default function RadarPage() {
           <CampaignQueue
             campaigns={graph?.campaigns ?? []}
             busyCampaignId={busyCampaignId}
+            isLocked={anyWriteBusy}
             onBlockCampaign={(camp) => void handleBlockCampaign(camp)}
           />
         </div>
@@ -224,7 +285,7 @@ export default function RadarPage() {
             rules={graph?.active_block_rules ?? []}
             analystPin={analystPin}
             nowMs={nowMs}
-            isBusy={isMutating || busyCampaignId !== null}
+            isBusy={anyWriteBusy}
             onPinChange={setAnalystPin}
             onCreateManualRule={handleManualBlock}
             onResetRules={() => void handleReset()}

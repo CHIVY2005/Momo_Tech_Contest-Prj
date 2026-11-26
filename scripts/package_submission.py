@@ -82,18 +82,21 @@ def _should_exclude(rel_posix: str) -> bool:
 
 def _list_candidate_files(repo_root: Path) -> list[Path]:
     git_bin = shutil.which("git")
-    if git_bin and (repo_root / ".git").exists():
-        proc = subprocess.run(  # noqa: S603
-            [git_bin, "ls-files"],
-            cwd=str(repo_root),
-            capture_output=True,
-            text=True,
-            check=False,
+    if not git_bin or not (repo_root / ".git").exists():
+        raise RuntimeError(
+            "Packaging requires a Git checkout (`git ls-files -z`) "
+            "to prevent leaking untracked local files."
         )
-        if proc.returncode == 0 and proc.stdout.strip():
-            return [repo_root / rel for rel in proc.stdout.splitlines() if rel.strip()]
-
-    return sorted(p for p in repo_root.rglob("*") if p.is_file() and not p.is_symlink())
+    proc = subprocess.run(  # noqa: S603
+        [git_bin, "ls-files", "-z"],
+        cwd=str(repo_root),
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0 or not proc.stdout:
+        raise RuntimeError(f"git ls-files -z failed with exit code {proc.returncode}")
+    entries = [seg.decode("utf-8") for seg in proc.stdout.split(b"\x00") if seg]
+    return [repo_root / rel for rel in entries]
 
 
 def build_clean_source_zip(out_path: Path = OUT_ZIP) -> Path:

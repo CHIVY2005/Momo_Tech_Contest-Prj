@@ -54,13 +54,17 @@ def test_score_to_verdict_rejects_out_of_range_values() -> None:
 def test_settings_defaults_isolated_and_upload_ceiling_enforced(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    for env_name in ("MAX_UPLOAD_BYTES", "BLOCK_RULE_TTL_MINUTES", "ANALYST_PIN"):
+    for env_name in ("APP_ENV", "MAX_UPLOAD_BYTES", "BLOCK_RULE_TTL_MINUTES", "ANALYST_PIN"):
         monkeypatch.delenv(env_name, raising=False)
 
     cfg = Settings(_env_file=None)
+    assert cfg.app_env == "development"
     assert cfg.max_upload_bytes == 10 * 1024 * 1024
     assert cfg.block_rule_ttl_minutes == 30
-    assert cfg.analyst_pin == "2026"
+    assert cfg.analyst_pin == ""
+
+    demo_cfg = Settings(_env_file=None, app_env="demo")
+    assert demo_cfg.analyst_pin == "2026"
 
     exact_cap = Settings(_env_file=None, max_upload_bytes=10 * 1024 * 1024)
     assert exact_cap.max_upload_bytes == 10 * 1024 * 1024
@@ -124,7 +128,9 @@ def test_analysis_report_enforces_verdict_consistency_and_merchant_honesty() -> 
         receipt_verification_status="UNVERIFIED_SCREENSHOT",
         summary_vi="Chưa phát hiện dấu hiệu chỉnh sửa kỹ thuật trên ảnh biên lai.",
         receipt_logic=clean_receipt,
-        actions=_make_base_actions("Ảnh biên lai không chứng minh tiền đã vào tài khoản."),
+        actions=_make_base_actions(
+            "Ảnh biên lai không chứng minh tiền đã vào TK; kiểm tra số dư hoặc Loa thông báo."
+        ),
     )
     restored = AnalysisReport.model_validate_json(valid_report.model_dump_json())
     assert restored.receipt_verification_status == "UNVERIFIED_SCREENSHOT"

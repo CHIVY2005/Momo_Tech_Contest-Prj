@@ -1,7 +1,7 @@
 "use client";
 
 import { Ban, CheckCircle2, Code2, Loader2, Play } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { analyzeSync } from "@/lib/api";
 import type { AnalysisReport } from "@/lib/types";
@@ -30,28 +30,54 @@ export function ApiPlaygroundCard() {
   const [isCalling, setIsCalling] = useState(false);
   const [evaluated, setEvaluated] = useState<{
     payload: string;
+    inActiveCall: boolean;
     report: AnalysisReport;
   } | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => abortRef.current?.abort();
+  }, []);
+
+  function invalidatePending() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setIsCalling(false);
+    setEvaluated(null);
+    setErr(null);
+  }
 
   async function runApiCheck() {
     const submittedText = sampleText.trim();
+    const submittedCall = inActiveCall;
     if (!submittedText) return;
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setIsCalling(true);
     setErr(null);
     setEvaluated(null);
 
     const fd = new FormData();
     fd.append("mode", "wallet_transfer");
-    fd.append("in_active_call", String(inActiveCall));
+    fd.append("in_active_call", String(submittedCall));
     fd.append("text", submittedText);
     try {
-      const report = await analyzeSync(fd);
-      setEvaluated({ payload: submittedText, report });
+      const report = await analyzeSync(fd, controller.signal);
+      if (abortRef.current === controller) {
+        setEvaluated({ payload: submittedText, inActiveCall: submittedCall, report });
+      }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Lỗi gọi API kiểm định.");
+      if ((e as Error).name !== "AbortError" && abortRef.current === controller) {
+        setErr(e instanceof Error ? e.message : "Lỗi gọi API kiểm định.");
+      }
     } finally {
-      setIsCalling(false);
+      if (abortRef.current === controller) {
+        setIsCalling(false);
+      }
     }
   }
 
@@ -82,10 +108,9 @@ export function ApiPlaygroundCard() {
             key={p.label}
             type="button"
             onClick={() => {
+              invalidatePending();
               setSampleText(p.text);
               setInActiveCall(p.inActiveCall);
-              setEvaluated(null);
-              setErr(null);
             }}
             className="cursor-pointer rounded-lg border border-slate-700 bg-[#0b1120] px-2.5 py-1.5 text-[11px] font-medium text-slate-200 hover:border-sky-400"
           >
@@ -104,8 +129,8 @@ export function ApiPlaygroundCard() {
             rows={2}
             value={sampleText}
             onChange={(e) => {
+              invalidatePending();
               setSampleText(e.target.value);
-              setEvaluated(null);
             }}
             className="w-full rounded-xl border border-slate-700 bg-[#0b1120] px-3 py-2 font-[family-name:var(--font-mono)] text-xs text-slate-100"
           />
@@ -117,8 +142,8 @@ export function ApiPlaygroundCard() {
               type="checkbox"
               checked={inActiveCall}
               onChange={(e) => {
+                invalidatePending();
                 setInActiveCall(e.target.checked);
-                setEvaluated(null);
               }}
               className="h-4 w-4 cursor-pointer accent-amber-500"
             />
@@ -174,6 +199,7 @@ export function ApiPlaygroundCard() {
               {JSON.stringify(
                 {
                   evaluated_payload: evaluated.payload,
+                  in_active_call: evaluated.inActiveCall,
                   case_id: result.case_id,
                   risk_score: result.risk_score,
                   verdict: result.verdict,

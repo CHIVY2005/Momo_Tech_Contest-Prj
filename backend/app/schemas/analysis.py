@@ -105,6 +105,8 @@ class AnalysisReport(BaseModel):
     llm_provider: str = "none"
     llm_model: str | None = None
     llm_latency_ms: int | None = Field(default=None, ge=0)
+    llm_attempts: int = Field(default=0, ge=0)
+    llm_failed_attempts: int = Field(default=0, ge=0)
     llm_error: str | None = None
 
     @model_validator(mode="after")
@@ -133,5 +135,29 @@ class AnalysisReport(BaseModel):
             if not (warning and warning.strip()):
                 raise ValueError(
                     "Merchant receipt report must populate actions.merchant_balance_warning"
+                )
+            w_low = warning.lower()
+            negated_phrases = (
+                "không cần kiểm tra",
+                "khỏi kiểm tra",
+                "không phải kiểm tra",
+                "có thể giao hàng ngay",
+                "đã nhận đủ tiền",
+            )
+            if any(neg in w_low for neg in negated_phrases):
+                raise ValueError(
+                    "Merchant receipt warning must never negate balance verification"
+                )
+            has_check_verb = any(
+                v in w_low
+                for v in ("kiểm tra", "đối chiếu", "xác nhận", "chỉ giao hàng", "verify", "check")
+            )
+            has_balance_target = any(
+                kw in w_low
+                for kw in ("số dư", "loa thông báo", "soundbox", "ứng dụng ngân hàng", "balance")
+            )
+            if not (has_check_verb and has_balance_target):
+                raise ValueError(
+                    "Merchant receipt warning must instruct verifying actual balance or Soundbox"
                 )
         return self

@@ -137,7 +137,7 @@ export function InputWorkbench({
       </div>
 
       <div
-        role="tablist"
+        role="radiogroup"
         aria-label="Chế độ thẩm định"
         className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3"
       >
@@ -147,8 +147,8 @@ export function InputWorkbench({
             <button
               key={id}
               type="button"
-              role="tab"
-              aria-selected={selected}
+              role="radio"
+              aria-checked={selected}
               onClick={() => updateField("mode", id)}
               className={`cursor-pointer rounded-xl border p-3 text-left transition-colors ${
                 selected

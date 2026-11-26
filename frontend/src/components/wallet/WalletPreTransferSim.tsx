@@ -1,8 +1,9 @@
 "use client";
 
 import { AlertTriangle, Ban, CheckCircle2, Lock, PhoneOff, ShieldAlert, Timer } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+import { maskDisplayIoc } from "@/lib/api";
 import type { AnalysisReport } from "@/lib/types";
 
 interface WalletPreTransferSimProps {
@@ -17,25 +18,43 @@ export function WalletPreTransferSim({
   transferAmountInput,
 }: WalletPreTransferSimProps) {
   const pre = report.actions.pre_transfer;
-  const [secondsLeft, setSecondsLeft] = useState<number>(pre.cooling_off_seconds);
+  const [deadlineMs, setDeadlineMs] = useState<number>(() =>
+    pre.should_hold_transfer ? Date.now() + pre.cooling_off_seconds * 1000 : 0,
+  );
+  const [secondsLeft, setSecondsLeft] = useState<number>(
+    pre.should_hold_transfer ? pre.cooling_off_seconds : 0,
+  );
   const [checkedQuestions, setCheckedQuestions] = useState<Record<number, boolean>>({});
   const [outcome, setOutcome] = useState<WalletSimulationOutcome>("pending");
 
-  useEffect(() => {
-    setSecondsLeft(pre.should_hold_transfer ? pre.cooling_off_seconds : 0);
+  const startFreshHold = useCallback(() => {
+    const secs = pre.should_hold_transfer ? pre.cooling_off_seconds : 0;
+    setDeadlineMs(secs > 0 ? Date.now() + secs * 1000 : 0);
+    setSecondsLeft(secs);
     setCheckedQuestions({});
     setOutcome("pending");
-  }, [report.case_id, pre.cooling_off_seconds, pre.should_hold_transfer]);
+  }, [pre.cooling_off_seconds, pre.should_hold_transfer]);
 
   useEffect(() => {
-    if (secondsLeft <= 0 || pre.blocked_by_ops_rule || outcome !== "pending") {
+    startFreshHold();
+  }, [report.case_id, startFreshHold]);
+
+  useEffect(() => {
+    if (deadlineMs <= 0 || pre.blocked_by_ops_rule || outcome !== "pending") {
       return;
     }
-    const timer = window.setInterval(() => {
-      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [secondsLeft, pre.blocked_by_ops_rule, outcome]);
+    const syncElapsed = () => {
+      const rem = Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
+      setSecondsLeft(rem);
+    };
+    syncElapsed();
+    const timer = window.setInterval(syncElapsed, 250);
+    document.addEventListener("visibilitychange", syncElapsed);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", syncElapsed);
+    };
+  }, [deadlineMs, pre.blocked_by_ops_rule, outcome]);
 
   if (!pre.should_hold_transfer && report.mode !== "wallet_transfer") {
     return null;
@@ -47,13 +66,17 @@ export function WalletPreTransferSim({
     secondsLeft === 0 &&
     (pre.verification_questions.length === 0 || allVerified);
 
-  const parsedAmount = Number(transferAmountInput);
+  const trimmedAmt = transferAmountInput.trim();
+  const parsedAmount = trimmedAmt !== "" ? Number(trimmedAmt) : Number.NaN;
   const formattedAmount =
-    Number.isFinite(parsedAmount) && parsedAmount > 0
+    trimmedAmt !== "" && Number.isFinite(parsedAmount) && parsedAmount >= 0
       ? `${parsedAmount.toLocaleString("vi-VN")} VND`
-      : "15.000.000 VND (Mô phỏng)";
-  const targetAccount =
-    report.iocs.bank_accounts[0] ?? report.iocs.phones[0] ?? "Tài khoản nhận chưa xác thực";
+      : "Chưa nhập số tiền (Mô phỏng trước chuyển khoản)";
+
+  const vqrAcct = report.vietqr_findings.find((v) => v.account_number)?.account_number;
+  const rawMention = vqrAcct ?? report.iocs.bank_accounts[0] ?? report.iocs.phones[0] ?? null;
+  const targetDisplay = rawMention ? maskDisplayIoc(rawMention) : "Chưa khai báo STK đích";
+  const targetLabel = vqrAcct ? "Tài khoản thụ hưởng (VietQR): " : "Thực thể trích xuất liên quan: ";
 
   return (
     <section
@@ -76,9 +99,9 @@ export function WalletPreTransferSim({
 
       <div className="mt-3 grid grid-cols-1 gap-2.5 rounded-xl border border-slate-800 bg-[#0b1120] p-3 text-xs sm:grid-cols-2">
         <div>
-          <span className="text-slate-400">Người nhận / STK đích: </span>
+          <span className="text-slate-400">{targetLabel}</span>
           <strong className="font-[family-name:var(--font-mono)] text-amber-300">
-            {targetAccount}
+            {targetDisplay}
           </strong>
         </div>
         <div>
@@ -115,10 +138,10 @@ export function WalletPreTransferSim({
           </div>
           <button
             type="button"
-            onClick={() => setOutcome("pending")}
+            onClick={startFreshHold}
             className="cursor-pointer rounded-lg border border-amber-400/50 bg-slate-950 px-2.5 py-1 text-[11px] font-semibold text-amber-200 hover:bg-slate-900"
           >
-            Xem lại Khóa 30s
+            Khởi động lại Khóa 30s
           </button>
         </div>
       ) : pre.blocked_by_ops_rule ? (

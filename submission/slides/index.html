@@ -371,7 +371,7 @@
     </div>
     <div>
       <h2>Kiến Trúc Kết Hợp Luật Xác Định, Mô Hình ONNX Riêng &amp; LLM Cô Lập</h2>
-      <p class="subtitle">Đảm bảo tốc độ phản hồi nội bộ <strong>&lt;50ms</strong>, không bao giờ sập khi đứt kết nối Cloud AI và miễn nhiễm với <span class="mono">Prompt Injection</span>.</p>
+      <p class="subtitle">Đảm bảo tốc độ phản hồi nội bộ <strong>&lt;50ms</strong>, hạ cấp an toàn khi đứt kết nối Cloud AI và chặn thao túng phán quyết từ <span class="mono">Prompt Injection</span>.</p>
     </div>
     <div class="grid-3">
       <div class="card card-sky">
@@ -525,27 +525,27 @@
       <span class="tag tag-green">Số liệu Thật 100% từ evaluation/results.json</span>
     </div>
     <div>
-      <h2>Kiểm Định Trên 40 Ca Tiếng Việt Tổng Hợp &amp; Kịch Bản Tấn Công Red-Team</h2>
-      <p class="subtitle">Đo kiểm trực tiếp trên luồng sản xuất thực tế kết hợp mô hình <span class="mono">scam_e5_int8.onnx</span> và <span class="mono">{{ACTUAL_LLM_MODEL}}</span> (40/40 lượt gọi API thành công, 0 lỗi).</p>
+      <h2>Kiểm Định Trên {{TOTAL_CASES}} Ca Tiếng Việt Tổng Hợp &amp; Kịch Bản Tấn Công Red-Team</h2>
+      <p class="subtitle">Đo kiểm trực tiếp trên luồng sản xuất thực tế kết hợp mô hình <span class="mono">scam_e5_int8.onnx</span> và <span class="mono">{{ACTUAL_LLM_MODEL}}</span> ({{LIVE_SUCCESS_COUNT}}/{{TOTAL_CASES}} ca phản hồi trực tiếp, {{TERMINAL_ERRORS}} lỗi dừng).</p>
     </div>
     <div class="grid-2">
       <div class="card">
         <h3>Chỉ Số Phân Loại &amp; Phòng Vệ Chuyên Biệt</h3>
         <div style="margin-top:10px;">
           <div class="bar-row">
-            <div class="bar-head"><span>Precision / Recall / F1-Score Tổng thể (40 ca)</span><span class="mono" style="color:#34d399;">{{PRECISION}} / {{RECALL}} / {{F1_SCORE}}</span></div>
+            <div class="bar-head"><span>Precision / Recall / F1-Score Tổng thể ({{TOTAL_CASES}} ca)</span><span class="mono" style="color:#34d399;">{{PRECISION}} / {{RECALL}} / {{F1_SCORE}}</span></div>
             <div class="bar-track"><div class="bar-fill" style="width:100%;"></div></div>
           </div>
           <div class="bar-row">
-            <div class="bar-head"><span>Tỷ lệ Chặn Tấn công Prompt Injection &amp; SSRF</span><span class="mono" style="color:#38bdf8;">{{INJ_BLOCK}}</span></div>
+            <div class="bar-head"><span>Nhóm ca Prompt Injection (&ge;70đ: {{INJ_BLOCK}} · Cờ Tĩnh: {{INJ_FLAG}})</span><span class="mono" style="color:#38bdf8;">{{INJ_BLOCK}}</span></div>
             <div class="bar-track"><div class="bar-fill" style="width:100%;"></div></div>
           </div>
           <div class="bar-row">
-            <div class="bar-head"><span>Tỷ lệ Bắt Fake Bill Zalo &amp; Bẫy VietQR Hoàn tiền</span><span class="mono" style="color:#fbbf24;">100.0%</span></div>
+            <div class="bar-head"><span>Tỷ lệ Phát hiện Kịch bản Fake Bill Zalo</span><span class="mono" style="color:#fbbf24;">{{FAKE_BILL_CATCH}}</span></div>
             <div class="bar-track"><div class="bar-fill" style="width:100%;"></div></div>
           </div>
           <div class="bar-row">
-            <div class="bar-head"><span>Độ chính xác Giữ Sạch Tin Khuyến cáo Ngân hàng (1 - FPR)</span><span class="mono" style="color:#34d399;">100.0% (FPR {{ADV_FPR}})</span></div>
+            <div class="bar-head"><span>Độ chính xác Giữ Sạch Tin Khuyến cáo Ngân hàng (1 - FPR)</span><span class="mono" style="color:#34d399;">{{ADV_CLEAN_RATE}} (FPR {{ADV_FPR}})</span></div>
             <div class="bar-track"><div class="bar-fill" style="width:100%;"></div></div>
           </div>
         </div>
@@ -558,11 +558,11 @@
           </thead>
           <tbody>
             <tr><td>Backbone &amp; Giấy phép</td><td><span class="mono">multilingual-e5-small</span> (MIT)</td></tr>
-            <tr><td>Bộ từ vựng sau cắt tỉa Việt–Anh</td><td><span class="mono">36,000</span> tokens (từ 250k)</td></tr>
+            <tr><td>Bộ từ vựng sau cắt tỉa Việt–Anh</td><td><span class="mono">{{PRUNED_VOCAB}}</span> tokens (từ 250k)</td></tr>
             <tr><td>Dung lượng <span class="mono">scam_e5_int8.onnx</span></td><td><strong class="mono" style="color:#fbbf24;">{{ONNX_SIZE_MB}} MB</strong> (&lt; 50 MB)</td></tr>
             <tr><td>Độ trễ Suy luận ONNX CPU (P50 / P95)</td><td><strong class="mono" style="color:#38bdf8;">{{ONNX_P50_MS}} ms / {{ONNX_P95_MS}} ms</strong></td></tr>
             <tr><td>Độ trễ Đa phương thức Toàn trình P50</td><td><span class="mono">{{E2E_P50_S}}s</span> (có SSE từng chặng)</td></tr>
-            <tr><td>Kiểm thử Tự động Toàn Kho Mã</td><td><strong class="mono" style="color:#34d399;">59 Backend + 6 Web Tests PASS</strong></td></tr>
+            <tr><td>Kiểm thử Tự động Toàn Kho Mã</td><td><strong class="mono" style="color:#34d399;">Backend Pytest + Node Suite PASS</strong></td></tr>
           </tbody>
         </table>
       </div>
@@ -595,7 +595,7 @@
       <div class="card card-amber">
         <h3>Tuân Thủ Tuyệt Đối Quy Chế Cuộc Thi</h3>
         <ul>
-          <li><strong>Giấy phép Mã nguồn mở Sạch 100%:</strong> Chỉ sử dụng các thư viện và mô hình mang giấy phép <span class="mono">MIT</span>, <span class="mono">Apache-2.0</span>, <span class="mono">BSD</span>, <span class="mono">LGPL-3.0</span> (loại bỏ triệt để các mô hình chỉ dành cho nghiên cứu học thuật hoặc dính <span class="mono">AGPL</span>).</li>
+          <li><strong>Giấy phép Mã nguồn mở Sạch 100%:</strong> Chỉ sử dụng các thư viện và mô hình mang giấy phép mở thương mại (<span class="mono">MIT</span>, <span class="mono">MIT-CMU</span>, <span class="mono">ISC</span>, <span class="mono">Apache-2.0</span>, <span class="mono">BSD</span>, <span class="mono">LGPL-3.0</span>; loại bỏ triệt để các mô hình chỉ dành cho nghiên cứu học thuật hoặc dính <span class="mono">AGPL</span>).</li>
           <li><strong>100% Dữ liệu Tổng hợp (Synthetic):</strong> Toàn bộ tập huấn luyện, 5 kịch bản Demo và 40 ca Benchmark không chứa bất kỳ thông tin cá nhân thật nào.</li>
           <li><strong>Tôn trọng Nhãn hiệu &amp; Sở hữu Trí tuệ:</strong> Thương hiệu độc lập <strong>VeriShield AI</strong>, công khai minh bạch toàn bộ tài sản mã nguồn mở và công cụ hỗ trợ phát triển trong <span class="mono">README.md</span>.</li>
         </ul>

@@ -78,10 +78,12 @@ export default function HomePage() {
 
     const capturedImageFile = !overrideDemo && !activeDemo ? form.imageFile : null;
     const capturedAmount = overrideDemo
-      ? overrideDemo.transfer_amount
+      ? overrideDemo.transfer_amount !== null && overrideDemo.transfer_amount !== undefined
         ? String(overrideDemo.transfer_amount)
         : ""
-      : form.transferAmount;
+      : form.mode !== "merchant"
+        ? form.transferAmount
+        : "";
 
     const fd = new FormData();
     if (overrideDemo) {
@@ -95,9 +97,12 @@ export default function HomePage() {
       fd.append("text", form.text);
       if (form.url.trim()) fd.append("url", form.url.trim());
       fd.append("in_active_call", String(form.inActiveCall));
-      if (form.transferAmount.trim()) fd.append("transfer_amount", form.transferAmount.trim());
-      if (form.expectedMerchantAccount.trim()) {
-        fd.append("expected_merchant_account", form.expectedMerchantAccount.trim());
+      if (form.mode === "merchant") {
+        if (form.expectedMerchantAccount.trim()) {
+          fd.append("expected_merchant_account", form.expectedMerchantAccount.trim());
+        }
+      } else if (form.transferAmount.trim()) {
+        fd.append("transfer_amount", form.transferAmount.trim());
       }
       if (form.imageFile) fd.append("image", form.imageFile);
       if (form.audioFile) fd.append("audio", form.audioFile);

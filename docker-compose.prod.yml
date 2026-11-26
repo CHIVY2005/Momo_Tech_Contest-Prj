@@ -3,6 +3,9 @@ services:
     ports: !override []
     expose:
       - "8000"
+    environment:
+      - APP_ENV=${APP_ENV:-production}
+      - ANALYST_PIN=${ANALYST_PIN:?Set ANALYST_PIN explicitly in deploy/.env.prod}
 
   frontend:
     ports: !override []

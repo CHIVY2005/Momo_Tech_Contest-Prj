@@ -1,8 +1,11 @@
 {
   "backbone": "intfloat/multilingual-e5-small",
   "license": "MIT",
+  "vocab_fit_scope": "train_plus_kb_only",
   "pruned_vocab_size": 36000,
   "onnx_size_mb": 34.25,
+  "pytorch_fp32_test_macro_f1": 1.0,
+  "onnx_int8_test_macro_f1": 1.0,
   "test_macro_f1": 1.0,
   "confusion_matrix": [
     [

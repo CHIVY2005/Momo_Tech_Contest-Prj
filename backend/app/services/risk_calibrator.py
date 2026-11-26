@@ -68,6 +68,7 @@ def calibrate_risk(
     receipt_logic: ReceiptLogicResult | None,
     active_block_rule_hit: bool,
     in_active_call: bool,
+    has_visual_bill_anomaly: bool = False,
 ) -> CalibrationResult:
     """Fuse Tier-1, Dual-Head ONNX, and Gemini signals while enforcing hard safety invariants."""
     t1 = max(0, min(100, tier1_score))
@@ -114,8 +115,12 @@ def calibrate_risk(
     if active_block_rule_hit:
         fused = max(fused, 96)
         confidence = 0.99
-    # 2. Official Safety Advisory Cap (<= 20) when free of any threat indicators
-    elif (guardrails.safety_advisory_detected or is_neural_advisory) and not hard_threat:
+    # 2. Official Safety Advisory Cap (<= 20) when free of any threat indicators and not vetoed
+    elif (
+        (guardrails.safety_advisory_detected or is_neural_advisory)
+        and not guardrails.advisory_vetoed
+        and not hard_threat
+    ):
         fused = min(fused, 16)
         confidence = max(confidence, 0.92)
     else:
@@ -132,8 +137,11 @@ def calibrate_risk(
         elif any(v.kind == "INVALID_CRC_VIETQR" for v in vietqr_findings):
             fused = max(fused, 72)
 
-        if sandbox and (sandbox.blocked_ssrf or sandbox.has_apk_download or sandbox.risk_points >= 75):
-            fused = max(fused, 85)
+        if sandbox:
+            if sandbox.blocked_ssrf or sandbox.has_apk_download or sandbox.risk_points >= 75:
+                fused = max(fused, 85)
+            elif sandbox.risk_points >= 40:
+                fused = max(fused, 52)
 
         if receipt_logic:
             if receipt_logic.is_replayed or receipt_logic.beneficiary_mismatch:
@@ -153,17 +161,27 @@ def calibrate_risk(
             elif image_forensics.tamper_score >= 35:
                 fused = max(fused, 45)
 
+        if has_visual_bill_anomaly:
+            fused = max(fused, 45)
+
     final_score = max(0, min(100, fused))
     verdict = score_to_verdict(final_score)
 
-    # Resolve ReceiptVerificationStatus aligned with Merchant Honesty Guardrail
+    # Derive ReceiptVerificationStatus strictly from receipt-specific forensic evidence
+    has_receipt_specific_anomaly = bool(
+        (image_forensics is not None and image_forensics.tamper_score >= 35)
+        or (receipt_logic is not None and receipt_logic.logic_risk_points > 0)
+        or has_visual_bill_anomaly
+    )
     receipt_status: ReceiptVerificationStatus = "NOT_APPLICABLE"
     if receipt_logic and receipt_logic.is_receipt_candidate:
         receipt_status = receipt_logic.verification_status
-        if verdict != "SAFE" and receipt_status == "UNVERIFIED_SCREENSHOT":
+        if receipt_status == "UNVERIFIED_SCREENSHOT" and has_receipt_specific_anomaly:
             receipt_status = "TAMPER_OR_LOGIC_ANOMALY"
     elif mode == "merchant" and image_forensics is not None:
-        receipt_status = "UNVERIFIED_SCREENSHOT" if verdict == "SAFE" else "TAMPER_OR_LOGIC_ANOMALY"
+        receipt_status = (
+            "TAMPER_OR_LOGIC_ANOMALY" if has_receipt_specific_anomaly else "UNVERIFIED_SCREENSHOT"
+        )
 
     return CalibrationResult(
         final_score=final_score,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from functools import lru_cache
@@ -42,7 +43,7 @@ def crc16_ccitt_false(payload: bytes) -> str:
 
 
 def read_tlv(raw: str) -> tuple[dict[str, str], bool]:
-    """Parse sequential 2-digit Tag + 2-digit Length + Value pairs; return (fields, ok)."""
+    """Parse sequential 2-digit Tag + 2-digit Length + Value pairs; reject duplicate tags."""
     idx = 0
     total = len(raw)
     fields: dict[str, str] = {}
@@ -52,6 +53,8 @@ def read_tlv(raw: str) -> tuple[dict[str, str], bool]:
         tag = raw[idx : idx + 2]
         len_str = raw[idx + 2 : idx + 4]
         if not (tag.isdigit() and len_str.isdigit()):
+            return fields, False
+        if tag in fields:
             return fields, False
         length = int(len_str)
         val_start = idx + 4
@@ -112,6 +115,11 @@ def parse_qr_payload(
     if not cleaned.startswith("000201"):
         return VietQRInfo(raw=cleaned, kind="TEXT_QR", crc_valid=True), evidence
 
+    frame_tag = (
+        f"[VIETQR_INVALID_FRAME:sha256="
+        f"{hashlib.sha256(cleaned.encode('utf-8')).hexdigest()[:10]}:len={len(cleaned)}]"
+    )
+
     if len(cleaned) < 16 or not cleaned.isascii() or cleaned[-8:-4] != "6304":
         evidence.append(
             EvidenceItem(
@@ -119,7 +127,7 @@ def parse_qr_payload(
                 severity="HIGH",
                 title="Mã VietQR sai cấu trúc EMVCo",
                 detail="Chuỗi bắt đầu bằng 000201 nhưng thiếu trường kiểm tra toàn vẹn 6304.",
-                snippet=cleaned[:80],
+                snippet=frame_tag,
             )
         )
         return VietQRInfo(raw=cleaned, kind="INVALID_CRC_VIETQR", crc_valid=False), evidence
@@ -127,23 +135,23 @@ def parse_qr_payload(
     declared_crc = cleaned[-4:].upper()
     computed_crc = crc16_ccitt_false(cleaned[:-4].encode("ascii"))
     top_fields, tlv_ok = read_tlv(cleaned)
+    last_key = next(reversed(top_fields.keys()), "") if top_fields else ""
 
-    if declared_crc != computed_crc or not tlv_ok:
+    if declared_crc != computed_crc or not tlv_ok or last_key != "63" or len(top_fields.get("63", "")) != 4:
         evidence.append(
             EvidenceItem(
                 source="vietqr_parser",
                 severity="HIGH",
-                title="Mã kiểm tra CRC-16 VietQR không hợp lệ",
+                title="Mã kiểm tra CRC-16 hoặc cấu trúc TLV VietQR không hợp lệ",
                 detail=(
-                    f"Chữ ký CRC-16 trong mã ({declared_crc}) lệch với giá trị toán học "
-                    f"({computed_crc}) — dấu hiệu chuỗi QR bị chỉnh sửa thủ công."
+                    f"Chữ ký CRC-16 trong mã ({declared_crc} vs {computed_crc}) hoặc trường TLV trùng/hỏng "
+                    "— dấu hiệu chuỗi QR bị chỉnh sửa thủ công."
                 ),
-                snippet=cleaned[:80],
+                snippet=frame_tag,
             )
         )
         return VietQRInfo(raw=cleaned, kind="INVALID_CRC_VIETQR", crc_valid=False), evidence
 
-    # Require valid Tag 38 NAPAS transfer template before classifying as VALID_VIETQR
     if "38" not in top_fields:
         return VietQRInfo(raw=cleaned, kind="TEXT_QR", crc_valid=True), evidence
 
@@ -155,7 +163,7 @@ def parse_qr_payload(
                 severity="HIGH",
                 title="Trường định danh tài khoản NAPAS (Tag 38) bị hỏng",
                 detail="Cấu trúc TLV bên trong Tag 38 không hợp lệ.",
-                snippet=cleaned[:80],
+                snippet=frame_tag,
             )
         )
         return VietQRInfo(raw=cleaned, kind="INVALID_CRC_VIETQR", crc_valid=False), evidence
@@ -163,12 +171,25 @@ def parse_qr_payload(
     if sub38.get("00") != NAPAS_GUID or "01" not in sub38:
         return VietQRInfo(raw=cleaned, kind="TEXT_QR", crc_valid=True), evidence
 
-    service_code = sub38.get("02", "QRIBFTTA")
+    service_code = sub38.get("02")
     acct_tlv, ok_acct = read_tlv(sub38["01"])
     bank_bin = acct_tlv.get("00") if ok_acct else None
     account_number = acct_tlv.get("01") if ok_acct else None
 
-    if not ok_acct or not bank_bin or not account_number or service_code not in SUPPORTED_NAPAS_SERVICES:
+    if (
+        not ok_acct
+        or not bank_bin
+        or not (bank_bin.isdigit() and len(bank_bin) == 6)
+        or not account_number
+        or service_code not in SUPPORTED_NAPAS_SERVICES
+    ):
+        return VietQRInfo(raw=cleaned, kind="TEXT_QR", crc_valid=True), evidence
+
+    act_digits = re.sub(r"\D", "", account_number)
+    if service_code == "QRIBFTTA":
+        if not account_number.isdigit() or not (6 <= len(account_number) <= 19):
+            return VietQRInfo(raw=cleaned, kind="TEXT_QR", crc_valid=True), evidence
+    elif not account_number.isdigit() or not (12 <= len(account_number) <= 19):
         return VietQRInfo(raw=cleaned, kind="TEXT_QR", crc_valid=True), evidence
 
     bank_name = _load_bin_map().get(bank_bin, f"BIN {bank_bin}")
@@ -200,8 +221,7 @@ def parse_qr_payload(
     beneficiary_mismatch = False
     if expected_merchant_account:
         exp_digits = re.sub(r"\D", "", expected_merchant_account)
-        act_digits = re.sub(r"\D", "", account_number)
-        if exp_digits and act_digits and exp_digits != act_digits:
+        if exp_digits and exp_digits != act_digits:
             beneficiary_mismatch = True
             evidence.append(
                 EvidenceItem(

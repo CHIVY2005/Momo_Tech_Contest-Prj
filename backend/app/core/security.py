@@ -8,6 +8,7 @@ import io
 import ipaddress
 import re
 import socket
+import warnings
 from collections.abc import Iterable
 from typing import Any, Final, Literal
 from urllib.parse import urlsplit
@@ -18,6 +19,8 @@ import httpx
 from PIL import Image, UnidentifiedImageError
 
 MAX_DECOMPRESSED_PIXELS: Final[int] = 25_000_000
+MAX_DECODED_AUDIO_SAMPLES: Final[int] = 48_000 * 600  # Max 10 minutes at 48kHz
+MAX_AUDIO_CHANNELS: Final[int] = 8
 
 _BLOCKED_IPV4_NETS: Final[tuple[ipaddress.IPv4Network, ...]] = (
     ipaddress.IPv4Network("0.0.0.0/8"),
@@ -45,6 +48,7 @@ _BLOCKED_IPV6_NETS: Final[tuple[ipaddress.IPv6Network, ...]] = (
     ipaddress.IPv6Network("2001:db8::/32"),
     ipaddress.IPv6Network("fc00::/7"),
     ipaddress.IPv6Network("fe80::/10"),
+    ipaddress.IPv6Network("fec0::/10"),  # Deprecated IPv6 site-local
     ipaddress.IPv6Network("ff00::/8"),
 )
 
@@ -77,7 +81,6 @@ def is_public_ip(ip_str: str) -> bool:
         return False
 
     if isinstance(addr, ipaddress.IPv6Address):
-        # Explicitly reject all IPv4-mapped IPv6 literals regardless of embedded IPv4
         if addr.ipv4_mapped is not None:
             return False
         if addr.sixtofour is not None:
@@ -92,6 +95,7 @@ def is_public_ip(ip_str: str) -> bool:
             and not addr.is_private
             and not addr.is_loopback
             and not addr.is_link_local
+            and not getattr(addr, "is_site_local", False)
             and not addr.is_multicast
             and not addr.is_reserved
             and not addr.is_unspecified
@@ -282,11 +286,16 @@ def _verify_decodable_audio(data: bytes) -> None:
         with av.open(io.BytesIO(data), mode="r") as container:
             if not container.streams.audio:
                 raise InvalidMediaError("Container has no audio streams.")
-            decoded_any = False
-            for _frame in container.decode(audio=0):
-                decoded_any = True
-                break
-            if not decoded_any:
+            stream = container.streams.audio[0]
+            channels = int(getattr(stream, "channels", 1) or 1)
+            if channels > MAX_AUDIO_CHANNELS:
+                raise InvalidMediaError(f"Audio channel count {channels} exceeds limit.")
+            total_samples = 0
+            for frame in container.decode(audio=0):
+                total_samples += int(frame.samples)
+                if total_samples > MAX_DECODED_AUDIO_SAMPLES:
+                    raise InvalidMediaError("Audio duration exceeds maximum safe decoding budget.")
+            if total_samples <= 0:
                 raise InvalidMediaError("Audio stream contains zero decodable frames.")
     except InvalidMediaError:
         raise
@@ -299,7 +308,7 @@ def validate_upload_bytes(
     max_bytes: int,
     kind: Literal["image", "audio"],
 ) -> None:
-    """Enforce upload byte ceiling, non-empty check, container decoding, and pixel-bomb cap."""
+    """Enforce upload byte ceiling, non-empty check, full pixel/frame decoding, and bomb cap."""
     if not data:
         raise InvalidMediaError(f"Empty {kind} payload.")
     if len(data) > max_bytes:
@@ -319,15 +328,29 @@ def validate_upload_bytes(
         raise InvalidMediaError("RIFF container is not a valid WEBP image.")
 
     try:
-        with Image.open(io.BytesIO(data)) as img:
-            width, height = img.size
-            if width <= 0 or height <= 0 or (width * height) > MAX_DECOMPRESSED_PIXELS:
-                raise InvalidMediaError("Image dimensions invalid or exceed pixel-bomb threshold.")
-            img.verify()
-    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(data)) as img:
+                width, height = img.size
+                if width <= 0 or height <= 0 or (width * height) > MAX_DECOMPRESSED_PIXELS:
+                    raise InvalidMediaError(
+                        "Image dimensions invalid or exceed pixel-bomb threshold."
+                    )
+                img.verify()
+            # Re-open and force full raster pixel decode to catch truncated JPEG scan streams
+            with Image.open(io.BytesIO(data)) as decoded_img:
+                decoded_img.load()
+    except (
+        UnidentifiedImageError,
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
+        OSError,
+        ValueError,
+        SyntaxError,
+    ) as exc:
         if isinstance(exc, InvalidMediaError):
             raise
-        raise InvalidMediaError(f"Corrupt image file: {exc}") from exc
+        raise InvalidMediaError(f"Corrupt or unsafe image file: {exc}") from exc
 
 
 def verify_secret(provided: str | None, expected: str) -> bool:

@@ -81,10 +81,15 @@ class ReceiptLogicResult(BaseModel):
     bank_detected: str | None = None
     reference_code: str | None = None
     reference_valid: bool = True
+    timestamp_checked: bool = False
     timestamp_anomaly: bool = False
+    amount_checked: bool = False
     amount_format_anomaly: bool = False
+    geometry_checked: bool = False
     geometry_anomaly: bool = False
+    beneficiary_checked: bool = False
     beneficiary_mismatch: bool = False
+    replay_checked: bool = False
     is_replayed: bool = False
     verification_status: ReceiptVerificationStatus = "NOT_APPLICABLE"
     logic_risk_points: int = Field(default=0, ge=0, le=100)

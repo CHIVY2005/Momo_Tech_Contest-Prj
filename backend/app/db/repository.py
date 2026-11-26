@@ -18,69 +18,234 @@ from app.schemas import (
     RadarGraphResponse,
     RadarNode,
 )
-from app.services.ioc_extractor import hash_ioc, mask_ioc
+from app.services.ioc_extractor import hash_ioc, mask_ioc, scrub_free_text_pii
+
+MAX_CASE_GRAPH_IOCS = 20
 
 
 class ProtectedDemoIocError(ValueError):
     """Raised when attempting to create a block rule against a protected SAFE demo IOC (HTTP 409)."""
 
 
-def redact_report_pii(report: AnalysisReport) -> AnalysisReport:
-    """Return a deep copy of AnalysisReport with all raw phone/bank-account PII masked."""
-    replacements: list[tuple[str, str]] = []
-    masked_phones: list[str] = []
-    for ph in report.iocs.phones:
-        masked = ph if "****" in ph else mask_ioc("phone", ph)
-        masked_phones.append(masked)
-        if ph != masked:
-            replacements.append((ph, masked))
+def _normalize_public_account_mask(acct: str) -> str:
+    cleaned = acct.strip()
+    if "****" not in cleaned:
+        return mask_ioc("bank_account", cleaned)
+    if (
+        len(cleaned) == 12
+        and cleaned[4:8] == "****"
+        and cleaned[:4].isdigit()
+        and cleaned[8:].isdigit()
+    ):
+        return f"{cleaned[:2]}****{cleaned[-2:]}"
+    return cleaned
 
-    masked_accounts: list[str] = []
-    for acct in report.iocs.bank_accounts:
-        masked = acct if "****" in acct else mask_ioc("bank_account", acct)
-        masked_accounts.append(masked)
-        if acct != masked:
-            replacements.append((acct, masked))
+
+def redact_report_pii(report: AnalysisReport, strip_visual_blobs: bool = False) -> AnalysisReport:
+    """Return a deep public-safe projection of AnalysisReport with zero raw phone/account PII."""
+    raw_phones = list(report.iocs.phones)
+    raw_accounts = list(report.iocs.bank_accounts)
+    for v in report.vietqr_findings:
+        if v.account_number and "****" not in v.account_number:
+            raw_accounts.append(v.account_number)
+
+    masked_phones = [ph if "****" in ph else mask_ioc("phone", ph) for ph in report.iocs.phones]
+    masked_accounts = [_normalize_public_account_mask(acct) for acct in report.iocs.bank_accounts]
+
+    def _scrub(val: str | None) -> str | None:
+        if val is None:
+            return None
+        return scrub_free_text_pii(val, known_phones=raw_phones, known_accounts=raw_accounts)
+
+    masked_urls = [_scrub(u) or u for u in report.iocs.urls]
+    masked_domains = [
+        d if "****" in d else (_scrub(d) or d)
+        for d in report.iocs.domains
+    ]
 
     masked_vqr = []
     for v in report.vietqr_findings:
-        if v.account_number and "****" not in v.account_number:
-            m_acct = mask_ioc("bank_account", v.account_number)
-            replacements.append((v.account_number, m_acct))
-            masked_vqr.append(v.model_copy(update={"account_number": m_acct}))
-        else:
-            masked_vqr.append(v)
+        m_acct = _normalize_public_account_mask(v.account_number) if v.account_number else None
+        redacted_raw = (
+            f"[VIETQR_REDACTED:{v.bank_bin or 'NAPAS'}:{m_acct or 'N/A'}]"
+            if v.kind in ("VALID_VIETQR", "INVALID_CRC_VIETQR")
+            else (_scrub(v.raw) or v.raw)
+        )
+        masked_vqr.append(
+            v.model_copy(
+                update={
+                    "raw": redacted_raw,
+                    "account_number": m_acct,
+                    "note": _scrub(v.note),
+                }
+            )
+        )
 
-    def _scrub_str(val: str | None) -> str | None:
-        if not val:
-            return val
-        out = val
-        for raw_val, m_val in replacements:
-            if raw_val:
-                out = out.replace(raw_val, m_val)
-        return out
+    scrubbed_urls = [
+        u.model_copy(
+            update={
+                "url": _scrub(u.url) or u.url,
+                "domain": _scrub(u.domain) or u.domain,
+                "normalized_ascii_domain": _scrub(u.normalized_ascii_domain)
+                or u.normalized_ascii_domain,
+                "final_url": _scrub(u.final_url),
+                "reasons": [_scrub(r) or r for r in u.reasons],
+            }
+        )
+        for u in report.url_findings
+    ]
+
+    scrubbed_sandbox = (
+        report.sandbox.model_copy(
+            update={
+                "visited_url": _scrub(report.sandbox.visited_url) or report.sandbox.visited_url,
+                "final_url": _scrub(report.sandbox.final_url),
+                "page_title": _scrub(report.sandbox.page_title),
+                "screenshot_base64": None if strip_visual_blobs else report.sandbox.screenshot_base64,
+                "reasons": [_scrub(r) or r for r in report.sandbox.reasons],
+            }
+        )
+        if report.sandbox is not None
+        else None
+    )
+
+    scrubbed_img = (
+        report.image_forensics.model_copy(
+            update={
+                "filename": f"evidence.{report.image_forensics.format.lower()}",
+                "exif_software": (
+                    None if strip_visual_blobs else _scrub(report.image_forensics.exif_software)
+                ),
+                "ela_heatmap_base64": (
+                    None if strip_visual_blobs else report.image_forensics.ela_heatmap_base64
+                ),
+                "qr_payloads": [
+                    "[QR_PAYLOAD_REDACTED_IN_PUBLIC_CASE]"
+                    for _ in report.image_forensics.qr_payloads
+                ],
+                "ocr_text": _scrub(report.image_forensics.ocr_text) or "",
+                "reasons": [_scrub(r) or r for r in report.image_forensics.reasons],
+            }
+        )
+        if report.image_forensics is not None
+        else None
+    )
+
+    scrubbed_receipt = (
+        report.receipt_logic.model_copy(
+            update={
+                "reference_code": _scrub(report.receipt_logic.reference_code),
+                "reasons": [_scrub(r) or r for r in report.receipt_logic.reasons],
+            }
+        )
+        if report.receipt_logic is not None
+        else None
+    )
 
     scrubbed_ev = [
         ev.model_copy(
             update={
-                "detail": _scrub_str(ev.detail) or ev.detail,
-                "snippet": _scrub_str(ev.snippet),
+                "title": _scrub(ev.title) or ev.title,
+                "detail": _scrub(ev.detail) or ev.detail,
+                "snippet": _scrub(ev.snippet),
             }
         )
         for ev in report.evidence
     ]
 
-    return report.model_copy(
+    scrubbed_actions = report.actions.model_copy(
         update={
-            "summary_vi": _scrub_str(report.summary_vi) or report.summary_vi,
-            "transcript": _scrub_str(report.transcript),
-            "iocs": report.iocs.model_copy(
-                update={"phones": masked_phones, "bank_accounts": masked_accounts}
+            "counter_replies": [_scrub(r) or r for r in report.actions.counter_replies],
+            "family_shield_message": _scrub(report.actions.family_shield_message) or "",
+            "urgent_steps": [_scrub(s) or s for s in report.actions.urgent_steps],
+            "pre_transfer": report.actions.pre_transfer.model_copy(
+                update={
+                    "warning_headline": _scrub(report.actions.pre_transfer.warning_headline) or "",
+                    "verification_questions": [
+                        _scrub(q) or q for q in report.actions.pre_transfer.verification_questions
+                    ],
+                }
             ),
-            "vietqr_findings": masked_vqr,
-            "evidence": scrubbed_ev,
         }
     )
+
+    scrubbed_trace = [
+        st.model_copy(update={"detail": _scrub(st.detail) or st.detail}) for st in report.trace
+    ]
+
+    return report.model_copy(
+        update={
+            "summary_vi": _scrub(report.summary_vi) or report.summary_vi,
+            "transcript": _scrub(report.transcript),
+            "matched_playbooks": [_scrub(p) or p for p in report.matched_playbooks],
+            "manipulation_tactics": [_scrub(t) or t for t in report.manipulation_tactics],
+            "highlighted_phrases": [_scrub(h) or h for h in report.highlighted_phrases],
+            "iocs": report.iocs.model_copy(
+                update={
+                    "phones": masked_phones,
+                    "bank_accounts": masked_accounts,
+                    "urls": masked_urls,
+                    "domains": masked_domains,
+                }
+            ),
+            "vietqr_findings": masked_vqr,
+            "url_findings": scrubbed_urls,
+            "sandbox": scrubbed_sandbox,
+            "image_forensics": scrubbed_img,
+            "receipt_logic": scrubbed_receipt,
+            "evidence": scrubbed_ev,
+            "actions": scrubbed_actions,
+            "trace": scrubbed_trace,
+        }
+    )
+
+
+def _sanitize_legacy_radar_label(ioc_type: str, masked_value: str, ioc_hash: str) -> str:
+    """Rewrite legacy stored radar labels that could expose full 8-digit accounts or subdomains."""
+    raw = masked_value.strip()
+    if ioc_type == "domain":
+        had_wildcard = raw.startswith("*.")
+        labels = [p for p in raw.split(".") if p and p != "*"]
+        if len(labels) >= 2:
+            two_sfx = f"{labels[-2]}.{labels[-1]}".lower()
+            multi_sfx = {
+                "com.vn",
+                "gov.vn",
+                "net.vn",
+                "org.vn",
+                "edu.vn",
+                "int.vn",
+                "ac.vn",
+                "co.uk",
+                "org.uk",
+                "com.sg",
+            }
+            if len(labels) >= 3 and two_sfx in multi_sfx:
+                suffix = two_sfx
+                core = labels[-3]
+                has_sub = had_wildcard or len(labels) > 3
+            else:
+                suffix = labels[-1]
+                core = labels[-2]
+                has_sub = had_wildcard or len(labels) > 2
+            masked_core = core if "****" in core else f"{core[:2]}****"
+            return f"*.{masked_core}.{suffix}" if has_sub else f"{masked_core}.{suffix}"
+        return f"dom_{ioc_hash[:6]}****"
+
+    if ioc_type == "bank_account":
+        is_old_8digit_leak = (
+            len(raw) == 12
+            and raw[4:8] == "****"
+            and raw[:4].isdigit()
+            and raw[8:].isdigit()
+        )
+        if "****" not in raw or is_old_8digit_leak:
+            return f"stk_{ioc_hash[:6]}****"
+        return raw
+
+    if ioc_type == "phone" and "****" not in raw:
+        return f"tel_{ioc_hash[:6]}****"
+    return raw
 
 
 class CaseRepository:
@@ -97,6 +262,14 @@ class CaseRepository:
         conn.execute("PRAGMA busy_timeout=5000;")
         conn.execute("PRAGMA foreign_keys=ON;")
         return conn
+
+    def is_wal_ready(self) -> bool:
+        try:
+            with self._connect() as conn:
+                row = conn.execute("PRAGMA journal_mode;").fetchone()
+                return bool(row and str(row[0]).lower() == "wal")
+        except sqlite3.Error:
+            return False
 
     def init_db(self) -> None:
         """Initialize SQLite schema with hashed/masked-only IOC graph tables."""
@@ -151,8 +324,88 @@ class CaseRepository:
                     fingerprint TEXT PRIMARY KEY,
                     created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS telegram_updates (
+                    update_id INTEGER PRIMARY KEY,
+                    status TEXT NOT NULL DEFAULT 'completed',
+                    lease_owner TEXT,
+                    lease_expires_at TEXT,
+                    case_id TEXT,
+                    reply_text TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                );
                 """
             )
+            cols = {
+                str(r["name"])
+                for r in conn.execute("PRAGMA table_info(telegram_updates);").fetchall()
+            }
+            if "status" not in cols:
+                conn.execute(
+                    "ALTER TABLE telegram_updates ADD COLUMN status TEXT NOT NULL DEFAULT 'completed';"
+                )
+            if "lease_owner" not in cols:
+                conn.execute("ALTER TABLE telegram_updates ADD COLUMN lease_owner TEXT;")
+            if "lease_expires_at" not in cols:
+                conn.execute("ALTER TABLE telegram_updates ADD COLUMN lease_expires_at TEXT;")
+
+            # Migrate any pre-remediation stored rows in-place on DB open
+            for row in conn.execute("SELECT case_id, report_json FROM cases").fetchall():
+                try:
+                    parsed = AnalysisReport.model_validate_json(str(row["report_json"]))
+                    clean_json = redact_report_pii(parsed, strip_visual_blobs=True).model_dump_json()
+                    if clean_json != str(row["report_json"]):
+                        conn.execute(
+                            "UPDATE cases SET report_json = ? WHERE case_id = ?",
+                            (clean_json, str(row["case_id"])),
+                        )
+                except Exception:  # noqa: S110
+                    pass
+
+            for s_row in conn.execute(
+                "SELECT ioc_hash, ioc_type, masked_value FROM ioc_sightings"
+            ).fetchall():
+                s_hash = str(s_row["ioc_hash"])
+                s_type = str(s_row["ioc_type"])
+                raw_m = str(s_row["masked_value"])
+                clean_m = _sanitize_legacy_radar_label(s_type, raw_m, s_hash)
+                if clean_m != raw_m:
+                    conn.execute(
+                        "UPDATE ioc_sightings SET masked_value = ? WHERE ioc_hash = ?",
+                        (clean_m, s_hash),
+                    )
+
+            for c_row in conn.execute(
+                "SELECT campaign_id, primary_ioc_type, primary_ioc_hash, primary_ioc_masked "
+                "FROM campaigns"
+            ).fetchall():
+                c_masked = str(c_row["primary_ioc_masked"])
+                clean_cm = _sanitize_legacy_radar_label(
+                    str(c_row["primary_ioc_type"]),
+                    c_masked,
+                    str(c_row["primary_ioc_hash"]),
+                )
+                if clean_cm != c_masked:
+                    conn.execute(
+                        "UPDATE campaigns SET primary_ioc_masked = ? WHERE campaign_id = ?",
+                        (clean_cm, str(c_row["campaign_id"])),
+                    )
+
+            for b_row in conn.execute(
+                "SELECT rule_id, ioc_hash, ioc_type, masked_value, reason FROM block_rules"
+            ).fetchall():
+                b_masked = str(b_row["masked_value"])
+                b_reason = str(b_row["reason"])
+                clean_bm = _sanitize_legacy_radar_label(
+                    str(b_row["ioc_type"]),
+                    b_masked,
+                    str(b_row["ioc_hash"]),
+                )
+                clean_br = scrub_free_text_pii(b_reason)
+                if clean_bm != b_masked or clean_br != b_reason:
+                    conn.execute(
+                        "UPDATE block_rules SET masked_value = ?, reason = ? WHERE rule_id = ?",
+                        (clean_bm, clean_br, str(b_row["rule_id"])),
+                    )
 
     def seed_if_empty(
         self,
@@ -251,33 +504,109 @@ class CaseRepository:
         )
         return h
 
+    def claim_receipt_replay(
+        self,
+        dhash_hex: str | None,
+        bank: str | None,
+        ref_code: str | None,
+        register_if_new: bool = True,
+    ) -> bool:
+        """Atomically check receipt fingerprints and only register new ones for receipt candidates."""
+        probes: list[str] = []
+        if dhash_hex:
+            probes.append(f"dhash:{dhash_hex}")
+        if ref_code:
+            probes.append(f"ref:{bank or ''}:{ref_code}")
+        if not probes:
+            return False
+
+        now_iso = datetime.now(UTC).isoformat()
+        conn = self._connect()
+        try:
+            conn.isolation_level = None
+            conn.execute("BEGIN IMMEDIATE;")
+            placeholders = ",".join("?" for _ in probes)
+            existing = conn.execute(
+                f"SELECT 1 FROM receipt_hashes WHERE fingerprint IN ({placeholders}) LIMIT 1",  # noqa: S608
+                tuple(probes),
+            ).fetchone()
+            if register_if_new and existing is None:
+                for fp in probes:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO receipt_hashes (fingerprint, created_at) VALUES (?, ?)",
+                        (fp, now_iso),
+                    )
+            conn.execute("COMMIT;")
+            return existing is not None
+        except Exception:
+            conn.execute("ROLLBACK;")
+            raise
+        finally:
+            conn.close()
+
     def save_report(
         self,
         report: AnalysisReport,
         receipt_dhash: str | None = None,
         track_replay: bool = True,
     ) -> AnalysisReport:
-        """Persist PII-redacted case report, update masked IOC graph, and store replay hashes."""
-        redacted = redact_report_pii(report)
+        """Persist PII-redacted report, update IOC graph & campaigns, and store replay hashes."""
+        live_redacted = redact_report_pii(report, strip_visual_blobs=False)
+        stored_redacted = redact_report_pii(report, strip_visual_blobs=True)
         with self._connect() as conn:
-            if report.risk_score >= 45:
+            already_saved = (
+                conn.execute(
+                    "SELECT 1 FROM cases WHERE case_id = ? LIMIT 1",
+                    (stored_redacted.case_id,),
+                ).fetchone()
+                is not None
+            )
+
+            if not already_saved and report.risk_score >= 45:
                 seen_hashes: list[str] = []
                 for ph in report.iocs.phones:
                     if "****" not in ph:
-                        seen_hashes.append(self._upsert_sighting(conn, "phone", ph))
+                        h = self._upsert_sighting(conn, "phone", ph)
+                        if h not in seen_hashes:
+                            seen_hashes.append(h)
                 for acct in report.iocs.bank_accounts:
                     if "****" not in acct:
-                        seen_hashes.append(self._upsert_sighting(conn, "bank_account", acct))
+                        h = self._upsert_sighting(conn, "bank_account", acct)
+                        if h not in seen_hashes:
+                            seen_hashes.append(h)
                 for dom in report.iocs.domains:
                     if "****" not in dom:
-                        seen_hashes.append(self._upsert_sighting(conn, "domain", dom))
+                        h = self._upsert_sighting(conn, "domain", dom)
+                        if h not in seen_hashes:
+                            seen_hashes.append(h)
 
-                for idx in range(len(seen_hashes)):
-                    for jdx in range(idx + 1, len(seen_hashes)):
+                bounded_hashes = seen_hashes[:MAX_CASE_GRAPH_IOCS]
+                for idx in range(len(bounded_hashes)):
+                    for jdx in range(idx + 1, len(bounded_hashes)):
                         conn.execute(
                             "INSERT OR IGNORE INTO ioc_edges (source_id, target_id, relation) "
                             "VALUES (?, ?, 'co_occurs')",
-                            (seen_hashes[idx], seen_hashes[jdx]),
+                            (bounded_hashes[idx], bounded_hashes[jdx]),
+                        )
+
+                if bounded_hashes:
+                    placeholders = ",".join("?" for _ in bounded_hashes)
+                    matched_cids: set[str] = set()
+                    for row in conn.execute(
+                        f"SELECT campaign_id FROM campaigns WHERE primary_ioc_hash IN ({placeholders})",  # noqa: S608
+                        tuple(bounded_hashes),
+                    ).fetchall():
+                        matched_cids.add(str(row["campaign_id"]))
+                    for row in conn.execute(
+                        f"SELECT DISTINCT campaign_id FROM ioc_sightings "  # noqa: S608
+                        f"WHERE ioc_hash IN ({placeholders}) AND campaign_id IS NOT NULL",
+                        tuple(bounded_hashes),
+                    ).fetchall():
+                        matched_cids.add(str(row["campaign_id"]))
+                    for cid in matched_cids:
+                        conn.execute(
+                            "UPDATE campaigns SET case_count = case_count + 1 WHERE campaign_id = ?",
+                            (cid,),
                         )
 
             if track_replay:
@@ -301,14 +630,14 @@ class CaseRepository:
                 VALUES (?, ?, ?, ?, ?)
                 """,
                 (
-                    redacted.case_id,
-                    redacted.created_at,
-                    redacted.verdict,
-                    redacted.risk_score,
-                    redacted.model_dump_json(),
+                    stored_redacted.case_id,
+                    stored_redacted.created_at,
+                    stored_redacted.verdict,
+                    stored_redacted.risk_score,
+                    stored_redacted.model_dump_json(),
                 ),
             )
-        return redacted
+        return live_redacted
 
     def get_report(self, case_id: str) -> AnalysisReport | None:
         with self._connect() as conn:
@@ -318,7 +647,146 @@ class CaseRepository:
             ).fetchone()
         if not row:
             return None
-        return AnalysisReport.model_validate_json(str(row["report_json"]))
+        parsed = AnalysisReport.model_validate_json(str(row["report_json"]))
+        return redact_report_pii(parsed, strip_visual_blobs=True)
+
+    def claim_telegram_update(
+        self,
+        update_id: int,
+        owner_id: str = "default",
+        lease_seconds: int = 180,
+    ) -> tuple[str, str | None, str | None]:
+        """Atomically claim update_id with an owner-tagged renewable lease."""
+        now_dt = datetime.now(UTC)
+        now_iso = now_dt.isoformat()
+        expires_iso = (now_dt + timedelta(seconds=max(0, lease_seconds))).isoformat()
+        conn = self._connect()
+        try:
+            conn.isolation_level = None
+            conn.execute("BEGIN IMMEDIATE;")
+            row = conn.execute(
+                "SELECT status, lease_owner, lease_expires_at, case_id, reply_text, created_at "
+                "FROM telegram_updates WHERE update_id = ?",
+                (update_id,),
+            ).fetchone()
+            if row is None:
+                alloc_case_id = f"vs_{uuid.uuid4().hex[:12]}"
+                conn.execute(
+                    "INSERT INTO telegram_updates "
+                    "(update_id, status, lease_owner, lease_expires_at, case_id, reply_text, created_at) "
+                    "VALUES (?, 'processing', ?, ?, ?, '', ?)",
+                    (update_id, owner_id, expires_iso, alloc_case_id, now_iso),
+                )
+                conn.execute("COMMIT;")
+                return ("claimed", alloc_case_id, None)
+
+            status = str(row["status"])
+            if status == "completed":
+                conn.execute("COMMIT;")
+                return (
+                    "cached",
+                    str(row["case_id"]) if row["case_id"] else None,
+                    str(row["reply_text"]),
+                )
+
+            cur_expires = str(row["lease_expires_at"] or row["created_at"])
+            if cur_expires <= now_iso:
+                alloc_case_id = (
+                    str(row["case_id"]) if row["case_id"] else f"vs_{uuid.uuid4().hex[:12]}"
+                )
+                conn.execute(
+                    "UPDATE telegram_updates "
+                    "SET status = 'processing', lease_owner = ?, lease_expires_at = ?, "
+                    "case_id = ?, created_at = ? "
+                    "WHERE update_id = ?",
+                    (owner_id, expires_iso, alloc_case_id, now_iso, update_id),
+                )
+                conn.execute("COMMIT;")
+                return ("claimed", alloc_case_id, None)
+
+            conn.execute("COMMIT;")
+            return ("in_progress", None, None)
+        except Exception:
+            conn.execute("ROLLBACK;")
+            raise
+        finally:
+            conn.close()
+
+    def renew_telegram_update_lease(
+        self,
+        update_id: int,
+        owner_id: str,
+        lease_seconds: int = 180,
+    ) -> bool:
+        expires_iso = (datetime.now(UTC) + timedelta(seconds=max(1, lease_seconds))).isoformat()
+        with self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE telegram_updates SET lease_expires_at = ? "
+                "WHERE update_id = ? AND status = 'processing' AND lease_owner = ?",
+                (expires_iso, update_id, owner_id),
+            )
+            return bool(cur.rowcount and cur.rowcount > 0)
+
+    def release_telegram_update_claim(
+        self,
+        update_id: int,
+        owner_id: str | None = None,
+    ) -> None:
+        with self._connect() as conn:
+            if owner_id is not None:
+                conn.execute(
+                    "DELETE FROM telegram_updates "
+                    "WHERE update_id = ? AND status = 'processing' AND lease_owner = ?",
+                    (update_id, owner_id),
+                )
+            else:
+                conn.execute(
+                    "DELETE FROM telegram_updates WHERE update_id = ? AND status = 'processing'",
+                    (update_id,),
+                )
+
+    def get_telegram_update_cache(self, update_id: int) -> tuple[str | None, str] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT case_id, reply_text FROM telegram_updates "
+                "WHERE update_id = ? AND status = 'completed'",
+                (update_id,),
+            ).fetchone()
+        if not row:
+            return None
+        return (str(row["case_id"]) if row["case_id"] else None, str(row["reply_text"]))
+
+    def save_telegram_update_cache(
+        self,
+        update_id: int,
+        case_id: str | None,
+        reply_text: str,
+        owner_id: str | None = None,
+    ) -> None:
+        now_iso = datetime.now(UTC).isoformat()
+        with self._connect() as conn:
+            if owner_id is not None:
+                conn.execute(
+                    """
+                    UPDATE telegram_updates
+                    SET status = 'completed',
+                        case_id = ?,
+                        reply_text = ?,
+                        lease_expires_at = NULL,
+                        created_at = ?
+                    WHERE update_id = ? AND lease_owner = ? AND status = 'processing'
+                    """,
+                    (case_id, reply_text, now_iso, update_id, owner_id),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO telegram_updates
+                    (update_id, status, lease_owner, lease_expires_at, case_id, reply_text, created_at)
+                    VALUES (?, 'completed', NULL, NULL, ?, ?, ?)
+                    """,
+                    (update_id, case_id, reply_text, now_iso),
+                )
 
     def is_receipt_replayed(
         self,
@@ -404,15 +872,25 @@ class CaseRepository:
         ttl_minutes: int | None = None,
         now: datetime | None = None,
     ) -> BlockRule:
-        """Create/refresh a TTL-bounded block rule while protecting SAFE demo IOCs."""
-        if raw_value and raw_value.strip():
+        """Create/refresh a TTL-bounded block rule with server-authoritative masking & PII redaction."""
+        _ = masked_value  # Never trust caller-supplied display labels on public radar rules
+        has_raw = bool(raw_value and raw_value.strip())
+        if has_raw and raw_value is not None:
             target_hash = hash_ioc(ioc_type, raw_value)
+            resolved_type: IocType = ioc_type
             resolved_mask = mask_ioc(ioc_type, raw_value)
         elif ioc_hash:
             target_hash = ioc_hash.strip().lower()
-            resolved_mask = masked_value or ""
+            resolved_type = ioc_type
+            resolved_mask = ""
         else:
             raise ValueError("Either raw_value or ioc_hash is required.")
+
+        scrubbed_reason = scrub_free_text_pii(
+            reason.strip(),
+            known_phones=[raw_value] if (has_raw and raw_value and ioc_type == "phone") else None,
+            known_accounts=[raw_value] if (has_raw and raw_value and ioc_type == "bank_account") else None,
+        )
 
         ts_now = now or datetime.now(UTC)
         ttl = ttl_minutes if ttl_minutes is not None else self._default_ttl
@@ -430,12 +908,25 @@ class CaseRepository:
                     "IOC này thuộc kịch bản Demo an toàn gốc nên được khóa bảo vệ chống ghi đè."
                 )
 
-            if not resolved_mask:
-                sighting = conn.execute(
-                    "SELECT masked_value FROM ioc_sightings WHERE ioc_hash = ?",
+            if not has_raw:
+                camp_row = conn.execute(
+                    "SELECT primary_ioc_type, primary_ioc_masked "
+                    "FROM campaigns WHERE primary_ioc_hash = ? LIMIT 1",
                     (target_hash,),
                 ).fetchone()
-                resolved_mask = str(sighting["masked_value"]) if sighting else f"{target_hash[:6]}****"
+                if camp_row is not None:
+                    resolved_type = camp_row["primary_ioc_type"]
+                    resolved_mask = str(camp_row["primary_ioc_masked"])
+                else:
+                    sighting = conn.execute(
+                        "SELECT ioc_type, masked_value FROM ioc_sightings WHERE ioc_hash = ? LIMIT 1",
+                        (target_hash,),
+                    ).fetchone()
+                    if sighting is not None:
+                        resolved_type = sighting["ioc_type"]
+                        resolved_mask = str(sighting["masked_value"])
+                    else:
+                        resolved_mask = f"{target_hash[:6]}****"
 
             conn.execute(
                 """
@@ -451,21 +942,26 @@ class CaseRepository:
                 (
                     rule_id,
                     target_hash,
-                    ioc_type,
+                    resolved_type,
                     resolved_mask,
-                    reason.strip(),
+                    scrubbed_reason,
                     created_iso,
                     expires_iso,
                 ),
             )
+            persisted = conn.execute(
+                "SELECT rule_id, ioc_type, masked_value, reason, created_at, expires_at "
+                "FROM block_rules WHERE ioc_hash = ?",
+                (target_hash,),
+            ).fetchone()
 
         return BlockRule(
-            rule_id=rule_id,
-            ioc_type=ioc_type,
-            masked_value=resolved_mask,
-            reason=reason.strip(),
-            created_at=created_iso,
-            expires_at=expires_iso,
+            rule_id=str(persisted["rule_id"]) if persisted else rule_id,
+            ioc_type=persisted["ioc_type"] if persisted else resolved_type,
+            masked_value=str(persisted["masked_value"]) if persisted else resolved_mask,
+            reason=str(persisted["reason"]) if persisted else scrubbed_reason,
+            created_at=str(persisted["created_at"]) if persisted else created_iso,
+            expires_at=str(persisted["expires_at"]) if persisted else expires_iso,
             active=True,
         )
 
@@ -475,9 +971,9 @@ class CaseRepository:
             return bool(cur.rowcount and cur.rowcount > 0)
 
     def reset_transient_rules(self) -> int:
+        """Clear transient /radar block rules without erasing receipt-replay forensic history."""
         with self._connect() as conn:
             cur = conn.execute("DELETE FROM block_rules")
-            conn.execute("DELETE FROM receipt_hashes")
             return int(cur.rowcount or 0)
 
     def get_radar_graph(self, now: datetime | None = None) -> RadarGraphResponse:
@@ -498,6 +994,9 @@ class CaseRepository:
             sighting_rows = conn.execute(
                 "SELECT * FROM ioc_sightings ORDER BY hit_count DESC LIMIT 60"
             ).fetchall()
+            total_sightings_row = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM ioc_sightings"
+            ).fetchone()
             edge_rows = conn.execute("SELECT * FROM ioc_edges LIMIT 120").fetchall()
             case_cnt_row = conn.execute("SELECT COUNT(*) AS c FROM cases").fetchone()
 
@@ -575,7 +1074,9 @@ class CaseRepository:
             active_block_rules=active_rules,
             stats={
                 "total_cases": int(case_cnt_row["c"]) if case_cnt_row else 0,
-                "tracked_iocs": len(sighting_rows),
+                "tracked_iocs": (
+                    int(total_sightings_row["cnt"]) if total_sightings_row else len(sighting_rows)
+                ),
                 "emerging_campaigns": len(campaigns),
                 "active_blocks": len(active_rules),
             },

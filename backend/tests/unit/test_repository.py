@@ -60,7 +60,7 @@ def test_wal_pii_redaction_ttl_protected_demo_and_hash_blocking(
     assert "0912345678" not in dumped_case
     assert "190384756201" not in dumped_case
     assert "091****678" in loaded.iocs.phones
-    assert "1903****6201" in loaded.iocs.bank_accounts
+    assert "19****01" in loaded.iocs.bank_accounts
 
     assert repo.is_receipt_replayed("a1b2c3d4e5f60718", None, None) is True
     assert repo.is_receipt_replayed("ffffffffffffffff", None, None) is False

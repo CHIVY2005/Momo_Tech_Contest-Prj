@@ -61,12 +61,12 @@ Phần lớn các vụ lừa đảo tài chính tại Việt Nam diễn ra ở *
 
 | Chỉ số Thực nghiệm | Kết quả Đo Thực tế | Ghi chú |
 | --- | --- | --- |
-| **Precision / Recall / F1** | **`1.0000` / `1.0000` / `1.0000`** | Đúng `40/40` ca (`28` ca lừa đảo/tấn công, `12` ca sạch) |
-| **Tỷ lệ Báo động giả trên Tin Khuyến cáo (`Advisory FPR`)** | **`0.0000` (`0%`)** | `5/5` tin khuyến cáo chính thống đều được xếp `SAFE` (`2–3/100`) |
-| **Tỷ lệ Chặn Tấn công `Prompt Injection`** | **`1.0000` (`100%`)** | Chặn toàn bộ kỹ thuật thoát thẻ XML & ghi đè điểm số |
-| **Tỷ lệ Phát hiện `Fake Bill` & Bẫy `VietQR`** | **`1.0000` (`100%`)** | Bắt trọn lỗi sửa số tiền, sai STK nhận, sai CRC-16 |
-| **Dung lượng & Độ trễ `scam_e5_int8.onnx` (CPU)** | **`34.25 MB` · `P50 = 11 ms` (`P95 = 13 ms`)** | Cắt tỉa từ vựng Việt–Anh (`36.000` token), không cần PyTorch |
-| **Model Suy luận Đa phương thức Thực tế** | `gemini-4-hydrogen` (`40/40` ca, `0` lỗi API) | Độ trễ toàn trình `E2E P50 = 7.17s` |
+| **Precision / Recall / F1** | **`1.0000` / `1.0000` / `1.0000`** | Phân loại đúng `40/40` ca tổng hợp (`28` ca lừa đảo/tấn công, `12` ca sạch) |
+| **Tỷ lệ Báo động giả trên Tin Khuyến cáo (`Advisory FPR`)** | **`0.0000` (`0%`)** | `5/5` ca khuyến cáo chính thống đều được phân loại `SAFE` (`6–15/100`) |
+| **Kết quả Nhóm ca `Prompt Injection`** | **`3/3` ca `>= 70` đ (`100%`)** | `3/3` ca đạt ngưỡng `>= 70` đ; `2/3` ca (`66.7%`) bật cờ tĩnh `prompt_injection_detected` |
+| **Kết quả Nhóm ca `Fake Bill` & `VietQR`** | **`1.0000` (`7/7` ca phát hiện)** | Phân loại đúng toàn bộ các ca mẫu biên lai chỉnh sửa & mã VietQR bẫy |
+| **Dung lượng & Độ trễ `scam_e5_int8.onnx` (CPU)** | **`34.25 MB` · `P50 = 10 ms` (`P95 = 14 ms`)** | Cắt tỉa từ vựng Việt–Anh (`36.000` token), không cần PyTorch |
+| **Model Suy luận Đa phương thức Thực tế** | `gemini-4-hydrogen` (`40/40` ca hoàn tất, `0` ca suy giảm cuối) | Độ trễ toàn trình `E2E P50 = 7.27s` |
 
 ---
 
@@ -82,11 +82,11 @@ cp backend/.env.example backend/.env
 docker compose --env-file backend/.env up --build
 ```
 
-Sau khi khởi chạy, mở trình duyệt tại `http://localhost:3000` (hoặc `/radar` tại `http://localhost:3000/radar`). Mã PIN mặc định cho Giám khảo thử tính năng Khóa 1-Click trên `/radar` là **`2026`**.
+Sau khi khởi chạy, mở trình duyệt tại `http://localhost:3000` (hoặc `/radar` tại `http://localhost:3000/radar`). Mặc định cổng ghi trên `/radar` được khóa cho đến khi bạn đặt khóa bí mật `ANALYST_PIN` riêng (chỉ khi bật chế độ trình diễn cô lập `APP_ENV=demo` thì mã PIN mẫu `2026` mới được phép sử dụng).
 
 ### Cách 2: Chạy Thủ công trong Môi trường Phát triển
 
-**Yêu cầu:** Python `3.11+` và Node.js `20+`.
+**Yêu cầu:** Python `3.12+` và Node.js `20+`.
 
 ```powershell
 # Terminal 1 — Khởi chạy Backend FastAPI

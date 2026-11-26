@@ -40,6 +40,7 @@ def _build_class_pools(rng: random.Random) -> dict[str, list[str]]:
         "dichvucong-bo.online",
         "etax-hoanthue.click",
     ]
+    dates_vn = [f"{(d % 28) + 1:02d}/{(d % 12) + 1:02d}/2026" for d in range(60)]
 
     pools: dict[str, list[str]] = {label: [] for label in SCAM_LABELS}
 
@@ -61,28 +62,33 @@ def _build_class_pools(rng: random.Random) -> dict[str, list[str]]:
         place = places[(i // 2) % len(places)]
         tod = times_of_day[(i // 4) % len(times_of_day)]
         topic = casual_topics[(i // 6) % len(casual_topics)]
+        day_str = dates_vn[i % len(dates_vn)]
         acct = f"1903{100000 + i:06d}"
         templates = [
-            f"{name} ơi, lát tiện chuyển lại cho mình {amt} {item} vào {bank} {acct} nhé, cảm ơn nhiều!",
-            f"Shop xác nhận đơn {item} của chị {name} tổng {amt} tại {place}, khi giao tới nơi bưu tá gọi chị nha.",
-            f"Chào {name}, hẹn {tod} tại {place} để {topic} nhé mọi người.",
-            f"Ghi chú công việc cùng {name} lúc {tod}: {topic} ở {place}.",
-            f"Biên lai chuyển khoản thành công {bank} số tiền {amt} đến STK {acct} thanh toán {item} lúc {tod}.",
+            f"{name} ơi, lát tiện chuyển lại cho mình {amt} {item} ngày {day_str} vào {bank} {acct} nhé, cảm ơn nhiều!",
+            f"Shop xác nhận đơn #{2100 + i} ({item}) của chị {name} tổng {amt} tại {place}, khi giao tới nơi bưu tá gọi chị nha.",
+            f"Chào {name}, hẹn {tod} ngày {day_str} tại {place} để {topic} (nhóm {10 + (i % 45)}) nhé mọi người.",
+            f"Ghi chú công việc tuần {(i % 52) + 1} cùng {name} lúc {tod} ({day_str}, mã phòng P{100 + i}): {topic} ở {place}.",
+            f"Biên lai chuyển khoản thành công {bank} số tiền {amt} đến STK {acct} thanh toán {item} lúc {tod} ngày {day_str}.",
         ]
         pools["SAFE_NORMAL"].append(templates[i % len(templates)])
 
-    # 2. SAFE_ADVISORY
+    # 2. SAFE_ADVISORY (rich natural variations without any synthetic class tag)
     orgs = ["Ngân hàng", "NAPAS", "Cục An ninh mạng A05", "Bộ Công an", "Vietcombank", "Techcombank", "Cổng Dịch vụ công"]
     advisory_domains = ["vietcombank.com.vn", "techcombank.com.vn", "napas.com.vn", "dichvucong.gov.vn"]
+    hotlines = ["1900 545413", "1800 588822", "069 234 2593", "1900 558868", "1900 8198"]
     for i in range(900):
         org = orgs[i % len(orgs)]
         dom = advisory_domains[(i // 3) % len(advisory_domains)]
         bank = banks[(i // 2) % len(banks)]
+        day_str = dates_vn[i % len(dates_vn)]
+        hotline = hotlines[(i // 4) % len(hotlines)]
+        bulletin_no = f"TB-{2026000 + i}"
         templates = [
-            f"[CẢNH BÁO AN TOÀN] {org} khuyến cáo khách hàng TUYỆT ĐỐI KHÔNG cung cấp mã OTP, mật khẩu và KHÔNG cài đặt file .apk không rõ nguồn gốc. Chi tiết tại https://{dom}",
-            f"[THÔNG BÁO BẢO MẬT] {org} cảnh báo thủ đoạn mạo danh SMS đổi điểm thưởng thẻ {bank}. Ngân hàng KHÔNG bao giờ gửi đường link yêu cầu nhập OTP.",
-            f"[KHUYẾN CÁO PHÒNG CHỐNG LỪA ĐẢO] {org} khẳng định Cơ quan Công an và Viện Kiểm sát KHÔNG làm việc qua điện thoại/Zalo và KHÔNG yêu cầu chuyển tiền chứng minh trong sạch.",
-            f"[CẨM NANG AN TOÀN {org}] Mã VietQR chỉ dùng để CHUYỂN TIỀN ĐI, tuyệt đối KHÔNG quét mã QR do người lạ gửi để nhận tiền hoàn đơn hàng ({bank}).",
+            f"[CẢNH BÁO AN TOÀN {bulletin_no}] Ngày {day_str}, {org} khuyến cáo khách hàng TUYỆT ĐỐI KHÔNG cung cấp mã OTP, mật khẩu và KHÔNG cài đặt file .apk không rõ nguồn gốc. Chi tiết tại https://{dom}",
+            f"[THÔNG BÁO BẢO MẬT {bulletin_no}] {org} cảnh báo thủ đoạn mạo danh SMS đổi điểm thưởng thẻ {bank} ({day_str}). Ngân hàng KHÔNG bao giờ gửi đường link yêu cầu nhập OTP; liên hệ tổng đài {hotline}.",
+            f"[KHUYẾN CÁO PHÒNG CHỐNG LỪA ĐẢO #{100 + i}] Bản tin {day_str}: {org} khẳng định Cơ quan Công an và Viện Kiểm sát KHÔNG làm việc qua điện thoại/Zalo và KHÔNG yêu cầu chuyển tiền chứng minh trong sạch.",
+            f"[CẨM NANG AN TOÀN {org} - Kỳ {10 + i}] Mã VietQR chỉ dùng để CHUYỂN TIỀN ĐI, tuyệt đối KHÔNG quét mã QR do người lạ gửi để nhận tiền hoàn đơn hàng ({bank}, cập nhật {day_str}).",
         ]
         pools["SAFE_ADVISORY"].append(templates[i % len(templates)])
 
@@ -157,7 +163,7 @@ def generate_synthetic_samples(
     per_class: int = 520,
     seed: int = 2026,
 ) -> list[dict[str, str]]:
-    """Generate deterministic, unique, balanced synthetic Vietnamese messages across 7 classes."""
+    """Generate deterministic, unique, balanced synthetic Vietnamese messages with zero label leakage."""
     rng = random.Random(seed)  # noqa: S311
     pools = _build_class_pools(rng)
     dataset: list[dict[str, str]] = []
@@ -170,11 +176,10 @@ def generate_synthetic_samples(
         while picked < per_class and idx < len(candidates):
             text = candidates[idx]
             idx += 1
-            # Apply realistic no-diacritic / teencode augmentation on ~25% of samples
             if picked % 4 == 1:
                 text = strip_vietnamese_diacritics(text)
             if text in seen:
-                text = f"{text} [{label[:4]}-{picked}]"
+                continue
             seen.add(text)
             dataset.append({"text": text, "label": label})
             picked += 1

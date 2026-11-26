@@ -7,6 +7,7 @@ import type { EmergingCampaign } from "@/lib/types";
 interface CampaignQueueProps {
   campaigns: EmergingCampaign[];
   busyCampaignId: string | null;
+  isLocked?: boolean;
   onBlockCampaign: (campaign: EmergingCampaign) => void;
 }
 
@@ -19,6 +20,7 @@ const IOC_TYPE_LABELS: Record<EmergingCampaign["primary_ioc_type"], string> = {
 export function CampaignQueue({
   campaigns,
   busyCampaignId,
+  isLocked = false,
   onBlockCampaign,
 }: CampaignQueueProps) {
   return (
@@ -68,7 +70,7 @@ export function CampaignQueue({
                 ) : (
                   <button
                     type="button"
-                    disabled={isBusy}
+                    disabled={isBusy || isLocked}
                     onClick={() => onBlockCampaign(camp)}
                     className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-rose-600 px-3.5 py-2 text-xs font-bold text-white transition-colors hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
                   >

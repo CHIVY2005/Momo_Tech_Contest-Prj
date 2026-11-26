@@ -4,10 +4,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Final, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 MAX_UPLOAD_CEILING_BYTES: Final[int] = 10 * 1024 * 1024
+AppEnvSetting = Literal["demo", "development", "production"]
 LlmProviderSetting = Literal["auto", "openai_compatible", "google_genai"]
 ResolvedLlmProvider = Literal["openai_compatible", "google_genai"]
 
@@ -29,6 +30,7 @@ class Settings(BaseSettings):
 
     app_name: str = "VeriShield AI"
     app_version: str = "2.0.0"
+    app_env: AppEnvSetting = "development"
 
     llm_provider: LlmProviderSetting = "auto"
     gemini_base_url: str = ""
@@ -41,7 +43,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
 
-    analyst_pin: str = "2026"
+    analyst_pin: str = ""
     block_rule_ttl_minutes: int = Field(default=30, ge=1, le=1440)
 
     model_dir: str = "app/data/models"
@@ -75,6 +77,33 @@ class Settings(BaseSettings):
         raise ValueError(
             f"Unsupported LLM_PROVIDER={raw!r}. Expected 'auto', 'openai_compatible', or 'google_genai'."
         )
+
+    @model_validator(mode="after")
+    def _validate_production_secrets(self) -> "Settings":
+        pin = self.analyst_pin.strip()
+        if self.app_env == "demo" and not pin:
+            self.analyst_pin = "2026"
+            return self
+
+        placeholder_pins = {
+            "change_me",
+            "changeme",
+            "change_me_strong_analyst_pin",
+            "your_pin_here",
+            "example",
+            "password",
+            "1234",
+            "0000",
+        }
+        if pin.lower() in placeholder_pins:
+            raise ValueError("ANALYST_PIN cannot be a placeholder/example value.")
+        if self.app_env != "demo" and pin == "2026":
+            raise ValueError(
+                f"APP_ENV={self.app_env} forbids the published contest demo ANALYST_PIN ('2026')."
+            )
+        if self.app_env == "production" and len(pin) < 8:
+            raise ValueError("APP_ENV=production requires ANALYST_PIN of at least 8 characters.")
+        return self
 
     @property
     def resolved_llm_provider(self) -> ResolvedLlmProvider:

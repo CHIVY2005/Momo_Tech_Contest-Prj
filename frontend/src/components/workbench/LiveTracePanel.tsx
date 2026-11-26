@@ -28,6 +28,10 @@ const EXPECTED_PIPELINE_STAGES: Array<{ step_id: string; defaultTitle: string }>
   },
 ];
 
+function isTerminalStatus(status: TraceStep["status"] | undefined): boolean {
+  return status === "done" || status === "warning" || status === "skipped";
+}
+
 export function LiveTracePanel({ steps, isAnalyzing }: LiveTracePanelProps) {
   if (!isAnalyzing && steps.length === 0) {
     return null;
@@ -55,48 +59,51 @@ export function LiveTracePanel({ steps, isAnalyzing }: LiveTracePanelProps) {
 
       <ol className="grid grid-cols-1 gap-2.5 md:grid-cols-2 lg:grid-cols-4">
         {EXPECTED_PIPELINE_STAGES.map((stage, idx) => {
-          const doneStep = byId.get(stage.step_id);
-          const isCurrentRunning =
-            !doneStep && isAnalyzing && (idx === 0 || byId.has(EXPECTED_PIPELINE_STAGES[idx - 1]?.step_id ?? ""));
+          const step = byId.get(stage.step_id);
+          const prevStep = idx > 0 ? byId.get(EXPECTED_PIPELINE_STAGES[idx - 1]?.step_id ?? "") : undefined;
+          const isExplicitRunning = step?.status === "running";
+          const isInferredRunning =
+            !step && isAnalyzing && (idx === 0 || isTerminalStatus(prevStep?.status));
+          const isRunning = isExplicitRunning || isInferredRunning;
 
           return (
             <li
               key={stage.step_id}
               className={`rounded-xl border p-3 transition-colors ${
-                doneStep?.status === "warning"
+                step?.status === "warning"
                   ? "border-amber-500/40 bg-amber-500/10"
-                  : doneStep
-                    ? "border-emerald-500/30 bg-emerald-500/5"
-                    : isCurrentRunning
-                      ? "border-sky-500/50 bg-sky-500/10"
+                  : isRunning
+                    ? "border-sky-500/50 bg-sky-500/10"
+                    : step
+                      ? "border-emerald-500/30 bg-emerald-500/5"
                       : "border-slate-800 bg-[#0b1120]"
               }`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-100">
-                  {doneStep?.status === "warning" ? (
+                  {step?.status === "warning" ? (
                     <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
-                  ) : doneStep?.status === "skipped" ? (
+                  ) : step?.status === "skipped" ? (
                     <MinusCircle className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
-                  ) : doneStep ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
-                  ) : isCurrentRunning ? (
+                  ) : isRunning ? (
                     <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-400" aria-hidden="true" />
+                  ) : step ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
                   ) : (
                     <span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-700" aria-hidden="true" />
                   )}
-                  <span className="leading-snug">{doneStep?.title ?? stage.defaultTitle}</span>
+                  <span className="leading-snug">{step?.title ?? stage.defaultTitle}</span>
                 </div>
-                {doneStep && (
+                {step && step.status !== "running" && (
                   <span className="shrink-0 rounded bg-slate-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[10px] text-slate-300">
-                    {doneStep.duration_ms}ms
+                    {step.duration_ms}ms
                   </span>
                 )}
               </div>
               <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
-                {doneStep
-                  ? doneStep.detail
-                  : isCurrentRunning
+                {step
+                  ? step.detail
+                  : isRunning
                     ? "Đang thực thi bước kiểm định..."
                     : "Đang chờ bước trước..."}
               </p>

@@ -45,8 +45,17 @@ def _load_replacements(base_url: str) -> dict[str, str]:
 
     cm = results["classification_metrics"]
     lat = results["latency_ms"]
+    health = results["api_health"]
     models_obs: dict[str, int] = results.get("actual_models_observed") or {}
-    primary_model = next(iter(models_obs.keys()), results["llm_config"]["configured_model"])
+
+    live_ok = int(health.get("live_llm_success_count", 0))
+    total_cases = int(results.get("dataset_size", 40))
+    if live_ok <= 0 or not models_obs:
+        raise RuntimeError(
+            "Refusing to render contest PDFs without verified live LLM "
+            "benchmark observations in evaluation/results.json."
+        )
+    primary_model = max(models_obs.items(), key=lambda kv: kv[1])[0]
 
     clean_url = base_url.rstrip("/")
     return {
@@ -54,8 +63,19 @@ def _load_replacements(base_url: str) -> dict[str, str]:
         "{{PRECISION}}": f"{cm['precision'] * 100:.1f}%",
         "{{RECALL}}": f"{cm['recall'] * 100:.1f}%",
         "{{ADV_FPR}}": f"{cm['safety_advisory_fpr'] * 100:.1f}%",
+        "{{ADV_CLEAN_RATE}}": f"{(1.0 - float(cm['safety_advisory_fpr'])) * 100:.1f}%",
         "{{INJ_BLOCK}}": f"{cm['prompt_injection_block_rate'] * 100:.1f}%",
+        "{{INJ_FLAG}}": (
+            f"{cm.get('prompt_injection_flag_rate', cm['prompt_injection_block_rate']) * 100:.1f}%"
+        ),
+        "{{FAKE_BILL_CATCH}}": f"{cm['fake_bill_catch_rate'] * 100:.1f}%",
+        "{{LIVE_SUCCESS_COUNT}}": str(live_ok),
+        "{{TOTAL_CASES}}": str(total_cases),
+        "{{TERMINAL_ERRORS}}": str(
+            health.get("terminal_error_count", health.get("api_error_count", 0))
+        ),
         "{{ONNX_SIZE_MB}}": f"{train_metrics['onnx_size_mb']:.2f}",
+        "{{PRUNED_VOCAB}}": f"{int(train_metrics['pruned_vocab_size']):,}",
         "{{ONNX_P50_MS}}": str(lat["onnx_p50_ms"]),
         "{{ONNX_P95_MS}}": str(lat["onnx_p95_ms"]),
         "{{E2E_P50_S}}": f"{lat['e2e_p50_ms'] / 1000.0:.2f}",

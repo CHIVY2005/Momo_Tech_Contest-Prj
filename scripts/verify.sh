@@ -16,7 +16,7 @@ else
 fi
 
 echo "==> [1/3] Running Ruff linter..."
-"${RUFF}" check app tests
+"${RUFF}" check app tests ../scripts ../evaluation ../submission ../training
 
 echo "==> [2/3] Running Mypy strict typecheck..."
 "${MYPY}" --config-file pyproject.toml app

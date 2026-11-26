@@ -17,7 +17,7 @@ if (-not (Test-Path $PytestExe)) {
 Push-Location $BackendDir
 try {
     Write-Host "==> [1/3] Running Ruff linter..." -ForegroundColor Yellow
-    & $RuffExe check app tests
+    & $RuffExe check app tests ../scripts ../evaluation ../submission ../training
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     Write-Host "==> [2/3] Running Mypy strict typecheck..." -ForegroundColor Yellow

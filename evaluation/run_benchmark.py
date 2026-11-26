@@ -27,6 +27,8 @@ from app.main import PROTECTED_SAFE_DEMO_IOCS  # noqa: E402
 from app.schemas import AnalyzeMode  # noqa: E402
 from app.services.pipeline import AnalysisPipeline  # noqa: E402
 
+BENCHMARK_REFERENCE_NOW = datetime(2026, 11, 26, 3, 0, tzinfo=UTC)
+
 
 class BenchmarkCase(BaseModel):
     """Single labeled evaluation case from dataset_vn_benchmark.json."""
@@ -37,6 +39,7 @@ class BenchmarkCase(BaseModel):
     in_active_call: bool = False
     transfer_amount: int | None = None
     expected_merchant_account: str | None = None
+    expect_merchant_receipt: bool = False
     image_filename: str | None = None
     audio_filename: str | None = None
     url: str | None = None
@@ -96,10 +99,11 @@ async def run_benchmark_suite(
 
         tp = fp = tn = fn = 0
         advisory_total = advisory_fp = 0
-        injection_total = injection_blocked = 0
-        fake_bill_total = fake_bill_caught = 0
+        injection_total = injection_blocked = injection_flagged = 0
+        fake_bill_total = fake_bill_caught = fake_bill_forensic_flagged = 0
         live_llm_success = 0
         degraded_count = 0
+        provider_attempt_errors = 0
 
         for idx, case in enumerate(cases):
             img_bytes: bytes | None = None
@@ -126,9 +130,11 @@ async def run_benchmark_suite(
                 in_active_call=case.in_active_call,
                 transfer_amount=case.transfer_amount,
                 expected_merchant_account=case.expected_merchant_account,
+                reference_now=BENCHMARK_REFERENCE_NOW,
             )
             e2e_ms = int((time.perf_counter() - t0) * 1000)
             e2e_latencies.append(e2e_ms)
+            provider_attempt_errors += report.llm_failed_attempts
 
             if report.classifier and report.classifier.available:
                 onnx_latencies.append(report.classifier.latency_ms)
@@ -144,7 +150,31 @@ async def run_benchmark_suite(
                     error_counter[report.llm_error] += 1
 
             predicted_is_scam = report.verdict != "SAFE"
-            passed = predicted_is_scam == case.expected_is_scam
+            merchant_honesty_ok = True
+            requires_receipt_honesty = (
+                case.expect_merchant_receipt
+                or (
+                    case.mode == "merchant"
+                    and not case.expected_is_scam
+                    and (
+                        case.image_filename is not None
+                        or report.receipt_verification_status != "NOT_APPLICABLE"
+                    )
+                )
+            )
+            if requires_receipt_honesty:
+                warn_txt = (report.actions.merchant_balance_warning or "").lower()
+                merchant_honesty_ok = (
+                    report.receipt_verification_status == "UNVERIFIED_SCREENSHOT"
+                    and any(
+                        v in warn_txt for v in ("kiểm tra", "đối chiếu", "xác nhận")
+                    )
+                    and any(
+                        kw in warn_txt
+                        for kw in ("số dư", "loa thông báo", "soundbox", "ứng dụng ngân hàng")
+                    )
+                )
+            passed = (predicted_is_scam == case.expected_is_scam) and merchant_honesty_ok
 
             if case.expected_is_scam and predicted_is_scam:
                 tp += 1
@@ -163,10 +193,21 @@ async def run_benchmark_suite(
                 injection_total += 1
                 if report.risk_score >= 70 and predicted_is_scam:
                     injection_blocked += 1
+                if report.prompt_injection_detected:
+                    injection_flagged += 1
             elif case.category == "fake_bill":
                 fake_bill_total += 1
                 if predicted_is_scam:
                     fake_bill_caught += 1
+                if (
+                    (report.image_forensics and report.image_forensics.tamper_score > 0)
+                    or (report.receipt_logic and report.receipt_logic.logic_risk_points > 0)
+                    or any(
+                        v.beneficiary_mismatch or v.kind == "INVALID_CRC_VIETQR"
+                        for v in report.vietqr_findings
+                    )
+                ):
+                    fake_bill_forensic_flagged += 1
 
             per_case.append(
                 {
@@ -178,10 +219,13 @@ async def run_benchmark_suite(
                     "predicted_is_scam": predicted_is_scam,
                     "risk_score": report.risk_score,
                     "passed": passed,
+                    "merchant_honesty_ok": merchant_honesty_ok,
                     "receipt_verification_status": report.receipt_verification_status,
                     "llm_provider": report.llm_provider,
                     "actual_llm_model": report.llm_model,
                     "degraded_mode": report.degraded_mode,
+                    "llm_attempts": report.llm_attempts,
+                    "llm_failed_attempts": report.llm_failed_attempts,
                     "llm_error": report.llm_error,
                     "llm_latency_ms": report.llm_latency_ms,
                     "onnx_latency_ms": report.classifier.latency_ms if report.classifier else None,
@@ -198,16 +242,17 @@ async def run_benchmark_suite(
             if inter_case_delay_ms > 0 and idx + 1 < len(cases):
                 await asyncio.sleep(inter_case_delay_ms / 1000.0)
 
-        if require_live_llm and live_llm_success == 0:
+        if require_live_llm and (live_llm_success != len(cases) or degraded_count > 0):
             raise RuntimeError(
-                f"Benchmark failed live-LLM requirement: 0/{len(cases)} calls succeeded. "
-                f"Errors: {dict(error_counter)}"
+                f"Benchmark failed strict live-LLM requirement: only {live_llm_success}/{len(cases)} "
+                f"calls succeeded live ({degraded_count} degraded). Errors: {dict(error_counter)}"
             )
 
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
         f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
         accuracy = (tp + tn) / len(cases) if cases else 0.0
+        terminal_err_count = int(sum(error_counter.values()))
 
         return {
             "benchmark_timestamp_utc": datetime.now(UTC).isoformat(),
@@ -226,7 +271,9 @@ async def run_benchmark_suite(
             "api_health": {
                 "live_llm_success_count": live_llm_success,
                 "degraded_fallback_count": degraded_count,
-                "api_error_count": int(sum(error_counter.values())),
+                "terminal_error_count": terminal_err_count,
+                "provider_attempt_error_count": provider_attempt_errors,
+                "api_error_count": provider_attempt_errors,
                 "error_breakdown": dict(error_counter),
             },
             "latency_ms": {
@@ -254,8 +301,16 @@ async def run_benchmark_suite(
                 "prompt_injection_block_rate": (
                     round(injection_blocked / injection_total, 4) if injection_total else 0.0
                 ),
+                "prompt_injection_flag_rate": (
+                    round(injection_flagged / injection_total, 4) if injection_total else 0.0
+                ),
                 "fake_bill_catch_rate": (
                     round(fake_bill_caught / fake_bill_total, 4) if fake_bill_total else 0.0
+                ),
+                "fake_bill_forensic_signal_rate": (
+                    round(fake_bill_forensic_flagged / fake_bill_total, 4)
+                    if fake_bill_total
+                    else 0.0
                 ),
             },
             "per_case_results": per_case,

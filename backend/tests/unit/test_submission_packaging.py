@@ -21,12 +21,22 @@ def test_rendered_pdfs_and_templates_respect_strict_contest_page_limits() -> Non
 
     slides_pdf = DIST_DIR / "VeriShield_AI_Slides_10p.pdf"
     guide_pdf = DIST_DIR / "VeriShield_AI_UserGuide_1p.pdf"
-    if slides_pdf.exists():
-        assert slides_pdf.read_bytes()[:5] == b"%PDF-"
-        assert len(PdfReader(str(slides_pdf)).pages) == 10
-    if guide_pdf.exists():
-        assert guide_pdf.read_bytes()[:5] == b"%PDF-"
-        assert len(PdfReader(str(guide_pdf)).pages) == 1
+    assert slides_pdf.exists(), f"Missing required contest artifact: {slides_pdf}"
+    assert guide_pdf.exists(), f"Missing required contest artifact: {guide_pdf}"
+
+    assert slides_pdf.read_bytes()[:5] == b"%PDF-"
+    slides_reader = PdfReader(str(slides_pdf))
+    assert len(slides_reader.pages) == 10
+    s_box = slides_reader.pages[0].mediabox
+    assert float(s_box.width) > float(s_box.height)
+
+    assert guide_pdf.read_bytes()[:5] == b"%PDF-"
+    guide_reader = PdfReader(str(guide_pdf))
+    assert len(guide_reader.pages) == 1
+    g_box = guide_reader.pages[0].mediabox
+    # A4 portrait in PDF points (~595.28 x 841.89 pt)
+    assert 590.0 <= float(g_box.width) <= 600.0
+    assert 835.0 <= float(g_box.height) <= 850.0
 
 
 def _assert_clean_archive(zip_path: Path) -> None:
@@ -43,6 +53,14 @@ def _assert_clean_archive(zip_path: Path) -> None:
         "frontend/package.json",
         "frontend/src/app/page.tsx",
         "frontend/src/app/radar/page.tsx",
+        "frontend/src/lib/api.ts",
+        "frontend/src/lib/formatters.ts",
+        "frontend/src/lib/sse.ts",
+        "frontend/src/lib/types.ts",
+        "frontend/src/lib/radarLayout.ts",
+        "frontend/src/lib/__tests__/sse.test.ts",
+        "frontend/src/lib/__tests__/radarLayout.test.ts",
+        "frontend/src/lib/__tests__/auditRegressions.test.ts",
         "training/train_export_e5_onnx.py",
         "evaluation/dataset_vn_benchmark.json",
         "evaluation/results.json",

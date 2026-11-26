@@ -95,11 +95,15 @@ def _extract_editing_software(img: Image.Image, raw_bytes: bytes) -> tuple[str |
 
 
 def _compute_ela_and_tamper_score(rgb_img: Image.Image) -> tuple[int, str, list[str]]:
+    working = rgb_img
+    if max(rgb_img.size) > 1600:
+        working = rgb_img.copy()
+        working.thumbnail((1600, 1600), Image.Resampling.BILINEAR)
     jpeg_buf = io.BytesIO()
-    rgb_img.save(jpeg_buf, format="JPEG", quality=90)
+    working.save(jpeg_buf, format="JPEG", quality=90)
     jpeg_buf.seek(0)
     with Image.open(jpeg_buf) as recompressed:
-        diff_img = ImageChops.difference(rgb_img, recompressed.convert("RGB"))
+        diff_img = ImageChops.difference(working, recompressed.convert("RGB"))
 
     diff_arr = np.asarray(diff_img, dtype=np.float32)
     gray_err = np.mean(diff_arr, axis=2)

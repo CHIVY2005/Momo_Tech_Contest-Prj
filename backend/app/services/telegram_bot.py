@@ -1,8 +1,10 @@
-"""Telegram 1-Tap Forward Bot webhook handler with verified Bot API delivery."""
+"""Telegram 1-Tap Forward Bot webhook handler with verified Bot API delivery & idempotency."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import uuid
 from typing import Any
 
 from app.config import Settings
@@ -15,6 +17,10 @@ logger = logging.getLogger(__name__)
 
 class TelegramDeliveryError(RuntimeError):
     """Raised when sending a reply through Telegram Bot API fails or is rejected."""
+
+
+class InvalidTelegramPayloadError(ValueError):
+    """Raised when an authenticated Telegram webhook body violates expected object structure."""
 
 
 def format_telegram_verdict_reply(report: AnalysisReport) -> str:
@@ -73,21 +79,109 @@ async def handle_telegram_update(
     pipeline: AnalysisPipeline,
     settings: Settings,
 ) -> dict[str, Any]:
-    """Process incoming Telegram message/forwarded message and deliver reply reliably."""
-    msg = update.get("message") or update.get("edited_message") or {}
-    chat = msg.get("chat") or {}
-    chat_id = chat.get("id")
-    raw_text = str(msg.get("text") or msg.get("caption") or "").strip()
+    """Process incoming Telegram message/forwarded message with strict schema & update_id idempotency."""
+    if not isinstance(update, dict):
+        raise InvalidTelegramPayloadError("Telegram update must be a JSON object.")
+
+    raw_update_id = update.get("update_id")
+    if raw_update_id is not None and (
+        isinstance(raw_update_id, bool) or not isinstance(raw_update_id, int)
+    ):
+        raise InvalidTelegramPayloadError("Telegram update_id must be an integer.")
+    update_id: int | None = raw_update_id
+
+    for field_name in ("message", "edited_message"):
+        if (
+            field_name in update
+            and update[field_name] is not None
+            and not isinstance(update[field_name], dict)
+        ):
+            raise InvalidTelegramPayloadError(f"Telegram field '{field_name}' must be a JSON object.")
+
+    msg = update.get("message") or update.get("edited_message")
+    if msg is None:
+        return {"ok": True, "delivered": False, "ignored": True}
+
+    chat = msg.get("chat")
+    if chat is not None and not isinstance(chat, dict):
+        raise InvalidTelegramPayloadError("Telegram message.chat must be a JSON object.")
+    chat_id = chat.get("id") if isinstance(chat, dict) else None
+    if chat_id is not None and (isinstance(chat_id, bool) or not isinstance(chat_id, (int, str))):
+        raise InvalidTelegramPayloadError("Telegram chat.id must be an integer or string.")
+
+    raw_text_field = msg.get("text") if msg.get("text") is not None else msg.get("caption")
+    if raw_text_field is not None and not isinstance(raw_text_field, str):
+        raise InvalidTelegramPayloadError("Telegram text/caption must be a string.")
+    raw_text = (raw_text_field or "").strip()
 
     report: AnalysisReport | None = None
-    if not raw_text:
-        reply_text = (
-            "🛡 VeriShield AI: Hãy chuyển tiếp (Forward) tin nhắn đáng ngờ, đường link "
-            "hoặc mô tả giao dịch vào đây để kiểm tra tức thì!"
+    claim_state = "untracked"
+    cached_case_id: str | None = None
+    reply_text = ""
+    owner_id = uuid.uuid4().hex
+
+    if update_id is not None:
+        claim_state, cached_case_id, cached_reply = pipeline.repo.claim_telegram_update(
+            update_id,
+            owner_id=owner_id,
+            lease_seconds=180,
         )
-    else:
-        report = await pipeline.run(mode="personal", text=raw_text)
-        reply_text = format_telegram_verdict_reply(report)
+        if claim_state == "in_progress":
+            return {"ok": True, "delivered": False, "duplicate_in_progress": True}
+        if claim_state == "cached" and cached_reply is not None:
+            reply_text = cached_reply
+            if cached_case_id:
+                report = pipeline.repo.get_report(cached_case_id)
+
+    if claim_state != "cached":
+        renew_task: asyncio.Task[None] | None = None
+        if update_id is not None:
+            uid_for_renew = update_id
+
+            async def _heartbeat() -> None:
+                while True:
+                    await asyncio.sleep(30.0)
+                    pipeline.repo.renew_telegram_update_lease(
+                        uid_for_renew,
+                        owner_id=owner_id,
+                        lease_seconds=180,
+                    )
+
+            renew_task = asyncio.create_task(_heartbeat())
+        try:
+            if not raw_text:
+                reply_text = (
+                    "🛡 VeriShield AI: Hãy chuyển tiếp (Forward) tin nhắn đáng ngờ, đường link "
+                    "hoặc mô tả giao dịch vào đây để kiểm tra tức thì!"
+                )
+                if update_id is not None:
+                    pipeline.repo.save_telegram_update_cache(
+                        update_id,
+                        None,
+                        reply_text,
+                        owner_id=owner_id,
+                    )
+            else:
+                report = await pipeline.run(
+                    mode="personal",
+                    text=raw_text,
+                    case_id_override=cached_case_id,
+                )
+                reply_text = format_telegram_verdict_reply(report)
+                if update_id is not None:
+                    pipeline.repo.save_telegram_update_cache(
+                        update_id,
+                        report.case_id,
+                        reply_text,
+                        owner_id=owner_id,
+                    )
+        except Exception:
+            if update_id is not None:
+                pipeline.repo.release_telegram_update_claim(update_id, owner_id=owner_id)
+            raise
+        finally:
+            if renew_task is not None:
+                renew_task.cancel()
 
     token = settings.telegram_bot_token.strip()
     delivered = False
@@ -102,7 +196,6 @@ async def handle_telegram_update(
         "reply_text": reply_text,
     }
     if chat_id is not None and not token:
-        # Valid Telegram webhook-method fallback when outbound Bot API token is not set
         response["method"] = "sendMessage"
         response["text"] = reply_text
 

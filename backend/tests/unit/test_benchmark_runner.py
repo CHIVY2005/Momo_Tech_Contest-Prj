@@ -82,9 +82,76 @@ async def test_benchmark_runner_records_real_model_latency_and_errors_without_se
     assert summary["actual_models_observed"] == {"cpa/gemini-2.5-flash-live": 2}
     assert summary["api_health"]["live_llm_success_count"] == 2
     assert summary["api_health"]["degraded_fallback_count"] == 1
+    assert summary["api_health"]["terminal_error_count"] == 1
+    assert summary["api_health"]["provider_attempt_error_count"] == 1
     assert summary["api_health"]["api_error_count"] == 1
     assert summary["api_health"]["error_breakdown"] == {"HTTP_502": 1}
     assert len(summary["per_case_results"]) == 3
+
+    # Verify recovered provider retry increments provider_attempt_error_count while terminal_error_count=0
+    retry_cfg = cfg.model_copy(update={"llm_max_retries": 1, "sqlite_path": str(tmp_path / "retry.db")})
+    attempt_no = 0
+
+    def _mock_retry(_req: httpx.Request) -> httpx.Response:
+        nonlocal attempt_no
+        attempt_no += 1
+        if attempt_no == 1:
+            return httpx.Response(503, headers={"Retry-After": "0"}, json={"error": "busy"})
+        return httpx.Response(
+            200,
+            json={
+                "model": "cpa/gemini-2.5-flash-live",
+                "choices": [{"message": {"content": '{"ai_risk_score": 88, "summary_vi": "Lừa đảo."}'}}],
+            },
+        )
+
+    with respx.mock(assert_all_called=True) as router_r:
+        router_r.post("https://cpa.joiboi.app/v1/chat/completions").mock(side_effect=_mock_retry)
+        recovered = await run_benchmark_suite(cases=cases[:1], settings=retry_cfg, require_live_llm=True)
+
+    assert recovered["api_health"]["live_llm_success_count"] == 1
+    assert recovered["api_health"]["terminal_error_count"] == 0
+    assert recovered["api_health"]["provider_attempt_error_count"] == 1
+    assert recovered["api_health"]["api_error_count"] == 1
+
+    # Ordinary URL_QR inside a fake_bill case must NOT count as INVALID_CRC_VIETQR forensic signal
+    import io
+
+    import cv2
+    from evaluation.run_benchmark import BenchmarkCase
+    from PIL import Image
+
+    qr_mat = cv2.QRCodeEncoder_create().encode("https://vietcombank.com.vn")
+    qr_img = Image.fromarray(qr_mat).resize((220, 220), Image.Resampling.NEAREST).convert("RGB")
+    demo_media = REPO_ROOT / "backend" / "app" / "data" / "demo_media"
+    tmp_qr_name = "_tmp_url_qr_bench.png"
+    tmp_qr_path = demo_media / tmp_qr_name
+    buf = io.BytesIO()
+    qr_img.save(buf, format="PNG")
+    tmp_qr_path.write_bytes(buf.getvalue())
+    try:
+        fb_case = BenchmarkCase(
+            case_id="vn_fb_urlqr",
+            category="fake_bill",
+            mode="personal",
+            image_filename=tmp_qr_name,
+            text="Kiểm tra ảnh mã QR đường dẫn thông thường",
+            expected_is_scam=True,
+        )
+        with respx.mock(assert_all_called=True) as router_fb:
+            router_fb.post("https://cpa.joiboi.app/v1/chat/completions").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "model": "cpa/gemini-2.5-flash-live",
+                        "choices": [{"message": {"content": '{"ai_risk_score": 85, "summary_vi": "ok"}'}}],
+                    },
+                )
+            )
+            fb_sum = await run_benchmark_suite(cases=[fb_case], settings=cfg, require_live_llm=True)
+        assert fb_sum["classification_metrics"]["fake_bill_forensic_signal_rate"] == 0.0
+    finally:
+        tmp_qr_path.unlink(missing_ok=True)
 
 
 def test_gitignore_protects_backend_and_root_dotenv_files() -> None:

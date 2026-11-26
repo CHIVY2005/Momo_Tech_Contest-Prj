@@ -19,7 +19,8 @@ services:
       - LLM_MAX_RETRIES=${LLM_MAX_RETRIES:-2}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET:-}
-      - ANALYST_PIN=${ANALYST_PIN:-2026}
+      - APP_ENV=${APP_ENV:-development}
+      - ANALYST_PIN=${ANALYST_PIN:-}
       - BLOCK_RULE_TTL_MINUTES=${BLOCK_RULE_TTL_MINUTES:-30}
       - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:3000","https://verishield.joiboi.app"]}
     volumes:
@@ -39,6 +40,7 @@ services:
     restart: unless-stopped
     environment:
       - BACKEND_INTERNAL_URL=http://backend:8000
+      - NEXT_PUBLIC_APP_ENV=${APP_ENV:-development}
     depends_on:
       backend:
         condition: service_healthy

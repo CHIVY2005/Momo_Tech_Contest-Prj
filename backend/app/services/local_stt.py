@@ -50,8 +50,8 @@ def run_local_stt(
     try:
         model = _get_whisper_model()
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            tmp.write(audio_bytes)
             tmp_path = tmp.name
+            tmp.write(audio_bytes)
 
         segments, _ = model.transcribe(
             tmp_path,

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import onnxruntime as ort
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -23,6 +24,7 @@ MODEL_NAME = "intfloat/multilingual-e5-small"
 MAX_SEQ_LEN = 192
 TRAIN_SEQ_LEN = 96
 TARGET_MAX_VOCAB = 36_000
+MAX_ONNX_SIZE_MB = 50.0
 
 _VIETNAMESE_CHARS = frozenset(
     "ÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝàáâãèéêìíòóôõùúýĂăĐđĨĩŨũƠơƯư"
@@ -103,24 +105,23 @@ class JsonlScamDataset(Dataset[dict[str, torch.Tensor]]):
 def prune_e5_vocabulary(
     base_model: Any,
     fast_tokenizer: Any,
-    corpus_texts: list[str],
+    train_only_texts: list[str],
     out_tokenizer_dir: Path,
 ) -> tuple[Any, dict[int, int]]:
-    """Prune 250k multilingual SentencePiece/Unigram vocab in tokenizer.json down to VI+EN (~40k)."""
+    """Prune 250k SentencePiece vocab strictly from training + KB texts (zero val/test leakage)."""
     tmp_tok_dir = out_tokenizer_dir / "_raw_tok"
     tmp_tok_dir.mkdir(parents=True, exist_ok=True)
     fast_tokenizer.save_pretrained(str(tmp_tok_dir))
     tok_json_path = tmp_tok_dir / "tokenizer.json"
     tok_data = json.loads(tok_json_path.read_text(encoding="utf-8"))
 
-    # Always keep special IDs + corpus-triggered IDs + all Vietnamese tokens + highest-prob ASCII/EN tokens
     vocab_list: list[list[Any]] = tok_data["model"]["vocab"]
     must_keep_ids: set[int] = set(range(min(16, len(vocab_list))))
     for added in tok_data.get("added_tokens", []):
         aid = int(added["id"])
         if 0 <= aid < len(vocab_list):
             must_keep_ids.add(aid)
-    for text in corpus_texts:
+    for text in train_only_texts:
         for tid in fast_tokenizer.encode(text, add_special_tokens=True):
             if 0 <= tid < len(vocab_list):
                 must_keep_ids.add(tid)
@@ -136,7 +137,6 @@ def prune_e5_vocabulary(
             score = float(entry[1]) if len(entry) > 1 else -99.0
             ascii_candidates.append((score, old_id))
 
-    # Sort ASCII/English subwords by Unigram log-probability descending to stay <= TARGET_MAX_VOCAB
     ascii_candidates.sort(key=lambda item: item[0], reverse=True)
     remaining_budget = max(0, TARGET_MAX_VOCAB - len(must_keep_ids))
     for _, old_id in ascii_candidates[:remaining_budget]:
@@ -177,6 +177,44 @@ def prune_e5_vocabulary(
     return base_model, old_to_new
 
 
+def _evaluate_int8_onnx_on_test(
+    onnx_path: Path,
+    rust_tok: Any,
+    test_jsonl_path: Path,
+    label_to_id: dict[str, int],
+) -> tuple[float, list[list[int]], dict[str, Any]]:
+    """Run the actual quantized INT8 ONNX artifact + shipped tokenizer on held-out test.jsonl."""
+    opts = ort.SessionOptions()
+    opts.enable_cpu_mem_arena = False
+    opts.enable_mem_pattern = False
+    sess = ort.InferenceSession(str(onnx_path), sess_options=opts, providers=["CPUExecutionProvider"])
+
+    rows = [
+        json.loads(line)
+        for line in test_jsonl_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    y_true: list[int] = []
+    y_pred: list[int] = []
+    for row in rows:
+        encoded = rust_tok.encode(f"query: {row['text']}")
+        ids = encoded.ids[:MAX_SEQ_LEN]
+        attn = [1] * len(ids)
+        feed = {
+            "input_ids": np.asarray([ids], dtype=np.int64),
+            "attention_mask": np.asarray([attn], dtype=np.int64),
+        }
+        logits, _ = sess.run(["logits", "embedding"], feed)
+        pred_idx = int(np.argmax(logits[0]))
+        y_pred.append(pred_idx)
+        y_true.append(label_to_id[row["label"]])
+
+    macro_f1 = float(f1_score(y_true, y_pred, average="macro"))
+    cm = confusion_matrix(y_true, y_pred).tolist()
+    rep = classification_report(y_true, y_pred, target_names=list(SCAM_LABELS), output_dict=True)
+    return macro_f1, cm, rep
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Fine-tune & export pruned E5 INT8 ONNX.")
     parser.add_argument("--data-dir", type=Path, default=Path("training/data"))
@@ -197,24 +235,22 @@ def main() -> None:
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     encoder = AutoModel.from_pretrained(MODEL_NAME)
 
-    corpus_texts = [
+    # Fit vocabulary strictly on training split + production playbook KB (never val/test!)
+    train_only_texts = [
         json.loads(line)["text"]
-        for split in ("train.jsonl", "val.jsonl", "test.jsonl")
-        for line in (args.data_dir / split).read_text(encoding="utf-8").splitlines()
+        for line in (args.data_dir / "train.jsonl").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
     kb_data = json.loads(args.kb_path.read_text(encoding="utf-8"))
     for pb in kb_data["playbooks"]:
-        corpus_texts.append(f"passage: {pb['name_vi']} {' '.join(pb['keywords'])}")
+        train_only_texts.append(f"passage: {pb['name_vi']} {' '.join(pb['keywords'])}")
 
-    encoder, _ = prune_e5_vocabulary(encoder, tokenizer, corpus_texts, args.out_dir)
+    encoder, _ = prune_e5_vocabulary(encoder, tokenizer, train_only_texts, args.out_dir)
     from tokenizers import Tokenizer as FastRustTokenizer
+    from transformers import PreTrainedTokenizerFast
 
     pruned_rust_tok = FastRustTokenizer.from_file(str(args.out_dir / "tokenizer.json"))
     print(f"[train_export_e5_onnx] Pruned vocabulary size: {pruned_rust_tok.get_vocab_size()}")
-
-    # Wrap pruned tokenizer for training
-    from transformers import PreTrainedTokenizerFast
 
     train_tok = PreTrainedTokenizerFast(  # noqa: S106
         tokenizer_object=pruned_rust_tok,
@@ -233,7 +269,6 @@ def main() -> None:
     test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False)
 
     model = DualHeadE5Classifier(encoder, hidden_size=384, num_labels=len(SCAM_LABELS)).to(device)
-    # Freeze token embeddings & lower 8 transformer layers to preserve E5 retrieval geometry
     for param in model.encoder.embeddings.parameters():
         param.requires_grad = False
     encoder_layers = getattr(getattr(model.encoder, "encoder", None), "layer", None)
@@ -262,24 +297,18 @@ def main() -> None:
         print(f"Epoch {epoch}/{args.epochs} - avg_loss={total_loss / len(train_loader):.4f}")
 
     model.eval()
-    y_true: list[int] = []
-    y_pred: list[int] = []
+    fp32_true: list[int] = []
+    fp32_pred: list[int] = []
     with torch.no_grad():
         for batch in test_loader:
             logits, _ = model(
                 batch["input_ids"].to(device),
                 batch["attention_mask"].to(device),
             )
-            preds = torch.argmax(logits, dim=1).cpu().tolist()
-            y_pred.extend(preds)
-            y_true.extend(batch["labels"].tolist())
+            fp32_pred.extend(torch.argmax(logits, dim=1).cpu().tolist())
+            fp32_true.extend(batch["labels"].tolist())
+    fp32_f1 = float(f1_score(fp32_true, fp32_pred, average="macro"))
 
-    macro_f1 = float(f1_score(y_true, y_pred, average="macro"))
-    cm = confusion_matrix(y_true, y_pred).tolist()
-    report = classification_report(y_true, y_pred, target_names=list(SCAM_LABELS), output_dict=True)
-    print(f"[train_export_e5_onnx] Test Macro-F1: {macro_f1:.4f}")
-
-    # Export Playbook Passage Embeddings (float32 [N, 384])
     pb_vecs: list[np.ndarray] = []
     with torch.no_grad():
         for pb in kb_data["playbooks"]:
@@ -298,7 +327,6 @@ def main() -> None:
             pb_vecs.append(emb.squeeze(0).cpu().numpy().astype(np.float32))
     np.save(str(args.out_dir / "playbook_embeddings.npy"), np.stack(pb_vecs, axis=0))
 
-    # Export FP32 ONNX -> Quantize INT8 -> Remove temporary FP32 file
     model_cpu = model.cpu().eval()
     dummy_ids = torch.ones((1, 32), dtype=torch.long)
     dummy_mask = torch.ones((1, 32), dtype=torch.long)
@@ -333,21 +361,38 @@ def main() -> None:
             child.unlink()
         raw_tok_tmp.rmdir()
 
+    size_mb = round(int8_onnx.stat().st_size / (1024 * 1024), 2)
+    if size_mb >= MAX_ONNX_SIZE_MB:
+        int8_onnx.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"Exported scam_e5_int8.onnx is {size_mb} MB (>= {MAX_ONNX_SIZE_MB} MB Git limit)!"
+        )
+
+    int8_f1, int8_cm, int8_report = _evaluate_int8_onnx_on_test(
+        int8_onnx,
+        pruned_rust_tok,
+        args.data_dir / "test.jsonl",
+        label_to_id,
+    )
+    print(f"[train_export_e5_onnx] FP32 Macro-F1={fp32_f1:.4f} | INT8 ONNX Macro-F1={int8_f1:.4f}")
+
     (args.out_dir / "label_map.json").write_text(
         json.dumps({"labels": list(SCAM_LABELS)}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    size_mb = round(int8_onnx.stat().st_size / (1024 * 1024), 2)
     (args.out_dir / "training_metrics.json").write_text(
         json.dumps(
             {
                 "backbone": MODEL_NAME,
                 "license": "MIT",
+                "vocab_fit_scope": "train_plus_kb_only",
                 "pruned_vocab_size": pruned_rust_tok.get_vocab_size(),
                 "onnx_size_mb": size_mb,
-                "test_macro_f1": round(macro_f1, 4),
-                "confusion_matrix": cm,
-                "classification_report": report,
+                "pytorch_fp32_test_macro_f1": round(fp32_f1, 4),
+                "onnx_int8_test_macro_f1": round(int8_f1, 4),
+                "test_macro_f1": round(int8_f1, 4),
+                "confusion_matrix": int8_cm,
+                "classification_report": int8_report,
             },
             ensure_ascii=False,
             indent=2,

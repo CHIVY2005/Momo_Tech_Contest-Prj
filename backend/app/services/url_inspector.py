@@ -203,17 +203,14 @@ async def inspect_url(
                         loc = resp.headers.get("location")
 
                     if status_code in (301, 302, 303, 307, 308) and loc:
-                        next_url = urljoin(current_url, loc)
-                        hop_ok, hop_reason, _ = await async_validate_url_target(
-                            next_url,
-                            resolve_dns=True,
-                        )
-                        if not hop_ok:
+                        try:
+                            next_url = urljoin(current_url, loc)
+                        except ValueError as exc:
                             return UrlFinding(
                                 url=cleaned,
                                 domain=raw_host,
                                 normalized_ascii_domain=ascii_host,
-                                final_url=next_url,
+                                final_url=loc[:160],
                                 redirect_hops=hops + 1,
                                 is_blocked_ssrf=True,
                                 is_idn_homoglyph=is_homoglyph,
@@ -221,9 +218,40 @@ async def inspect_url(
                                 risk_points=90,
                                 reasons=[
                                     *all_reasons,
-                                    f"Chặn chuyển hướng HTTP tới đích nội bộ (SSRF Redirect): {hop_reason}",
+                                    f"Chặn chuyển hướng HTTP có authority dị dạng: {exc}",
                                 ],
                             )
+                        hop_ok, hop_reason, _ = await async_validate_url_target(
+                            next_url,
+                            resolve_dns=True,
+                        )
+                        if not hop_ok:
+                            is_hop_ssrf = hop_reason is not None and not hop_reason.startswith(
+                                "DNS resolution failed"
+                            )
+                            if is_hop_ssrf:
+                                return UrlFinding(
+                                    url=cleaned,
+                                    domain=raw_host,
+                                    normalized_ascii_domain=ascii_host,
+                                    final_url=next_url,
+                                    redirect_hops=hops + 1,
+                                    is_blocked_ssrf=True,
+                                    is_idn_homoglyph=is_homoglyph,
+                                    spoofed_brand=spoofed_brand,
+                                    risk_points=90,
+                                    reasons=[
+                                        *all_reasons,
+                                        (
+                                            "Chặn chuyển hướng HTTP tới đích nội bộ "
+                                            f"(SSRF Redirect): {hop_reason}"
+                                        ),
+                                    ],
+                                )
+                            all_reasons.append("Đích chuyển hướng không thể phân giải tên miền DNS.")
+                            final_url = next_url
+                            hops += 1
+                            break
 
                         _, _, hop_brand, hop_homo, hop_risk, hop_reasons = _score_single_url(
                             next_url
@@ -255,6 +283,24 @@ async def inspect_url(
                 risk_points=90,
                 reasons=[*all_reasons, f"Chặn kết nối DNS Rebinding / SSRF tại tầng socket: {exc}"],
             )
+        except httpx.RemoteProtocolError as exc:
+            if "location header" in str(exc).lower() or "invalid url" in str(exc).lower():
+                return UrlFinding(
+                    url=cleaned,
+                    domain=raw_host,
+                    normalized_ascii_domain=ascii_host,
+                    final_url=current_url,
+                    redirect_hops=hops + 1,
+                    is_blocked_ssrf=True,
+                    is_idn_homoglyph=is_homoglyph,
+                    spoofed_brand=spoofed_brand,
+                    risk_points=90,
+                    reasons=[
+                        *all_reasons,
+                        f"Chặn chuyển hướng HTTP có header Location dị dạng: {exc}",
+                    ],
+                )
+            all_reasons.append("Máy chủ đích trả về giao thức HTTP không hợp lệ.")
         except (TimeoutError, httpx.HTTPError):
             all_reasons.append("Máy chủ đích không phản hồi hoặc quá thời gian kiểm tra.")
         finally:

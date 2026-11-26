@@ -15,7 +15,8 @@ from app.services.ai_orchestrator import LLMReasoningResult
 
 MERCHANT_HONESTY_BANNER: Final[str] = (
     "LƯU Ý BẮT BUỘC CHO TIỂU THƯƠNG: Ảnh chụp màn hình biên lai KHÔNG phải bằng chứng tiền đã vào "
-    "tài khoản. Chỉ giao hàng khi chính ứng dụng ngân hàng hoặc Loa thông báo ghi nhận biến động số dư."
+    "tài khoản. Chỉ giao hàng sau khi trực tiếp kiểm tra ứng dụng ngân hàng hoặc Loa thông báo "
+    "ghi nhận biến động số dư."
 )
 
 

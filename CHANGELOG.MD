@@ -12,5 +12,10 @@
   - Multimodal Investigation Workbench with 5 one-click Vietnamese demo scenarios, live UTF-8 chunk-safe SSE pipeline trace, 5 forensic evidence tabs, interactive 30-second Wallet Pre-Transfer Simulator, and Action Copilot.
   - Closed-Loop Fintech Fraud Ops workspace (`/radar`) featuring an interactive SVG anonymized IOC campaign graph (`SHA-256` hashed, PII masked), 1-click ecosystem block rules (`TTL 30m`, `HTTP 409` safe-IOC protection, 1-click reset), and embedded REST API Playground.
 - **Empirical Evaluation & Submission Suite:**
-  - Verified 40-case synthetic Vietnamese & Red-Team benchmark (`evaluation/results.json`: `40/40` passed, `F1 = 1.0000`, `Advisory FPR = 0.0000`, `Prompt Injection Block = 1.0000`).
+  - Verified 40-case synthetic Vietnamese & Red-Team benchmark (`evaluation/results.json`: `40/40` passed, `F1 = 1.0000`, `Advisory FPR = 0.0000`, `Prompt Injection >=70 Score = 100%`).
   - Automated Playwright PDF generator producing exact 10-page Finals Slide Deck (`VeriShield_AI_Slides_10p.pdf`), exact 1-page A4 Judge Guide (`VeriShield_AI_UserGuide_1p.pdf`), 3-minute demo video script, Docker + Caddy SSE production stack, and clean `.zip` packager.
+
+### Security, Forensics & Packaging Hardening (5-Shard Codex CLI Audit)
+- **Clean Packaging & Git Hygiene:** Fixed root `.gitignore` (`lib/` -> `/lib/`) so all `frontend/src/lib/**` modules and tests are tracked in Git and packaged into `verishield-ai-source.zip` via fail-closed `git ls-files -z`.
+- **Deep PII Projection & Radar Hardening:** Full public-case projection (`redact_report_pii`), subdomain wildcarding, grouped-digit & legacy `4+****+4` account scrubbing, startup SQLite row migration, non-demo fail-closed `APP_ENV` / `ANALYST_PIN` posture, atomic `BEGIN IMMEDIATE` receipt-replay claims (restricted to receipt candidates), and owner-leased Telegram `update_id` idempotency with random opaque `case_id` allocation.
+- **Forensics, Sandbox & ML Rigor:** Strictly socket-pinned multi-hop Playwright sandbox with `chromium_sandbox=True` and unified wall-clock deadline; strict EMVCo TLV/BIN/account validation without raw payment-frame snippets; explicit-recipient-only beneficiary matching & per-check applicability flags; leak-free `train + kb` vocabulary pruning (`scam_e5_int8.onnx` `34.25 MB`, standalone INT8 Macro-F1 `1.0000`).

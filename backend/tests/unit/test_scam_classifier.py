@@ -53,8 +53,7 @@ def test_classifier_dual_head_softmax_and_embedding_extraction(tmp_path: Path) -
 def test_real_exported_e5_int8_onnx_artifact_size_accuracy_and_cpu_latency() -> None:
     model_dir = Path(__file__).resolve().parents[2] / "app" / "data" / "models"
     onnx_path = model_dir / "scam_e5_int8.onnx"
-    if not onnx_path.exists():
-        return
+    assert onnx_path.exists(), "Required production model scam_e5_int8.onnx is missing!"
 
     # Hard Invariant #4: Model artifact committed to Git must remain < 50 MB
     size_mb = onnx_path.stat().st_size / (1024 * 1024)

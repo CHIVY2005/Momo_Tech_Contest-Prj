@@ -50,7 +50,7 @@ export function PhishingSandboxCard({ urls, sandbox }: PhishingSandboxCardProps)
             )}
             {u.is_idn_homoglyph && (
               <span className="rounded bg-rose-500/20 px-2 py-0.5 font-semibold text-rose-200">
-                 Tấn công Đồng hình Punycode IDN
+                Tấn công Đồng hình Punycode IDN
               </span>
             )}
             {u.spoofed_brand && (
@@ -82,12 +82,27 @@ export function PhishingSandboxCard({ urls, sandbox }: PhishingSandboxCardProps)
               <ShieldAlert className="h-4 w-4 text-amber-400" aria-hidden="true" />
               <span>Buồng Cô lập Trình duyệt Không đầu (Playwright Headless Detonation)</span>
             </div>
-            <span className="rounded bg-amber-500/15 px-2 py-0.5 font-[family-name:var(--font-mono)] text-[11px] text-amber-300">
-              Điểm Sandbox: {sandbox.risk_points}/100
-            </span>
+            {sandbox.blocked_ssrf ? (
+              <span className="rounded bg-rose-500/20 px-2 py-0.5 font-[family-name:var(--font-mono)] text-[11px] font-bold text-rose-200">
+                ĐÃ CHẶN SSRF ({sandbox.risk_points}/100)
+              </span>
+            ) : sandbox.available ? (
+              <span className="rounded bg-amber-500/15 px-2 py-0.5 font-[family-name:var(--font-mono)] text-[11px] text-amber-300">
+                Điểm Sandbox: {sandbox.risk_points}/100
+              </span>
+            ) : (
+              <span className="rounded bg-slate-800 px-2 py-0.5 font-[family-name:var(--font-mono)] text-[11px] text-slate-300">
+                Tạm ngưng / Không khả dụng
+              </span>
+            )}
           </div>
 
           <div className="mt-2.5 flex flex-wrap gap-2 text-[11px]">
+            {sandbox.blocked_ssrf && (
+              <span className="rounded bg-rose-500/20 px-2 py-0.5 font-semibold text-rose-200">
+                Chặn truy cập mạng nội bộ từ trình duyệt cô lập
+              </span>
+            )}
             {sandbox.has_password_field && (
               <span className="rounded bg-rose-500/20 px-2 py-0.5 text-rose-200">
                 Ô thu thập Mật khẩu
@@ -110,13 +125,21 @@ export function PhishingSandboxCard({ urls, sandbox }: PhishingSandboxCardProps)
             )}
           </div>
 
+          {sandbox.reasons.length > 0 && (
+            <ul className="mt-2.5 list-inside list-disc space-y-1 text-xs text-slate-200">
+              {sandbox.reasons.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+          )}
+
           {sandbox.screenshot_base64 && (
             <div className="mt-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={`data:image/jpeg;base64,${sandbox.screenshot_base64}`}
                 alt="Ảnh chụp trang web nghi vấn bên trong buồng cô lập an toàn"
-                className="max-h-64 w-full rounded-lg border border-slate-800 object-contain bg-slate-950"
+                className="max-h-64 w-full rounded-lg border border-slate-800 bg-slate-950 object-contain"
               />
             </div>
           )}

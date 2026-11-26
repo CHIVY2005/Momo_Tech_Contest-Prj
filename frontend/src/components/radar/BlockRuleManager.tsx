@@ -68,14 +68,16 @@ export function BlockRuleManager({
           className="flex items-center gap-1.5 text-xs font-semibold text-amber-200"
         >
           <KeyRound className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
-          <span>Mã PIN Chuyên viên Fraud Ops (Điền sẵn `2026` cho Giám khảo chấm thi)</span>
+          <span>Mã PIN Xác thực Chuyên viên Fraud Ops (Chế độ Trải nghiệm Giám khảo)</span>
         </label>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <input
             id="radar-analyst-pin"
-            type="text"
+            type="password"
+            autoComplete="off"
             value={analystPin}
             onChange={(e) => onPinChange(e.target.value)}
+            placeholder="Nhập PIN..."
             className="w-36 rounded-lg border border-amber-500/40 bg-[#0b1120] px-3 py-1.5 font-[family-name:var(--font-mono)] text-xs font-bold text-amber-200"
           />
           <span className="text-[11px] text-slate-300">

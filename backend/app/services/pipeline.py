@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from app.config import Settings
 from app.core.security import InvalidMediaError, validate_upload_bytes
@@ -21,6 +22,7 @@ from app.schemas import (
     EvidenceItem,
     ImageForensicsResult,
     ReceiptLogicResult,
+    ReceiptVerificationStatus,
     SandboxInspection,
     TraceStep,
     UrlFinding,
@@ -41,9 +43,60 @@ from app.services.scam_classifier import ScamClassifier
 from app.services.url_inspector import inspect_url
 from app.services.vietqr_parser import parse_qr_payload
 
+_FALSE_SETTLEMENT_RE: Final[re.Pattern[str]] = re.compile(
+    r"(?<!không\s)(?<!chưa\s)(?:"
+    r"tiền\s+đã\s+(?:vào|về|chuyển\s+vào)|"
+    r"đã\s+(?:nhận\s+(?:được\s+)?tiền|ghi\s+có|thanh\s+toán\s+xong|hoàn\s+tất\s+thanh\s+toán)|"
+    r"số\s+dư\s+đã\s+(?:được\s+)?(?:ghi\s+có|cập\s+nhật|tăng)|"
+    r"có\s+thể\s+giao\s+hàng|"
+    r"giao\s+hàng\s+ngay|"
+    r"giao\s+dịch\s+đã\s+hoàn\s+tất\s+an\s+toàn"
+    r")",
+    re.IGNORECASE,
+)
+
 
 class UnknownDemoError(KeyError):
     """Raised when a requested demo_id does not exist."""
+
+
+def _guard_merchant_summary(
+    raw_summary: str,
+    mode: AnalyzeMode,
+    receipt_status: ReceiptVerificationStatus,
+) -> str:
+    """Generate merchant receipt settlement conclusions strictly from trusted forensic status."""
+    cleaned = raw_summary.strip()
+    if receipt_status == "UNVERIFIED_SCREENSHOT":
+        return (
+            "Ảnh chụp biên lai không ghi nhận dấu hiệu cắt ghép kỹ thuật, nhưng trạng thái thanh toán "
+            "CHƯA ĐƯỢC XÁC MINH từ ngân hàng (UNVERIFIED_SCREENSHOT). Chỉ giao hàng sau khi trực tiếp "
+            "kiểm tra biến động số dư thực tế trên ứng dụng ngân hàng hoặc Loa thông báo."
+        )
+    if receipt_status == "REPLAYED_RECEIPT":
+        return (
+            "CẢNH BÁO ĐỎ: Ảnh biên lai hoặc mã tham chiếu trùng khớp với giao dịch cũ đã gửi trước đó "
+            "(REPLAYED_RECEIPT — chưa xác minh thanh toán mới). Tuyệt đối chưa giao hàng và kiểm tra "
+            "trực tiếp biến động số dư ngân hàng."
+        )
+    if receipt_status == "BENEFICIARY_MISMATCH":
+        return (
+            "CẢNH BÁO ĐỎ: Số tài khoản thụ hưởng trên biên lai KHÔNG KHỚP với tài khoản của cửa hàng "
+            "(BENEFICIARY_MISMATCH — tiền chưa được xác minh vào tài khoản chủ shop). Tuyệt đối dừng "
+            "giao hàng và đối chiếu số dư thực tế."
+        )
+    if receipt_status == "TAMPER_OR_LOGIC_ANOMALY":
+        return (
+            "CẢNH BÁO: Phát hiện dấu hiệu chỉnh sửa ảnh hoặc bất thường logic nghiệp vụ trên biên lai "
+            "(TAMPER_OR_LOGIC_ANOMALY — chưa xác minh thanh toán). Tuyệt đối chưa giao hàng trước khi "
+            "kiểm tra biến động số dư thực tế hoặc Loa thông báo."
+        )
+    if mode == "merchant" and _FALSE_SETTLEMENT_RE.search(cleaned):
+        return (
+            "Chưa xác minh tiền đã vào tài khoản — vui lòng kiểm tra trực tiếp biến động số dư "
+            "ngân hàng hoặc Loa thông báo trước khi giao hàng."
+        )
+    return cleaned
 
 
 class AnalysisPipeline:
@@ -92,6 +145,8 @@ class AnalysisPipeline:
         in_active_call: bool = False,
         transfer_amount: int | None = None,
         expected_merchant_account: str | None = None,
+        reference_now: datetime | None = None,
+        case_id_override: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Execute full 3-tier pipeline yielding live SSE trace steps and final AnalysisReport."""
         is_demo = bool(demo_id and demo_id.strip())
@@ -100,6 +155,9 @@ class AnalysisPipeline:
             if key not in self._demos:
                 raise UnknownDemoError(f"Unknown demo_id: {key}")
             demo = self._demos[key]
+            # Strictly isolate fixture runs from any caller-supplied uploads
+            image_bytes = None
+            audio_bytes = None
             mode = demo.mode
             text = demo.text
             url = demo.url
@@ -255,15 +313,16 @@ class AnalysisPipeline:
             top_u = max(url_findings, key=lambda item: item.risk_points)
             if top_u.risk_points >= 40 and not top_u.is_blocked_ssrf:
                 sandbox_res = await detonate_url_in_sandbox(top_u.url, enabled=True)
-                for s_reason in sandbox_res.reasons:
-                    evidence.append(
-                        EvidenceItem(
-                            source="phishing_sandbox",
-                            severity="CRITICAL",
-                            title="Buồng cô lập trình duyệt bắt quả tang bẫy Phishing",
-                            detail=s_reason,
+                if (sandbox_res.available or sandbox_res.blocked_ssrf) and sandbox_res.risk_points > 0:
+                    for s_reason in sandbox_res.reasons:
+                        evidence.append(
+                            EvidenceItem(
+                                source="phishing_sandbox",
+                                severity="CRITICAL" if sandbox_res.risk_points >= 75 else "HIGH",
+                                title="Buồng cô lập trình duyệt bắt quả tang bẫy Phishing",
+                                detail=s_reason,
+                            )
                         )
-                    )
 
         has_susp_url = any(u.risk_points > 0 or u.is_blocked_ssrf for u in url_findings)
         guardrails = evaluate_guardrails(combined_text, has_suspicious_url=has_susp_url)
@@ -295,20 +354,39 @@ class AnalysisPipeline:
 
         receipt_logic: ReceiptLogicResult | None = None
         if mode == "merchant" or image_bytes is not None:
+            # Separate receipt-printed OCR text from caller narrative when an image is uploaded
+            receipt_source_text = (
+                img_forensics.ocr_text if img_forensics is not None else text
+            )
+            prelim = validate_receipt_logic(
+                ocr_text=receipt_source_text,
+                ocr_boxes=ocr_boxes,
+                reference_now=reference_now,
+                expected_merchant_account=expected_merchant_account,
+                is_replayed_hash=False,
+                replay_checked=False,
+            )
+            has_replay_probe = bool(
+                (img_forensics and img_forensics.dhash_hex) or prelim.reference_code
+            )
+            replay_lookup_ran = (not is_demo) and has_replay_probe
             replayed = (
                 False
-                if is_demo
-                else self.repo.is_receipt_replayed(
+                if not replay_lookup_ran
+                else self.repo.claim_receipt_replay(
                     img_forensics.dhash_hex if img_forensics else None,
-                    None,
-                    None,
+                    prelim.bank_detected,
+                    prelim.reference_code,
+                    register_if_new=prelim.is_receipt_candidate,
                 )
             )
             receipt_logic = validate_receipt_logic(
-                ocr_text=combined_text,
+                ocr_text=receipt_source_text,
                 ocr_boxes=ocr_boxes,
+                reference_now=reference_now,
                 expected_merchant_account=expected_merchant_account,
                 is_replayed_hash=replayed,
+                replay_checked=replay_lookup_ran,
             )
             for r_reason in receipt_logic.reasons:
                 evidence.append(
@@ -335,10 +413,12 @@ class AnalysisPipeline:
         trace.append(onnx_step)
         yield {"event": "trace", "data": onnx_step.model_dump()}
 
-        # Compute deterministic Tier-1 score
+        # Compute deterministic Tier-1 score (including browser sandbox risk)
         tier1_score = 0
         if url_findings:
             tier1_score = max(tier1_score, max(u.risk_points for u in url_findings))
+        if sandbox_res and (sandbox_res.available or sandbox_res.blocked_ssrf):
+            tier1_score = max(tier1_score, sandbox_res.risk_points)
         if img_forensics:
             tier1_score = max(tier1_score, img_forensics.tamper_score)
         if receipt_logic:
@@ -352,7 +432,7 @@ class AnalysisPipeline:
         ):
             tier1_score = max(tier1_score, min(85, 58 + 12 * len(matched_pbs)))
 
-        # Step 4: Tier-2 Gemini 2.5 Flash Reasoning + 3-Signal Calibration
+        # Step 4: Tier-2 Multimodal Reasoning + Cloud-Transcript IOC Re-Check + Calibration
         t_llm = time.perf_counter()
         llm_res = await run_gemini_reasoning(
             settings=self.settings,
@@ -384,6 +464,30 @@ class AnalysisPipeline:
                 )
             )
 
+        # Re-evaluate IOCs & active block rules when cloud transcription supplies new audio text
+        if not local_transcript and llm_res.transcript and llm_res.transcript.strip():
+            enriched_text = f"{combined_text}\n{llm_res.transcript.strip()}".strip()
+            iocs = extract_iocs(enriched_text, extra_urls=extra_urls)
+            for vqr in vietqr_list:
+                if vqr.account_number and vqr.account_number not in iocs.bank_accounts:
+                    iocs.bank_accounts.append(vqr.account_number)
+            if not block_hit:
+                post_rules = self.repo.match_active_block_rules(iocs)
+                if post_rules:
+                    block_hit = True
+                    evidence.append(
+                        EvidenceItem(
+                            source="fraud_ops_radar",
+                            severity="CRITICAL",
+                            title="Trùng khớp Danh sách Chặn Khẩn cấp qua lời thoại (/radar)",
+                            detail=(
+                                f"Thực thể {post_rules[0].masked_value} trong cuộc gọi "
+                                "đang bị khóa bởi Fraud Ops."
+                            ),
+                        )
+                    )
+            guardrails = evaluate_guardrails(enriched_text, has_suspicious_url=has_susp_url)
+
         cal = calibrate_risk(
             mode=mode,
             tier1_score=tier1_score,
@@ -397,6 +501,7 @@ class AnalysisPipeline:
             receipt_logic=receipt_logic,
             active_block_rule_hit=block_hit,
             in_active_call=in_active_call,
+            has_visual_bill_anomaly=bool(llm_res.bill_visual_anomalies),
         )
         actions = build_action_bundle(
             mode=mode,
@@ -407,6 +512,11 @@ class AnalysisPipeline:
             receipt_status=cal.receipt_verification_status,
             matched_playbooks=matched_pbs,
             llm_result=llm_res,
+        )
+        safe_summary = _guard_merchant_summary(
+            llm_res.summary_vi,
+            mode=mode,
+            receipt_status=cal.receipt_verification_status,
         )
 
         llm_badge = (
@@ -426,7 +536,7 @@ class AnalysisPipeline:
 
         comm_hits = self.repo.count_ioc_hits(iocs)
         raw_report = AnalysisReport(
-            case_id=f"vs_{uuid.uuid4().hex[:12]}",
+            case_id=case_id_override or f"vs_{uuid.uuid4().hex[:12]}",
             created_at=datetime.now(UTC).isoformat(),
             mode=mode,
             in_active_call=in_active_call,
@@ -438,7 +548,7 @@ class AnalysisPipeline:
             prompt_injection_detected=guardrails.prompt_injection_detected,
             active_block_rule_hit=block_hit,
             receipt_verification_status=cal.receipt_verification_status,
-            summary_vi=llm_res.summary_vi,
+            summary_vi=safe_summary,
             transcript=llm_res.transcript,
             classifier=clf_out if clf_out.available else None,
             matched_playbooks=[str(pb["name_vi"]) for pb in matched_pbs],
@@ -458,11 +568,17 @@ class AnalysisPipeline:
             llm_provider=llm_res.llm_provider,
             llm_model=llm_res.llm_model,
             llm_latency_ms=llm_res.llm_latency_ms,
+            llm_attempts=llm_res.llm_attempts,
+            llm_failed_attempts=llm_res.llm_failed_attempts,
             llm_error=llm_res.llm_error,
         )
         saved_report = self.repo.save_report(
             raw_report,
-            receipt_dhash=img_forensics.dhash_hex if img_forensics else None,
+            receipt_dhash=(
+                img_forensics.dhash_hex
+                if (img_forensics and receipt_logic and receipt_logic.is_receipt_candidate)
+                else None
+            ),
             track_replay=not is_demo,
         )
         yield {"event": "result", "data": saved_report.model_dump()}

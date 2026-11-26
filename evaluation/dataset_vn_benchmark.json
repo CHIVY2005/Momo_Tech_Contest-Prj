@@ -306,6 +306,7 @@
     "category": "benign_normal",
     "mode": "merchant",
     "expected_merchant_account": "190311112222",
+    "expect_merchant_receipt": true,
     "expected_is_scam": false,
     "text": "CHUYỂN KHOẢN THÀNH CÔNG\nNgân hàng Techcombank\nSố tiền: 350.000 VND\nTài khoản nhận: 190311112222\nMã giao dịch: FT26329123456\nThời gian: 10:15:22 25/11/2026\nNội dung: Khach thanh toan ca phe hat"
   }

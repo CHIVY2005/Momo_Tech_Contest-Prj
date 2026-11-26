@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -253,6 +253,7 @@ Thumbs.db
 
 # Agent scratch, training scratch & submission build outputs
 .superpowers/
+/graphify-out/
 training/.venv/
 training/data/
 submission/dist/

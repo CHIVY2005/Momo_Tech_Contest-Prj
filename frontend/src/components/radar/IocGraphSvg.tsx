@@ -58,7 +58,7 @@ export function IocGraphSvg({ nodes, edges }: IocGraphSvgProps) {
       <div className="overflow-hidden rounded-xl border border-slate-800 bg-[#070b14]">
         <svg
           viewBox="0 0 760 420"
-          role="img"
+          role="group"
           aria-label="Sơ đồ mạng lưới chiến dịch lừa đảo và thực thể IOC đã che dấu PII"
           className="h-auto w-full"
         >
@@ -96,6 +96,7 @@ export function IocGraphSvg({ nodes, edges }: IocGraphSvgProps) {
                 key={node.node_id}
                 role="button"
                 tabIndex={0}
+                aria-pressed={isActive}
                 aria-label={`${style.labelVi}: ${node.label} (${node.hit_count} ca${
                   node.blocked ? ", đã bị chặn" : ""
                 })`}
