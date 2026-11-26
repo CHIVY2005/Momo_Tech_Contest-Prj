@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from typing import Final
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field
 
@@ -113,6 +114,7 @@ class GuardrailResult(BaseModel):
     """Deterministic guardrail screening output."""
 
     safety_advisory_detected: bool = False
+    advisory_vetoed: bool = False
     prompt_injection_detected: bool = False
     normalized_text: str = ""
     matched_patterns: list[str] = Field(default_factory=list)
@@ -139,8 +141,18 @@ def detect_prompt_injection(normalized_text: str, had_invisible: bool = False) -
 
 
 def _has_non_official_url(text: str) -> bool:
-    for m in re.finditer(r"https?://([a-zA-Z0-9.\-]+)", text, re.IGNORECASE):
-        host = m.group(1).lower().rstrip(".")
+    for m in re.finditer(r"https?://\S+", text, re.IGNORECASE):
+        raw_url = m.group(0).rstrip(".,;:!?)>\"']")
+        try:
+            parts = urlsplit(raw_url)
+            port = parts.port
+        except ValueError:
+            return True
+        if parts.username or parts.password or not parts.hostname:
+            return True
+        if port is not None and port not in (80, 443):
+            return True
+        host = parts.hostname.lower().rstrip(".")
         is_official = any(
             host == sfx.lstrip(".") or host.endswith(sfx if sfx.startswith(".") else f".{sfx}")
             for sfx in _OFFICIAL_ADVISORY_DOMAIN_SUFFIXES
@@ -153,14 +165,16 @@ def _has_non_official_url(text: str) -> bool:
 def detect_safety_advisory(
     normalized_text: str,
     has_suspicious_url: bool = False,
-) -> tuple[bool, list[str]]:
-    """Identify genuine security advisories that must not trigger false positives."""
-    if not normalized_text or has_suspicious_url:
-        return False, []
-    if _has_non_official_url(normalized_text):
-        return False, []
-    if _ACTIONABLE_SCAM_DEMAND_RE.search(normalized_text):
-        return False, []
+) -> tuple[bool, bool, list[str]]:
+    """Identify genuine security advisories and explicit scam/URL vetoes."""
+    if not normalized_text:
+        return False, False, []
+    if (
+        has_suspicious_url
+        or _has_non_official_url(normalized_text)
+        or bool(_ACTIONABLE_SCAM_DEMAND_RE.search(normalized_text))
+    ):
+        return False, True, []
 
     matched: list[str] = []
     for idx, pat in enumerate(_ADVISORY_HEADER_PATTERNS):
@@ -171,7 +185,7 @@ def detect_safety_advisory(
             matched.append(f"protective_clause_{idx + 1}")
 
     is_advisory = len(matched) >= 2 or "advisory_header_2" in matched
-    return is_advisory, matched if is_advisory else []
+    return is_advisory, False, matched if is_advisory else []
 
 
 def evaluate_guardrails(text: str, has_suspicious_url: bool = False) -> GuardrailResult:
@@ -197,13 +211,14 @@ def evaluate_guardrails(text: str, has_suspicious_url: bool = False) -> Guardrai
         )
         return GuardrailResult(
             safety_advisory_detected=False,
+            advisory_vetoed=True,
             prompt_injection_detected=True,
             normalized_text=normalized,
             matched_patterns=matched_patterns,
             evidence=evidence,
         )
 
-    adv_detected, adv_patterns = detect_safety_advisory(
+    adv_detected, adv_vetoed, adv_patterns = detect_safety_advisory(
         normalized,
         has_suspicious_url=has_suspicious_url,
     )
@@ -223,6 +238,7 @@ def evaluate_guardrails(text: str, has_suspicious_url: bool = False) -> Guardrai
 
     return GuardrailResult(
         safety_advisory_detected=adv_detected,
+        advisory_vetoed=adv_vetoed,
         prompt_injection_detected=False,
         normalized_text=normalized,
         matched_patterns=matched_patterns,

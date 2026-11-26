@@ -27,7 +27,18 @@ def test_suspicious_url_or_direct_transfer_demand_cancels_safety_advisory() -> N
         "Cảnh báo: Không chia sẻ OTP cho người lạ. Tuy nhiên anh cần chuyển ngay 5 triệu "
         "vào STK tạm giữ để xác minh hồ sơ."
     )
-    assert evaluate_guardrails(with_demand, has_suspicious_url=False).safety_advisory_detected is False
+    demand_res = evaluate_guardrails(with_demand, has_suspicious_url=False)
+    assert demand_res.safety_advisory_detected is False
+    assert demand_res.advisory_vetoed is True
+
+    # Userinfo URL spoofing (https://vietcombank.com.vn@evil.top) must NEVER pass as official domain
+    userinfo_spoof = (
+        "[CẢNH BÁO AN TOÀN] Vietcombank khuyến cáo KHÔNG cung cấp mã OTP. "
+        "Chi tiết tại https://vietcombank.com.vn@evil.top/login"
+    )
+    spoof_res = evaluate_guardrails(userinfo_spoof, has_suspicious_url=False)
+    assert spoof_res.safety_advisory_detected is False
+    assert spoof_res.advisory_vetoed is True
 
 
 def test_detects_vietnamese_and_english_zero_width_prompt_injection() -> None:

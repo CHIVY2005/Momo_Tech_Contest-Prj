@@ -109,6 +109,15 @@ def test_closed_loop_radar_block_rules_pin_protection_and_reset(tmp_path: Path) 
     assert tx_body["risk_score"] >= 95
     assert tx_body["actions"]["pre_transfer"]["should_hold_transfer"] is True
 
+    # Single-rule revoke removes only that specific rule_id before full reset
+    rule_id = ok_rule.json()["rule_id"]
+    rev_res = client.post(
+        f"/api/v1/radar/block-rules/{rule_id}/revoke",
+        json={"analyst_pin": "2026"},
+    )
+    assert rev_res.status_code == 200
+    assert rev_res.json()["revoked"] is True
+
     # Reset restores clean transient state
     reset_res = client.post("/api/v1/radar/block-rules/reset", json={"analyst_pin": "2026"})
     assert reset_res.status_code == 200

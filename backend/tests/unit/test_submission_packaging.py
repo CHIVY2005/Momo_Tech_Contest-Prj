@@ -21,10 +21,11 @@ def test_rendered_pdfs_and_templates_respect_strict_contest_page_limits() -> Non
 
     slides_pdf = DIST_DIR / "VeriShield_AI_Slides_10p.pdf"
     guide_pdf = DIST_DIR / "VeriShield_AI_UserGuide_1p.pdf"
-    if slides_pdf.exists() and guide_pdf.exists():
+    if slides_pdf.exists():
         assert slides_pdf.read_bytes()[:5] == b"%PDF-"
-        assert guide_pdf.read_bytes()[:5] == b"%PDF-"
         assert len(PdfReader(str(slides_pdf)).pages) == 10
+    if guide_pdf.exists():
+        assert guide_pdf.read_bytes()[:5] == b"%PDF-"
         assert len(PdfReader(str(guide_pdf)).pages) == 1
 
 

@@ -4,6 +4,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    env_file:
+      - path: ./backend/.env
+        required: false
     environment:
       - SQLITE_PATH=/data/verishield.db
       - MODEL_DIR=/app/app/data/models

@@ -79,7 +79,7 @@ Phần lớn các vụ lừa đảo tài chính tại Việt Nam diễn ra ở *
 cp backend/.env.example backend/.env
 
 # 2. Khởi chạy toàn bộ Backend (cổng 8000) & Frontend (cổng 3000)
-docker compose up --build
+docker compose --env-file backend/.env up --build
 ```
 
 Sau khi khởi chạy, mở trình duyệt tại `http://localhost:3000` (hoặc `/radar` tại `http://localhost:3000/radar`). Mã PIN mặc định cho Giám khảo thử tính năng Khóa 1-Click trên `/radar` là **`2026`**.

@@ -213,3 +213,33 @@ def test_minor_receipt_anomaly_with_zero_ai_score_never_contradicts_merchant_inv
         ),
     )
     assert report.verdict == cal.verdict
+
+
+def test_neural_advisory_cannot_override_guardrail_veto_on_transfer_demand() -> None:
+    vetoed_guard = GuardrailResult(
+        safety_advisory_detected=False,
+        advisory_vetoed=True,
+    )
+    tricked_clf = ScamClassifierOutput(
+        available=True,
+        predicted_label="SAFE_ADVISORY",
+        advisory_probability=0.88,
+        scam_probability=0.10,
+        latency_ms=10,
+    )
+    cal = calibrate_risk(
+        mode="personal",
+        tier1_score=65,
+        classifier=tricked_clf,
+        ai_score=85,
+        guardrails=vetoed_guard,
+        url_findings=[],
+        vietqr_findings=[],
+        sandbox=None,
+        image_forensics=None,
+        receipt_logic=None,
+        active_block_rule_hit=False,
+        in_active_call=False,
+    )
+    assert cal.final_score >= 45
+    assert cal.verdict != "SAFE"

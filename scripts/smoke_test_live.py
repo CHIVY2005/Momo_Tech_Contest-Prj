@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 
 import httpx
 
@@ -25,16 +26,23 @@ def run_smoke_test(base_url: str, analyst_pin: str = "2026") -> int:
         assert demos.status_code == 200 and len(demos.json()) == 5
         print("  [2/5] 5 Canonical 1-Click Demos OK")
 
-        # 3. Live SSE stream
+        # 3. Incremental SSE stream ordering check
+        first_trace_ts: float | None = None
+        result_ts: float | None = None
         with client.stream(
             "POST",
             f"{root}/api/v1/analyze/stream",
             data={"demo_id": demos.json()[0]["demo_id"]},
         ) as sse:
             assert sse.status_code == 200
-            stream_body = "".join(sse.iter_text())
-            assert "event: trace" in stream_body and "event: result" in stream_body
-        print("  [3/5] Unbuffered SSE streaming (/api/v1/analyze/stream) OK")
+            for line in sse.iter_lines():
+                if line == "event: trace" and first_trace_ts is None:
+                    first_trace_ts = time.perf_counter()
+                elif line == "event: result" and result_ts is None:
+                    result_ts = time.perf_counter()
+        assert first_trace_ts is not None and result_ts is not None
+        assert first_trace_ts <= result_ts
+        print("  [3/5] Incremental SSE streaming (/api/v1/analyze/stream) OK")
 
         # 4. Upload 413 ceiling & SSRF protection
         big_payload = b"\x89PNG\r\n\x1a\n" + (b"0" * (10 * 1024 * 1024 + 4096))
@@ -57,25 +65,28 @@ def run_smoke_test(base_url: str, analyst_pin: str = "2026") -> int:
         assert r_ssrf.json()["url_findings"][0]["is_blocked_ssrf"] is True
         print("  [4/5] 10MB Upload Guard (HTTP 413) & Cloud Metadata SSRF Block OK")
 
-        # 5. Closed-loop /radar block & clean reset
+        # 5. Closed-loop /radar non-destructive single-rule create & revoke
         radar = client.get(f"{root}/api/v1/radar/graph")
         assert radar.status_code == 200
+        smoke_acct = "999000111222"
         blk = client.post(
             f"{root}/api/v1/radar/block-rules",
             json={
                 "ioc_type": "bank_account",
-                "value": "999888777666",
-                "reason": "Smoke test transient block",
+                "value": smoke_acct,
+                "reason": "Smoke test isolated rule",
                 "analyst_pin": analyst_pin,
+                "ttl_minutes": 2,
             },
         )
         assert blk.status_code == 200
-        rst = client.post(
-            f"{root}/api/v1/radar/block-rules/reset",
+        rule_id = blk.json()["rule_id"]
+        rev = client.post(
+            f"{root}/api/v1/radar/block-rules/{rule_id}/revoke",
             json={"analyst_pin": analyst_pin},
         )
-        assert rst.status_code == 200
-        print("  [5/5] Closed-Loop /radar Block Rule + Clean Reset OK")
+        assert rev.status_code == 200 and rev.json()["revoked"] is True
+        print("  [5/5] Closed-Loop /radar Isolated Rule Create + Revoke OK")
 
     print("==> [VeriShield Smoke Test] ALL 5 LIVE CHECKS PASSED!")
     return 0

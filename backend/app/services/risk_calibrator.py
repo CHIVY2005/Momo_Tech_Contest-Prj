@@ -104,8 +104,10 @@ def calibrate_risk(
     is_neural_advisory = bool(
         onnx_avail
         and classifier is not None
+        and not guardrails.advisory_vetoed
         and classifier.predicted_label == "SAFE_ADVISORY"
         and classifier.advisory_probability >= 0.70
+        and (ai_score is None or llm_val < 45)
     )
 
     # 1. Active Fraud Ops Block Rule always overrides (>= 95)

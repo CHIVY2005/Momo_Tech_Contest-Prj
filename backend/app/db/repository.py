@@ -443,6 +443,7 @@ class CaseRepository:
                 (rule_id, ioc_hash, ioc_type, masked_value, reason, created_at, expires_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(ioc_hash) DO UPDATE SET
+                    rule_id = excluded.rule_id,
                     reason = excluded.reason,
                     created_at = excluded.created_at,
                     expires_at = excluded.expires_at
@@ -467,6 +468,11 @@ class CaseRepository:
             expires_at=expires_iso,
             active=True,
         )
+
+    def revoke_block_rule(self, rule_id: str) -> bool:
+        with self._connect() as conn:
+            cur = conn.execute("DELETE FROM block_rules WHERE rule_id = ?", (rule_id,))
+            return bool(cur.rowcount and cur.rowcount > 0)
 
     def reset_transient_rules(self) -> int:
         with self._connect() as conn:

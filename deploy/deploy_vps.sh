@@ -20,13 +20,20 @@ set +a
 
 TARGET_DOMAIN="${DOMAIN:-verishield.joiboi.app}"
 echo "==> [VeriShield Deploy] Waiting for HTTPS health check on https://${TARGET_DOMAIN}/api/v1/health ..."
+healthy=0
 for attempt in $(seq 1 20); do
     if curl -fsS "https://${TARGET_DOMAIN}/api/v1/health" >/dev/null 2>&1; then
         echo "    Health check OK on attempt ${attempt}!"
+        healthy=1
         break
     fi
     sleep 3
 done
+
+if [[ "${healthy}" -ne 1 ]]; then
+    echo "ERROR: HTTPS health check failed after 20 attempts on https://${TARGET_DOMAIN}/api/v1/health"
+    exit 1
+fi
 
 if [[ -n "${TELEGRAM_BOT_TOKEN:-}" && -n "${TELEGRAM_WEBHOOK_SECRET:-}" ]]; then
     echo "==> [VeriShield Deploy] Registering Telegram 1-Tap Bot Webhook..."

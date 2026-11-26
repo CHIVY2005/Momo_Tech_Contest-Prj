@@ -44,6 +44,21 @@ async def post_block_rule(body: CreateBlockRuleRequest, request: Request) -> Blo
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
+@router.post("/block-rules/{rule_id}/revoke")
+async def post_revoke_block_rule(
+    rule_id: str,
+    body: ResetBlockRulesRequest,
+    request: Request,
+) -> dict[str, Any]:
+    settings = request.app.state.settings
+    if not verify_secret(body.analyst_pin, settings.analyst_pin):
+        raise HTTPException(status_code=403, detail="Mã PIN chuyên viên không hợp lệ.")
+
+    repo: CaseRepository = request.app.state.repo
+    revoked = repo.revoke_block_rule(rule_id)
+    return {"ok": True, "rule_id": rule_id, "revoked": revoked}
+
+
 @router.post("/block-rules/reset")
 async def post_reset_block_rules(
     body: ResetBlockRulesRequest,
