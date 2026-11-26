@@ -19,11 +19,11 @@ interface EvidenceTabsProps {
 type EvidenceTabKey = "all" | "ela" | "receipt" | "vietqr" | "url";
 
 const SEVERITY_STYLES: Record<SeverityLevel, string> = {
-  CRITICAL: "bg-rose-500/20 text-rose-200 border-rose-500/40",
-  HIGH: "bg-orange-500/20 text-orange-200 border-orange-500/40",
-  MEDIUM: "bg-amber-500/20 text-amber-200 border-amber-500/40",
-  LOW: "bg-sky-500/20 text-sky-200 border-sky-500/40",
-  INFO: "bg-slate-800 text-slate-300 border-slate-700",
+  CRITICAL: "bg-rose-500/20 text-rose-200 border-rose-500/45",
+  HIGH: "bg-orange-500/20 text-orange-200 border-orange-500/45",
+  MEDIUM: "bg-amber-500/20 text-amber-200 border-amber-500/45",
+  LOW: "bg-sky-500/20 text-sky-200 border-sky-500/45",
+  INFO: "bg-surface-elevated text-ink-secondary border-border-strong",
 };
 
 export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) {
@@ -76,6 +76,10 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
       nextIdx = (idx + 1) % tabs.length;
     } else if (ev.key === "ArrowLeft") {
       nextIdx = (idx - 1 + tabs.length) % tabs.length;
+    } else if (ev.key === "Home") {
+      nextIdx = 0;
+    } else if (ev.key === "End") {
+      nextIdx = tabs.length - 1;
     } else {
       return;
     }
@@ -90,12 +94,12 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
   return (
     <section
       aria-label="Hồ sơ bằng chứng pháp y chi tiết"
-      className="rounded-2xl border border-slate-800 bg-[#111827]/95 p-5 shadow-lg"
+      className="rounded-2xl border border-border-subtle bg-surface/95 p-5 shadow-lg"
     >
       <div
         role="tablist"
         aria-label="Các lớp bằng chứng kỹ thuật"
-        className="mb-4 flex flex-wrap gap-2 border-b border-slate-800 pb-3"
+        className="mb-4 flex flex-wrap gap-2 border-b border-border-subtle pb-3"
       >
         {tabs.map(({ id, label, count, Icon }, idx) => {
           const selected = activeTab === id;
@@ -113,15 +117,15 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
               aria-controls={`ev-panel-${id}`}
               onClick={() => setActiveTab(id)}
               onKeyDown={(ev) => handleTabKeyDown(ev, idx)}
-              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+              className={`inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
                 selected
                   ? "border-amber-400 bg-amber-500/15 text-amber-200"
-                  : "border-slate-800 bg-[#0b1120] text-slate-300 hover:border-slate-600"
+                  : "border-border-subtle bg-surface-subtle text-ink-secondary hover:border-border-strong hover:text-ink"
               }`}
             >
-              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+              <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               <span>{label}</span>
-              <span className="rounded bg-slate-900 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[10px] text-slate-300">
+              <span className="tabular-num rounded bg-surface-elevated px-1.5 py-0.5 font-mono text-[10px] text-ink-secondary">
                 {count}
               </span>
             </button>
@@ -133,23 +137,21 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
         {activeTab === "all" && (
           <div className="space-y-2.5">
             {report.evidence.length === 0 ? (
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-ink-muted">
                 Không ghi nhận chỉ báo rủi ro kỹ thuật nào trên nội dung vừa kiểm tra.
               </p>
             ) : (
               report.evidence.map((ev, idx) => (
                 <div
                   key={`${ev.source}-${ev.title}-${idx}`}
-                  className="rounded-xl border border-slate-800 bg-[#0b1120] p-3.5"
+                  className="rounded-xl border border-border-subtle bg-surface-subtle p-3.5"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-slate-100">{ev.title}</span>
+                    <span className="text-xs font-semibold text-ink">{ev.title}</span>
                     <div className="flex items-center gap-1.5">
-                      <span className="font-[family-name:var(--font-mono)] text-[10px] text-slate-400">
-                        {ev.source}
-                      </span>
+                      <span className="font-mono text-[10px] text-ink-muted">{ev.source}</span>
                       <span
-                        className={`rounded border px-2 py-0.5 font-[family-name:var(--font-mono)] text-[10px] font-bold ${
+                        className={`rounded border px-2 py-0.5 font-mono text-[10px] font-bold ${
                           SEVERITY_STYLES[ev.severity]
                         }`}
                       >
@@ -157,9 +159,9 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
                       </span>
                     </div>
                   </div>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-300">{ev.detail}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-ink-secondary">{ev.detail}</p>
                   {ev.snippet && (
-                    <code className="mt-1.5 block truncate rounded bg-slate-900 px-2 py-1 font-[family-name:var(--font-mono)] text-[11px] text-amber-200">
+                    <code className="mt-1.5 block truncate rounded bg-surface-elevated px-2 py-1 font-mono text-[11px] text-amber-200">
                       {ev.snippet}
                     </code>
                   )}
@@ -176,7 +178,7 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
               originalPreviewUrl={originalPreviewUrl}
             />
           ) : (
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-ink-muted">
               Chưa có tệp hình ảnh nào được tải lên trong phiên phân tích này.
             </p>
           ))}
@@ -190,7 +192,7 @@ export function EvidenceTabs({ report, originalPreviewUrl }: EvidenceTabsProps) 
               imageForensics={report.image_forensics}
             />
           ) : (
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-ink-muted">
               Nội dung hiện tại không phải ảnh chụp biên lai chuyển khoản ngân hàng.
             </p>
           ))}

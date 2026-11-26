@@ -28,31 +28,31 @@ function StatusRow({
   detail: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 rounded-lg border border-slate-800 bg-[#0b1120] px-3 py-2.5">
-      <div className="flex items-start gap-2">
-        {state === "pass" ? (
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
-        ) : state === "fail" ? (
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" aria-hidden="true" />
-        ) : (
-          <MinusCircle className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
-        )}
-        <div>
-          <p className="text-xs font-semibold text-slate-100">{label}</p>
-          <p className="text-[11px] text-slate-400">{detail}</p>
+    <div className="flex flex-col justify-between gap-2 rounded-lg border border-border-subtle bg-surface-subtle px-3 py-2.5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2">
+          {state === "pass" ? (
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+          ) : state === "fail" ? (
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" aria-hidden="true" />
+          ) : (
+            <MinusCircle className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+          )}
+          <p className="text-xs font-semibold leading-snug text-ink">{label}</p>
         </div>
+        <span
+          className={`shrink-0 rounded px-2 py-0.5 font-mono text-[10px] font-semibold ${
+            state === "pass"
+              ? "bg-emerald-500/15 text-emerald-300"
+              : state === "fail"
+                ? "bg-rose-500/15 text-rose-200"
+                : "bg-surface-elevated text-ink-secondary"
+          }`}
+        >
+          {state === "pass" ? "ỔN ĐỊNH" : state === "fail" ? "BẤT THƯỜNG" : "CHƯA ĐỐI CHIẾU"}
+        </span>
       </div>
-      <span
-        className={`shrink-0 rounded px-2 py-0.5 font-[family-name:var(--font-mono)] text-[10px] font-semibold ${
-          state === "pass"
-            ? "bg-emerald-500/15 text-emerald-300"
-            : state === "fail"
-              ? "bg-rose-500/15 text-rose-300"
-              : "bg-slate-800 text-slate-300"
-        }`}
-      >
-        {state === "pass" ? "KHÔNG BẤT THƯỜNG" : state === "fail" ? "BẤT THƯỜNG" : "CHƯA ĐỐI CHIẾU"}
-      </span>
+      <p className="pl-6 text-[11px] leading-relaxed text-ink-muted">{detail}</p>
     </div>
   );
 }
@@ -135,25 +135,25 @@ export function ReceiptCheckCard({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-[#0b1120] px-3.5 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border-subtle bg-surface-subtle px-3.5 py-2.5">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
           <span>
-            <span className="text-slate-400">Ngân hàng nhận diện: </span>
-            <strong className="text-slate-100">{receipt?.bank_detected ?? "Chưa xác định"}</strong>
+            <span className="text-ink-muted">Ngân hàng nhận diện: </span>
+            <strong className="text-ink">{receipt?.bank_detected ?? "Chưa xác định"}</strong>
           </span>
           {receipt?.reference_code && (
-            <span className="font-[family-name:var(--font-mono)] text-sky-300">
+            <span className="tabular-num font-mono text-sky-300">
               Mã GD: {receipt.reference_code}
             </span>
           )}
           {receipt?.extracted_recipient_account && (
-            <span className="font-[family-name:var(--font-mono)] text-amber-300">
+            <span className="tabular-num font-mono text-amber-300">
               STK nhận: {maskDisplayIoc(receipt.extracted_recipient_account)}
             </span>
           )}
         </div>
         <span
-          className={`rounded border px-2 py-0.5 font-[family-name:var(--font-mono)] text-[11px] font-semibold ${
+          className={`tabular-num rounded border px-2 py-0.5 font-mono text-[11px] font-semibold ${
             isAlertStatus
               ? "border-rose-500/50 bg-rose-500/15 text-rose-200"
               : "border-amber-500/40 bg-amber-500/10 text-amber-200"
@@ -163,10 +163,10 @@ export function ReceiptCheckCard({
         </span>
       </div>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
         <StatusRow
           state={elaExifState}
-          label="Pháp y Vật lý Ảnh (ELA &amp; EXIF)"
+          label="Pháp y Vật lý Ảnh (ELA & EXIF)"
           detail={
             imageForensics
               ? `Điểm ELA/EXIF: ${imageForensics.tamper_score}/100${
@@ -192,7 +192,7 @@ export function ReceiptCheckCard({
         />
         <StatusRow
           state={geometryState}
-          label="Hình học Dòng chữ Số tiền &amp; Tài khoản"
+          label="Hình học Dòng chữ Số tiền & Tài khoản"
           detail="Đo phương sai chiều cao bounding-box OCR chống chèn chữ đè (cần >= 4 dòng chữ)"
         />
         <StatusRow
@@ -203,7 +203,7 @@ export function ReceiptCheckCard({
         <StatusRow
           state={replayState}
           label="Chống Tái sử dụng Biên lai Cũ (Replay)"
-          detail="Tra cứu dHash &amp; mã tham chiếu trên sổ cái khi có dấu vân tay biên lai"
+          detail="Tra cứu dHash & mã tham chiếu trên sổ cái khi có dấu vân tay biên lai"
         />
       </div>
 

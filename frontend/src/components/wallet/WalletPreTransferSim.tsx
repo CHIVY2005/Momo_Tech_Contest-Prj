@@ -18,6 +18,7 @@ export function WalletPreTransferSim({
   transferAmountInput,
 }: WalletPreTransferSimProps) {
   const pre = report.actions.pre_transfer;
+  const totalHoldSeconds = pre.should_hold_transfer ? Math.max(1, pre.cooling_off_seconds) : 0;
   const [deadlineMs, setDeadlineMs] = useState<number>(() =>
     pre.should_hold_transfer ? Date.now() + pre.cooling_off_seconds * 1000 : 0,
   );
@@ -78,15 +79,30 @@ export function WalletPreTransferSim({
   const targetDisplay = rawMention ? maskDisplayIoc(rawMention) : "Chưa khai báo STK đích";
   const targetLabel = vqrAcct ? "Tài khoản thụ hưởng (VietQR): " : "Thực thể trích xuất liên quan: ";
 
+  const elapsedPct =
+    totalHoldSeconds > 0
+      ? Math.min(100, Math.max(0, Math.round(((totalHoldSeconds - secondsLeft) / totalHoldSeconds) * 100)))
+      : 100;
+
+  // Announce only major milestones to screen readers (prevents per-second aria-live spam)
+  const srMilestone =
+    secondsLeft === 0
+      ? "Đã hết thời gian làm nguội 30 giây."
+      : secondsLeft === 10
+        ? "Còn 10 giây khóa làm nguội."
+        : secondsLeft === pre.cooling_off_seconds
+          ? `Đang kích hoạt khóa làm nguội ${pre.cooling_off_seconds} giây.`
+          : "";
+
   return (
     <section
       aria-labelledby="wallet-guard-heading"
-      className="rounded-2xl border-2 border-rose-500/60 bg-gradient-to-b from-[#1a1120] to-[#111827] p-5 shadow-xl"
+      className="rounded-2xl border-2 border-rose-500/60 bg-gradient-to-b from-[#1a1120] to-surface p-5 shadow-xl"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Lock className="h-5 w-5 text-rose-400" aria-hidden="true" />
-          <h3 id="wallet-guard-heading" className="text-sm font-bold text-slate-50">
+          <h3 id="wallet-guard-heading" className="text-sm font-bold text-ink">
             Chốt Chặn Phút 89 — Can thiệp Trước Xác Nhận Chuyển Tiền
           </h3>
         </div>
@@ -97,25 +113,21 @@ export function WalletPreTransferSim({
         )}
       </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-2.5 rounded-xl border border-slate-800 bg-[#0b1120] p-3 text-xs sm:grid-cols-2">
+      <div className="mt-3 grid grid-cols-1 gap-2.5 rounded-xl border border-border-subtle bg-surface-subtle p-3 text-xs sm:grid-cols-2">
         <div>
-          <span className="text-slate-400">{targetLabel}</span>
-          <strong className="font-[family-name:var(--font-mono)] text-amber-300">
-            {targetDisplay}
-          </strong>
+          <span className="text-ink-muted">{targetLabel}</span>
+          <strong className="tabular-num font-mono text-amber-300">{targetDisplay}</strong>
         </div>
         <div>
-          <span className="text-slate-400">Số tiền lệnh chuyển: </span>
-          <strong className="font-[family-name:var(--font-mono)] text-slate-100">
-            {formattedAmount}
-          </strong>
+          <span className="text-ink-muted">Số tiền lệnh chuyển: </span>
+          <strong className="tabular-num font-mono text-ink">{formattedAmount}</strong>
         </div>
       </div>
 
       {outcome === "aborted_safely" ? (
         <div
           role="status"
-          className="mt-4 flex items-center gap-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/15 p-4 text-xs font-semibold text-emerald-200"
+          className="mt-4 flex items-center gap-2.5 rounded-xl border border-emerald-500/45 bg-emerald-500/15 p-4 text-xs font-semibold text-emerald-200"
         >
           <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden="true" />
           <span>
@@ -132,14 +144,14 @@ export function WalletPreTransferSim({
             <span>
               <strong>Mô phỏng Ghi nhận Miễn trừ Trách nhiệm:</strong> Người dùng đã chờ hết 30 giây làm
               nguội và tích xác nhận tự chịu rủi ro cho hồ sơ{" "}
-              <code className="font-[family-name:var(--font-mono)]">{report.case_id}</code>. Hệ thống ví
-              đã ghi nhật ký cảnh báo bắt buộc trước khi giải ngân.
+              <code className="tabular-num font-mono">{report.case_id}</code>. Hệ thống ví đã ghi nhật
+              ký cảnh báo bắt buộc trước khi giải ngân.
             </span>
           </div>
           <button
             type="button"
             onClick={startFreshHold}
-            className="cursor-pointer rounded-lg border border-amber-400/50 bg-slate-950 px-2.5 py-1 text-[11px] font-semibold text-amber-200 hover:bg-slate-900"
+            className="min-h-[38px] cursor-pointer rounded-lg border border-amber-400/50 bg-surface-deep px-3 py-1.5 text-xs font-semibold text-amber-200 hover:bg-surface-elevated"
           >
             Khởi động lại Khóa 30s
           </button>
@@ -160,33 +172,45 @@ export function WalletPreTransferSim({
         </div>
       ) : pre.should_hold_transfer ? (
         <div className="mt-4 space-y-3.5">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/50 bg-amber-500/15 p-3.5">
-            <div className="flex items-start gap-2.5">
-              <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden="true" />
-              <p className="text-xs font-semibold leading-relaxed text-amber-100">
-                {pre.warning_headline}
-              </p>
+          <div className="rounded-xl border border-amber-500/50 bg-amber-500/15 p-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" aria-hidden="true" />
+                <p className="text-xs font-semibold leading-relaxed text-amber-100">
+                  {pre.warning_headline}
+                </p>
+              </div>
+              <div className="tabular-num flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-surface-deep px-3 py-1.5 font-mono text-sm font-bold text-amber-300">
+                <Timer className="h-4 w-4 text-amber-400" aria-hidden="true" />
+                <span>
+                  {secondsLeft > 0 ? `Khóa làm nguội: ${secondsLeft}s` : "Đã hết 30s làm nguội"}
+                </span>
+              </div>
             </div>
-            <div
-              aria-live="polite"
-              className="flex items-center gap-1.5 rounded-lg bg-slate-950 px-3 py-1.5 font-[family-name:var(--font-mono)] text-sm font-bold text-amber-300"
-            >
-              <Timer className="h-4 w-4 text-amber-400" aria-hidden="true" />
-              <span>
-                {secondsLeft > 0 ? `Khóa làm nguội: ${secondsLeft}s` : "Đã hết 30s làm nguội"}
-              </span>
+
+            <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-deep/90">
+              <div
+                className={`h-full rounded-full transition-all duration-200 ${
+                  secondsLeft === 0 ? "bg-emerald-400" : "bg-amber-400"
+                }`}
+                style={{ width: `${elapsedPct}%` }}
+              />
             </div>
+
+            <span className="sr-only" aria-live="polite" aria-atomic="true">
+              {srMilestone}
+            </span>
           </div>
 
           {pre.verification_questions.length > 0 && (
-            <fieldset className="space-y-2 rounded-xl border border-slate-800 bg-[#0b1120] p-3.5">
-              <legend className="px-1 text-xs font-semibold text-slate-200">
+            <fieldset className="space-y-1.5 rounded-xl border border-border-subtle bg-surface-subtle p-3.5">
+              <legend className="px-1 text-xs font-semibold text-ink">
                 Câu hỏi Phá vỡ Thao túng Tâm lý (Bắt buộc xác nhận từng mục):
               </legend>
               {pre.verification_questions.map((q, idx) => (
                 <label
                   key={q}
-                  className="flex cursor-pointer items-start gap-2.5 rounded-lg p-1.5 text-xs text-slate-200 hover:bg-slate-900"
+                  className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-xs text-ink-secondary transition-colors hover:bg-surface-elevated"
                 >
                   <input
                     type="checkbox"
@@ -194,9 +218,9 @@ export function WalletPreTransferSim({
                     onChange={(e) =>
                       setCheckedQuestions((prev) => ({ ...prev, [idx]: e.target.checked }))
                     }
-                    className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-amber-500"
+                    className="h-4 w-4 shrink-0 cursor-pointer accent-amber-500"
                   />
-                  <span>{q}</span>
+                  <span className="leading-snug">{q}</span>
                 </label>
               ))}
             </fieldset>
@@ -206,7 +230,7 @@ export function WalletPreTransferSim({
             <button
               type="button"
               onClick={() => setOutcome("aborted_safely")}
-              className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-slate-950 transition-colors hover:bg-emerald-400"
+              className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-xs font-bold text-slate-950 shadow-md shadow-emerald-500/20 transition-colors hover:bg-emerald-400 sm:text-sm"
             >
               <PhoneOff className="h-4 w-4" aria-hidden="true" />
               <span>Dừng Giao dịch &amp; Ngắt Cuộc gọi Ngay (An toàn)</span>
@@ -216,7 +240,7 @@ export function WalletPreTransferSim({
               type="button"
               disabled={!canProceedOverride}
               onClick={() => setOutcome("overridden_at_risk")}
-              className="cursor-pointer rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-medium text-slate-300 transition-colors enabled:hover:border-rose-500/60 enabled:hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-45"
+              className="tabular-num min-h-[44px] cursor-pointer rounded-xl border border-border-strong bg-surface-subtle px-4 py-2 text-xs font-medium text-ink-secondary transition-colors enabled:hover:border-rose-500/60 enabled:hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {secondsLeft > 0
                 ? `Đang khóa xác nhận (${secondsLeft}s)`

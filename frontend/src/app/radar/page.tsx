@@ -64,7 +64,6 @@ export default function RadarPage() {
         kind: "err",
         text: e instanceof Error ? e.message : "Không thể tải dữ liệu đồ thị Fraud Ops.",
       });
-      // Direct cancellable retry only while mounted on current generation
       retryTimerRef.current = window.setTimeout(() => {
         if (mountedRef.current && reqId === graphReqIdRef.current) {
           void loadGraph();
@@ -85,7 +84,6 @@ export default function RadarPage() {
     };
   }, [loadGraph, clearRetryTimer]);
 
-  // Keep UI remaining-TTL display ticking against wall-clock time while rules are active
   useEffect(() => {
     const activeCount = graph?.active_block_rules.length ?? 0;
     if (activeCount === 0) return;
@@ -236,19 +234,19 @@ export default function RadarPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-800 bg-gradient-to-r from-[#111827] via-[#0f172a] to-[#0c1f2e] p-5 sm:flex-row sm:items-center">
+    <div className="space-y-4 sm:space-y-5">
+      <section className="flex flex-col justify-between gap-3 rounded-2xl border border-border-subtle bg-gradient-to-r from-surface via-[#0f172a] to-[#0c1f2e] px-4 py-3.5 sm:flex-row sm:items-center sm:px-5 sm:py-4">
         <div>
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-0.5 text-xs font-semibold text-sky-300">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-sky-300">
             <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Closed-Loop Fintech Fraud Operations Workspace</span>
           </div>
-          <h1 className="mt-2 text-xl font-bold text-slate-50 sm:text-2xl">
+          <h1 className="mt-1.5 text-lg font-bold text-ink sm:text-xl">
             Trung tâm Điều hành Chống Gian lận Khép kín (/radar)
           </h1>
-          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-300 sm:text-sm">
-            Biến cảnh báo từ người dùng cuối thành lá chắn cho toàn bộ hệ sinh thái trong 1 cú nhấp
-            chuột — mọi SĐT và Số tài khoản đều được băm SHA-256 &amp; che dấu PII ngay từ tầng lưu trữ.
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-secondary">
+            Biến cảnh báo từ người dùng cuối thành lá chắn toàn hệ sinh thái trong 1 cú nhấp chuột —
+            mọi SĐT và STK đều được băm SHA-256 &amp; che dấu PII ngay từ tầng lưu trữ.
           </p>
         </div>
 
@@ -256,14 +254,14 @@ export default function RadarPage() {
           <button
             type="button"
             onClick={() => void loadGraph()}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:border-sky-400"
+            className="inline-flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-xl border border-border-strong bg-surface-subtle px-3.5 py-2 text-xs font-semibold text-ink hover:border-sky-400"
           >
             <RefreshCw className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
             <span>Làm mới Đồ thị</span>
           </button>
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3.5 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-500/25"
+            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3.5 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-500/25"
           >
             <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Về Workbench &amp; Ví 30s</span>
@@ -273,27 +271,27 @@ export default function RadarPage() {
 
       {graph && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl border border-slate-800 bg-[#111827] p-3.5">
-            <p className="text-xs text-slate-400">Tổng Hồ sơ Đã Thẩm định</p>
-            <p className="mt-1 font-[family-name:var(--font-mono)] text-2xl font-bold text-slate-50">
+          <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
+            <p className="text-xs text-ink-muted">Tổng Hồ sơ Đã Thẩm định</p>
+            <p className="tabular-num mt-1 font-mono text-2xl font-bold text-ink">
               {graph.stats.total_cases ?? 0}
             </p>
           </div>
-          <div className="rounded-xl border border-slate-800 bg-[#111827] p-3.5">
-            <p className="text-xs text-slate-400">Chiến dịch Lừa đảo Bùng phát</p>
-            <p className="mt-1 font-[family-name:var(--font-mono)] text-2xl font-bold text-rose-400">
+          <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
+            <p className="text-xs text-ink-muted">Chiến dịch Lừa đảo Bùng phát</p>
+            <p className="tabular-num mt-1 font-mono text-2xl font-bold text-rose-400">
               {graph.stats.emerging_campaigns ?? graph.campaigns.length}
             </p>
           </div>
-          <div className="rounded-xl border border-slate-800 bg-[#111827] p-3.5">
-            <p className="text-xs text-slate-400">Thực thể IOC Đã Ghi nhận</p>
-            <p className="mt-1 font-[family-name:var(--font-mono)] text-2xl font-bold text-sky-300">
+          <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
+            <p className="text-xs text-ink-muted">Thực thể IOC Đã Ghi nhận</p>
+            <p className="tabular-num mt-1 font-mono text-2xl font-bold text-sky-300">
               {graph.stats.tracked_iocs ?? graph.nodes.length}
             </p>
           </div>
-          <div className="rounded-xl border border-slate-800 bg-[#111827] p-3.5">
-            <p className="text-xs text-slate-400">Quy tắc Chặn Đang Bật</p>
-            <p className="mt-1 font-[family-name:var(--font-mono)] text-2xl font-bold text-amber-300">
+          <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
+            <p className="text-xs text-ink-muted">Quy tắc Chặn Đang Bật</p>
+            <p className="tabular-num mt-1 font-mono text-2xl font-bold text-amber-300">
               {graph.active_block_rules.length}
             </p>
           </div>
@@ -318,10 +316,12 @@ export default function RadarPage() {
         </div>
       )}
 
-      {graph && <IocGraphSvg nodes={graph.nodes} edges={graph.edges} />}
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <div className="lg:col-span-6">
+      {/* Scene 4 Side-by-Side: clicking 1-Click Block turns graph nodes crimson in the exact same frame */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:items-start">
+        <div className="xl:col-span-7">
+          {graph && <IocGraphSvg nodes={graph.nodes} edges={graph.edges} />}
+        </div>
+        <div className="xl:col-span-5">
           <CampaignQueue
             campaigns={graph?.campaigns ?? []}
             busyCampaignId={busyCampaignId}
@@ -329,7 +329,10 @@ export default function RadarPage() {
             onBlockCampaign={(camp) => void handleBlockCampaign(camp)}
           />
         </div>
-        <div className="lg:col-span-6">
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:items-start">
+        <div className="xl:col-span-6">
           <BlockRuleManager
             rules={graph?.active_block_rules ?? []}
             analystPin={analystPin}
@@ -341,9 +344,10 @@ export default function RadarPage() {
             onResetRules={() => void handleReset()}
           />
         </div>
+        <div className="xl:col-span-6">
+          <ApiPlaygroundCard />
+        </div>
       </div>
-
-      <ApiPlaygroundCard />
     </div>
   );
 }

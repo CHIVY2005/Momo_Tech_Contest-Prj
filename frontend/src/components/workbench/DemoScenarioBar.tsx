@@ -46,23 +46,23 @@ export function DemoScenarioBar({
   return (
     <section
       aria-labelledby="demo-scenarios-heading"
-      className="rounded-2xl border border-slate-800 bg-[#111827]/95 p-4 shadow-lg"
+      className="rounded-2xl border border-border-subtle bg-surface/95 p-3.5 shadow-lg sm:p-4"
     >
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 id="demo-scenarios-heading" className="text-sm font-semibold text-slate-100">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+          <h2 id="demo-scenarios-heading" className="text-xs font-bold text-ink sm:text-sm">
             5 Kịch bản Thực chiến 1-Click (Dành cho Hội đồng Giám khảo)
           </h2>
-          <p className="text-xs text-slate-400">
-            Nhấn chọn một tình huống để nạp dữ liệu mẫu tổng hợp và chạy luồng điều tra thời gian thực.
+          <p className="hidden text-[11px] text-ink-muted xl:block">
+            Chọn tình huống để nạp mẫu tổng hợp và chạy điều tra thời gian thực.
           </p>
         </div>
-        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 font-[family-name:var(--font-mono)] text-[11px] font-medium text-amber-300">
+        <span className="tabular-num rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-amber-300">
           Zero-Login · SSE Live
         </span>
       </div>
 
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 lg:grid-cols-5">
         {demos.map((demo) => {
           const Icon = pickScenarioIcon(demo);
           const isSelected = activeDemoId === demo.demo_id;
@@ -75,33 +75,33 @@ export function DemoScenarioBar({
               disabled={isAnalyzing}
               onClick={() => onSelectDemo(demo)}
               aria-pressed={isSelected}
-              className={`group flex cursor-pointer flex-col justify-between rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+              className={`group flex w-[236px] shrink-0 snap-start cursor-pointer flex-col justify-between rounded-xl border p-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-0 ${
                 isSelected
-                  ? "border-amber-400 bg-amber-500/15"
-                  : "border-slate-800 bg-[#0b1120] hover:border-slate-600 hover:bg-slate-900"
+                  ? "border-amber-400 bg-amber-500/15 shadow-sm shadow-amber-500/10"
+                  : "border-border-subtle bg-surface-subtle hover:border-border-strong hover:bg-surface-elevated"
               }`}
             >
               <div>
-                <div className="mb-2 flex items-center justify-between gap-1.5">
+                <div className="mb-1 flex items-center justify-between gap-1.5">
                   <span
-                    className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                    className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
                       isSafeControl
-                        ? "border border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
-                        : "border border-rose-500/30 bg-rose-500/15 text-rose-300"
+                        ? "border border-emerald-500/35 bg-emerald-500/15 text-emerald-300"
+                        : "border border-rose-500/35 bg-rose-500/15 text-rose-200"
                     }`}
                   >
-                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                    <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
                     <span>{demo.category_badge}</span>
                   </span>
-                  <span className="rounded bg-slate-800 px-1.5 py-0.5 font-[family-name:var(--font-mono)] text-[10px] text-slate-300">
+                  <span className="rounded bg-surface-elevated px-1.5 py-0.5 font-mono text-[10px] text-ink-secondary">
                     {MODE_LABELS[demo.mode]}
                   </span>
                 </div>
-                <p className="text-xs font-semibold leading-snug text-slate-100 group-hover:text-amber-200">
+                <p className="line-clamp-2 text-xs font-semibold leading-snug text-ink group-hover:text-amber-200">
                   {demo.title_vi}
                 </p>
               </div>
-              <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-slate-400">
+              <p className="mt-1 line-clamp-1 text-[11px] leading-snug text-ink-muted">
                 {demo.subtitle_vi}
               </p>
             </button>

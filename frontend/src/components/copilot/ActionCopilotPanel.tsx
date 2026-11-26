@@ -29,12 +29,12 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
   return (
     <aside
       aria-labelledby="action-copilot-heading"
-      className="space-y-4 rounded-2xl border border-slate-800 bg-[#111827]/95 p-5 shadow-lg"
+      className="space-y-4 rounded-2xl border border-border-subtle bg-surface/95 p-5 shadow-lg"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Shield className="h-5 w-5 text-amber-400" aria-hidden="true" />
-          <h3 id="action-copilot-heading" className="text-sm font-bold text-slate-50">
+          <h3 id="action-copilot-heading" className="text-sm font-bold text-ink">
             Trợ lý Ứng phó Tức thì (Action Copilot)
           </h3>
         </div>
@@ -43,7 +43,7 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
           href={getReportPdfUrl(report.case_id)}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 transition-colors hover:bg-amber-500/25"
+          className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-amber-500/45 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 transition-colors hover:bg-amber-500/25"
         >
           <FileDown className="h-3.5 w-3.5" aria-hidden="true" />
           <span>Tải Hồ sơ Tố giác PDF</span>
@@ -51,11 +51,11 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
       </div>
 
       {actions.urgent_steps.length > 0 && (
-        <div className="rounded-xl border border-slate-800 bg-[#0b1120] p-3.5">
-          <p className="mb-2 text-xs font-semibold text-slate-200">
+        <div className="rounded-xl border border-border-subtle bg-surface-subtle p-3.5">
+          <p className="mb-2 text-xs font-semibold text-ink">
             Các bước hành động bảo vệ ngay lập tức:
           </p>
-          <ol className="list-inside list-decimal space-y-1.5 text-xs leading-relaxed text-slate-300">
+          <ol className="list-inside list-decimal space-y-1.5 text-xs leading-relaxed text-ink-secondary">
             {actions.urgent_steps.map((step) => (
               <li key={step}>{step}</li>
             ))}
@@ -65,7 +65,7 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
 
       {actions.counter_replies.length > 0 && (
         <div className="space-y-2">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-200">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-ink">
             <MessageSquareReply className="h-4 w-4 text-sky-400" aria-hidden="true" />
             <span>Mẫu câu phản hồi an toàn để cắt đuôi kẻ gian (1-Click Copy):</span>
           </div>
@@ -75,14 +75,14 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
             return (
               <div
                 key={key}
-                className="flex items-start justify-between gap-2 rounded-xl border border-slate-800 bg-[#0b1120] p-3"
+                className="flex items-start justify-between gap-2 rounded-xl border border-border-subtle bg-surface-subtle p-3"
               >
-                <p className="text-xs leading-relaxed text-slate-200">&ldquo;{reply}&rdquo;</p>
+                <p className="text-xs leading-relaxed text-ink-secondary">&ldquo;{reply}&rdquo;</p>
                 <button
                   type="button"
                   onClick={() => void copyText(key, reply)}
                   aria-label={`Sao chép mẫu câu phản hồi số ${idx + 1}`}
-                  className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-slate-200 hover:border-amber-400"
+                  className="inline-flex min-h-[34px] shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border-strong bg-surface-elevated px-2.5 py-1 text-[11px] font-medium text-ink hover:border-amber-400"
                 >
                   {isCopied ? (
                     <>
@@ -103,7 +103,7 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
       )}
 
       {actions.family_shield_message && (
-        <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-3.5">
+        <div className="rounded-xl border border-sky-500/35 bg-sky-500/10 p-3.5">
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-sky-200">
               <HeartHandshake className="h-4 w-4 text-sky-400" aria-hidden="true" />
@@ -112,7 +112,7 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
             <button
               type="button"
               onClick={() => void copyText("family", actions.family_shield_message)}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-sky-500/40 bg-slate-900/90 px-2.5 py-1 text-[11px] font-medium text-sky-200 hover:border-sky-300"
+              className="inline-flex min-h-[34px] cursor-pointer items-center gap-1 rounded-lg border border-sky-500/45 bg-surface-subtle px-2.5 py-1 text-[11px] font-medium text-sky-200 hover:border-sky-300"
             >
               {copiedKey === "family" ? (
                 <>
@@ -127,7 +127,9 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
               )}
             </button>
           </div>
-          <p className="text-xs leading-relaxed text-slate-200">{actions.family_shield_message}</p>
+          <p className="text-xs leading-relaxed text-ink-secondary">
+            {actions.family_shield_message}
+          </p>
         </div>
       )}
     </aside>

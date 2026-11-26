@@ -124,7 +124,7 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 ### 4.2. Thư viện Mã nguồn mở, Hạ tầng & Stack Huấn luyện
 - **Backend Python Runtime:** `FastAPI` (`MIT`), `Pydantic v2` (`MIT`), `pydantic-settings` (`MIT`), `Uvicorn` (`BSD-3-Clause`), `python-multipart` (`Apache-2.0`), `HTTPX` (`BSD-3-Clause`), `idna` (`BSD-3-Clause`), `ONNX Runtime` (`MIT`), `Tokenizers` (`Apache-2.0`), `OpenCV-Headless` (`Apache-2.0`), `Pillow` (`MIT-CMU`), `NumPy` (`BSD-3-Clause`), `PyAV / av` (`LGPL-3.0-or-later`), `Playwright` (`Apache-2.0`), `google-genai` (`Apache-2.0`), `fpdf2` (`LGPL-3.0-only`), phông chữ `DejaVuSans.ttf` (`Bitstream Vera` — xem [LICENSE-DejaVu.txt](backend/app/data/fonts/LICENSE-DejaVu.txt)).
 - **Pipeline Huấn luyện & Đánh giá (chỉ chạy ngoại tuyến, tách khỏi runtime):** `PyTorch` (`BSD-3-Clause`), `Transformers` (`Apache-2.0`), `ONNX` (`Apache-2.0`), `ONNXScript` (`MIT`), `scikit-learn` (`BSD-3-Clause`), `pypdf` (`BSD-3-Clause`), `pytest` / `pytest-asyncio` / `respx` / `ruff` / `mypy` (`MIT` / `BSD`).
-- **Frontend Web:** `Next.js 15` (`MIT`), `React 19` (`MIT`), `TypeScript` (`Apache-2.0`), `Tailwind CSS v4` (`MIT`), `Lucide Icons` (`ISC`).
+- **Frontend Web:** `Next.js 15` (`MIT`), `React 19` (`MIT`), `TypeScript` (`Apache-2.0`), `Tailwind CSS v4` (`MIT`), `Lucide Icons` (`ISC`), phông chữ `Inter` & `JetBrains Mono` (`SIL OFL-1.1`, tự lưu cùng ứng dụng qua `next/font`).
 - **Hạ tầng Triển khai:** `SQLite 3 WAL` (`Public Domain`), `Caddy 2` Reverse Proxy & Automatic TLS (`Apache-2.0`), `Docker Compose`.
 
 ### 4.3. Công cụ AI Hỗ trợ Phát triển & Cam kết Dữ liệu / Pháp lý

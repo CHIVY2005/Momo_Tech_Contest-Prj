@@ -86,21 +86,19 @@ export function ApiPlaygroundCard() {
   return (
     <section
       aria-labelledby="api-playground-heading"
-      className="rounded-2xl border border-sky-500/30 bg-[#111827]/95 p-5 shadow-lg"
+      className="rounded-2xl border border-sky-500/35 bg-surface/95 p-4 shadow-lg sm:p-5"
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Code2 className="h-5 w-5 text-sky-400" aria-hidden="true" />
+        <div className="flex items-start gap-2">
+          <Code2 className="mt-0.5 h-5 w-5 shrink-0 text-sky-400" aria-hidden="true" />
           <div>
-            <h2 id="api-playground-heading" className="text-sm font-bold text-slate-50">
+            <h2 id="api-playground-heading" className="text-sm font-bold text-ink">
               Fintech Pre-Transfer REST API Playground (
-              <code className="font-[family-name:var(--font-mono)] text-sky-300">
-                POST /api/v1/analyze
-              </code>
-              )
+              <code className="font-mono text-sky-300">POST /api/v1/analyze</code>)
             </h2>
-            <p className="text-xs text-slate-400">
-              Kiểm chứng ngay lập tức: Khi Fraud Ops bấm Khóa 1-Click ở trên, lệnh chuyển tiền của Ví bị chặn cứng (&ge;96 điểm) trong tích tắc!
+            <p className="text-xs text-ink-muted">
+              Kiểm chứng ngay lập tức: Khi Fraud Ops bấm Khóa 1-Click ở trên, lệnh chuyển tiền của
+              Ví bị chặn cứng (&ge;96 điểm) trong tích tắc!
             </p>
           </div>
         </div>
@@ -116,7 +114,7 @@ export function ApiPlaygroundCard() {
               setSampleText(p.text);
               setInActiveCall(p.inActiveCall);
             }}
-            className="cursor-pointer rounded-lg border border-slate-700 bg-[#0b1120] px-2.5 py-1.5 text-[11px] font-medium text-slate-200 hover:border-sky-400"
+            className="min-h-[34px] cursor-pointer rounded-lg border border-border-strong bg-surface-subtle px-2.5 py-1.5 text-left text-[11px] font-medium text-ink-secondary hover:border-sky-400 hover:text-ink"
           >
             {p.label}
           </button>
@@ -125,7 +123,10 @@ export function ApiPlaygroundCard() {
 
       <div className="space-y-3">
         <div>
-          <label htmlFor="playground-payload" className="mb-1 block text-xs font-semibold text-slate-300">
+          <label
+            htmlFor="playground-payload"
+            className="mb-1 block text-xs font-semibold text-ink-secondary"
+          >
             Payload giao dịch gửi từ Ứng dụng Ví Điện Tử:
           </label>
           <textarea
@@ -136,12 +137,12 @@ export function ApiPlaygroundCard() {
               invalidatePending();
               setSampleText(e.target.value);
             }}
-            className="w-full rounded-xl border border-slate-700 bg-[#0b1120] px-3 py-2 font-[family-name:var(--font-mono)] text-xs text-slate-100"
+            className="w-full rounded-xl border border-border-strong bg-surface-subtle px-3 py-2 font-mono text-xs text-ink"
           />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-200">
+          <label className="inline-flex min-h-[38px] cursor-pointer items-center gap-2 text-xs text-ink-secondary">
             <input
               type="checkbox"
               checked={inActiveCall}
@@ -152,10 +153,8 @@ export function ApiPlaygroundCard() {
               className="h-4 w-4 cursor-pointer accent-amber-500"
             />
             <span>
-              <code className="font-[family-name:var(--font-mono)] text-amber-300">
-                in_active_call = true
-              </code>{" "}
-              (Đang trong cuộc gọi thoại)
+              <code className="font-mono text-amber-300">in_active_call = true</code> (Đang trong
+              cuộc gọi thoại)
             </span>
           </label>
 
@@ -163,7 +162,7 @@ export function ApiPlaygroundCard() {
             type="button"
             disabled={isCalling || !sampleText.trim()}
             onClick={() => void runApiCheck()}
-            className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex min-h-[40px] cursor-pointer items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isCalling ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -175,22 +174,25 @@ export function ApiPlaygroundCard() {
         </div>
 
         {err && (
-          <p role="alert" className="rounded-lg border border-rose-500/40 bg-rose-500/10 p-2.5 text-xs text-rose-200">
+          <p
+            role="alert"
+            className="rounded-lg border border-rose-500/40 bg-rose-500/10 p-2.5 text-xs text-rose-200"
+          >
             {err}
           </p>
         )}
 
         {result && evaluated && (
-          <div className="space-y-2.5 rounded-xl border border-slate-800 bg-[#070b14] p-3.5">
+          <div className="space-y-2.5 rounded-xl border border-border-subtle bg-surface-deep p-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-xs font-bold">
                 {result.active_block_rule_hit ? (
-                  <span className="inline-flex items-center gap-1.5 rounded bg-rose-500/20 px-2.5 py-1 text-rose-200">
+                  <span className="tabular-num inline-flex items-center gap-1.5 rounded bg-rose-500/20 px-2.5 py-1 text-rose-200">
                     <Ban className="h-4 w-4" aria-hidden="true" />
                     <span>BỊ CHẶN BỞI FRAUD OPS RULE ({result.risk_score}/100)</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded bg-amber-500/20 px-2.5 py-1 text-amber-200">
+                  <span className="tabular-num inline-flex items-center gap-1.5 rounded bg-amber-500/20 px-2.5 py-1 text-amber-200">
                     <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                     <span>
                       {result.verdict} ({result.risk_score}/100) · Khóa làm nguội:{" "}
@@ -199,12 +201,12 @@ export function ApiPlaygroundCard() {
                   </span>
                 )}
               </div>
-              <span className="font-[family-name:var(--font-mono)] text-[11px] text-slate-400">
+              <span className="tabular-num font-mono text-[11px] text-ink-muted">
                 case_id: {result.case_id}
               </span>
             </div>
 
-            <pre className="max-h-48 overflow-auto rounded-lg bg-slate-950 p-3 font-[family-name:var(--font-mono)] text-[11px] leading-relaxed text-sky-200">
+            <pre className="max-h-48 overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-[11px] leading-relaxed text-sky-200">
               {JSON.stringify(
                 {
                   evaluated_payload: evaluated.payload,
