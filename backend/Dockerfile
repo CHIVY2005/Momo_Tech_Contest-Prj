@@ -23,10 +23,11 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --upgrade pip && \
     pip install -r /app/requirements.txt && \
     playwright install --with-deps chromium && \
-    chmod -R 755 /ms-playwright && \
-    mkdir -p /app/whisper_cache /app/ocr_cache && \
+    chmod -R 755 /ms-playwright
+
+RUN mkdir -p /app/whisper_cache /app/ocr_cache && \
     python -c "from faster_whisper import download_model; download_model('tiny', cache_dir='/app/whisper_cache')" && \
-    python -c "import shutil; from pathlib import Path; import rapidocr; from rapidocr import EngineType, LangRec, ModelType, OCRVersion, RapidOCR; RapidOCR(params={'Global.use_cls': False, 'Det.engine_type': EngineType.ONNXRUNTIME, 'Det.ocr_version': OCRVersion.PPOCRV5, 'Det.model_type': ModelType.MOBILE, 'Rec.engine_type': EngineType.ONNXRUNTIME, 'Rec.ocr_version': OCRVersion.PPOCRV5, 'Rec.lang_type': LangRec.LATIN, 'Rec.model_type': ModelType.MOBILE, 'EngineConfig.onnxruntime.enable_cpu_mem_arena': False}); src = Path(rapidocr.__file__).resolve().parent / 'models'; dst = Path('/app/ocr_cache'); [shutil.copy2(src / n, dst / n) for n in ('ch_PP-OCRv5_det_mobile.onnx', 'latin_PP-OCRv5_rec_mobile.onnx')]; assert all((dst / n).is_file() and (dst / n).stat().st_size > 1_000_000 for n in ('ch_PP-OCRv5_det_mobile.onnx', 'latin_PP-OCRv5_rec_mobile.onnx'))"
+    python -c "import shutil; from pathlib import Path; import numpy as np; from PIL import Image, ImageDraw; import rapidocr; from rapidocr import EngineType, LangRec, ModelType, OCRVersion, RapidOCR; eng = RapidOCR(params={'Global.use_cls': False, 'Det.engine_type': EngineType.ONNXRUNTIME, 'Det.ocr_version': OCRVersion.PPOCRV5, 'Det.model_type': ModelType.MOBILE, 'Rec.engine_type': EngineType.ONNXRUNTIME, 'Rec.ocr_version': OCRVersion.PPOCRV5, 'Rec.lang_type': LangRec.LATIN, 'Rec.model_type': ModelType.MOBILE, 'EngineConfig.onnxruntime.enable_cpu_mem_arena': False}); img = Image.new('RGB', (320, 80), (255, 255, 255)); ImageDraw.Draw(img).text((20, 28), 'VIETCOMBANK 123456', fill=(0, 0, 0)); res = eng(np.array(img)); assert res.txts, 'OCR warm-up returned empty text'; src = Path(rapidocr.__file__).resolve().parent / 'models'; dst = Path('/app/ocr_cache'); [shutil.copy2(src / n, dst / n) for n in ('ch_PP-OCRv5_det_mobile.onnx', 'latin_PP-OCRv5_rec_mobile.onnx')]; assert all((dst / n).is_file() and (dst / n).stat().st_size > 1_000_000 for n in ('ch_PP-OCRv5_det_mobile.onnx', 'latin_PP-OCRv5_rec_mobile.onnx'))"
 
 RUN useradd --create-home --uid 10001 verishield && \
     mkdir -p /data && \
