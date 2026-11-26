@@ -1,35 +1,53 @@
 "use client";
 
-import { AlertCircle, ArrowLeft, CheckCircle2, RefreshCw, ShieldAlert } from "lucide-react";
-import Link from "next/link";
+import {
+  AlertCircle,
+  CheckCircle2,
+  FlaskConical,
+  Info,
+  PlusCircle,
+  RefreshCw,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiPlaygroundCard } from "@/components/radar/ApiPlaygroundCard";
 import { BlockRuleManager } from "@/components/radar/BlockRuleManager";
+import { CampaignDetailDrawer } from "@/components/radar/CampaignDetailDrawer";
 import { CampaignQueue } from "@/components/radar/CampaignQueue";
 import { IocGraphSvg } from "@/components/radar/IocGraphSvg";
+import {
+  RuleActionModal,
+  type RuleModalState,
+  type TargetIocOption,
+} from "@/components/radar/RuleActionModal";
 import {
   createBlockRule,
   fetchRadarGraph,
   resetBlockRules,
   revokeBlockRule,
-  validateAnalystPinInput,
 } from "@/lib/api";
-import { getNextRuleExpiryDelayMs } from "@/lib/radarLayout";
-import type { EmergingCampaign, IocType, RadarGraphResponse } from "@/lib/types";
-
-const DEFAULT_DEMO_PIN =
-  process.env.NEXT_PUBLIC_APP_ENV === "demo"
-    ? (process.env.NEXT_PUBLIC_DEMO_ANALYST_PIN ?? "2026")
-    : (process.env.NEXT_PUBLIC_DEMO_ANALYST_PIN ?? "");
+import { formatMaskedIoc, formatNodeDisplayLabel, getNextRuleExpiryDelayMs } from "@/lib/radarLayout";
+import type {
+  BlockRule,
+  EmergingCampaign,
+  IocType,
+  RadarGraphResponse,
+  RadarNode,
+} from "@/lib/types";
 
 export default function RadarPage() {
   const [graph, setGraph] = useState<RadarGraphResponse | null>(null);
-  const [analystPin, setAnalystPin] = useState(DEFAULT_DEMO_PIN);
-  const [busyCampaignId, setBusyCampaignId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [detailCampaignId, setDetailCampaignId] = useState<string | null>(null);
+  const [ruleModal, setRuleModal] = useState<RuleModalState | null>(null);
+  const [simulationOpen, setSimulationOpen] = useState(false);
+
   const graphReqIdRef = useRef(0);
   const retryTimerRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
@@ -48,6 +66,7 @@ export default function RadarPage() {
     const controller = new AbortController();
     graphAbortRef.current = controller;
     const reqId = ++graphReqIdRef.current;
+    setIsRefreshing(true);
     try {
       const data = await fetchRadarGraph(controller.signal);
       if (!mountedRef.current || controller.signal.aborted || reqId !== graphReqIdRef.current) {
@@ -70,6 +89,11 @@ export default function RadarPage() {
         }
       }, 5000);
       return false;
+    } finally {
+      if (mountedRef.current && reqId === graphReqIdRef.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
     }
   }, [clearRetryTimer]);
 
@@ -103,87 +127,104 @@ export default function RadarPage() {
     return () => window.clearTimeout(timer);
   }, [graph, loadGraph]);
 
-  const anyWriteBusy = isMutating || busyCampaignId !== null;
+  function openCampaignBlockModal(campaign: EmergingCampaign) {
+    const nodeMap = new Map((graph?.nodes ?? []).map((n) => [n.node_id, n]));
+    const linkedIds = new Set<string>([campaign.primary_ioc_hash]);
+    for (const edge of graph?.edges ?? []) {
+      if (edge.source === campaign.campaign_id && edge.target !== campaign.campaign_id) {
+        linkedIds.add(edge.target);
+      } else if (edge.target === campaign.campaign_id && edge.source !== campaign.campaign_id) {
+        linkedIds.add(edge.source);
+      }
+    }
 
-  async function handleBlockCampaign(camp: EmergingCampaign) {
-    if (anyWriteBusy) return;
-    const pinErr = validateAnalystPinInput(analystPin);
-    if (pinErr) {
-      setBanner({ kind: "err", text: pinErr });
-      return;
+    const targets: TargetIocOption[] = [];
+    for (const id of linkedIds) {
+      const node = nodeMap.get(id);
+      if (node && node.kind !== "campaign" && !node.blocked) {
+        targets.push({
+          iocType: node.kind as IocType,
+          iocHash: node.node_id,
+          maskedLabel: formatNodeDisplayLabel(node),
+        });
+      }
     }
-    setBusyCampaignId(camp.campaign_id);
-    setBanner(null);
-    try {
-      const rule = await createBlockRule({
-        ioc_type: camp.primary_ioc_type,
-        ioc_hash: camp.primary_ioc_hash,
-        reason: camp.recommended_action,
-        analyst_pin: analystPin,
+    if (targets.length === 0) {
+      targets.push({
+        iocType: campaign.primary_ioc_type,
+        iocHash: campaign.primary_ioc_hash,
+        maskedLabel: campaign.primary_ioc_masked,
       });
-      const refreshed = await loadGraph();
-      setBanner({
-        kind: refreshed ? "ok" : "err",
-        text: refreshed
-          ? `Đã bật quy tắc chặn cho ${rule.masked_value}. Bạn có thể kiểm tra ngay hiệu lực ở mục kiểm thử giao dịch bên dưới.`
-          : `Đã chặn ${rule.masked_value} nhưng tạm thời chưa cập nhật được sơ đồ (hệ thống tự thử lại sau 5 giây).`,
-      });
-    } catch (e) {
-      setBanner({
-        kind: "err",
-        text: e instanceof Error ? e.message : "Không thể thêm quy tắc chặn lúc này.",
-      });
-    } finally {
-      setBusyCampaignId(null);
     }
+
+    const initialHash =
+      targets.find((t) => t.iocHash === campaign.primary_ioc_hash)?.iocHash ??
+      targets[0]?.iocHash ??
+      campaign.primary_ioc_hash;
+
+    setRuleModal({
+      kind: "create_targeted",
+      title: campaign.title_vi,
+      targets,
+      initialHash,
+      defaultReason: campaign.recommended_action,
+    });
   }
 
-  async function handleManualBlock(
-    iocType: IocType,
-    rawValue: string,
-    reason: string,
-  ): Promise<boolean> {
-    if (anyWriteBusy) return false;
-    const pinErr = validateAnalystPinInput(analystPin);
-    if (pinErr) {
-      setBanner({ kind: "err", text: pinErr });
-      return false;
-    }
+  function openNodeBlockModal(node: RadarNode) {
+    if (node.kind === "campaign") return;
+    const label = formatNodeDisplayLabel(node);
+    setRuleModal({
+      kind: "create_targeted",
+      title: "Đối tượng được chọn trên mạng lưới",
+      targets: [
+        {
+          iocType: node.kind as IocType,
+          iocHash: node.node_id,
+          maskedLabel: label,
+        },
+      ],
+      initialHash: node.node_id,
+      defaultReason: `Áp dụng quy tắc chặn tạm thời cho dấu hiệu ${label}`,
+    });
+  }
+
+  async function handleCreateRule(payload: {
+    iocType: IocType;
+    rawValue?: string;
+    iocHash?: string;
+    reason: string;
+    ttlMinutes: number;
+    analystPin: string;
+  }): Promise<string | null> {
     setIsMutating(true);
     setBanner(null);
     try {
       const rule = await createBlockRule({
-        ioc_type: iocType,
-        value: rawValue,
-        reason,
-        analyst_pin: analystPin,
+        ioc_type: payload.iocType,
+        value: payload.rawValue,
+        ioc_hash: payload.iocHash,
+        reason: payload.reason,
+        ttl_minutes: payload.ttlMinutes,
+        analyst_pin: payload.analystPin,
       });
       const refreshed = await loadGraph();
+      const displayTarget = formatMaskedIoc(rule.masked_value, rule.rule_id);
       setBanner({
         kind: refreshed ? "ok" : "err",
         text: refreshed
-          ? `Đã bật quy tắc chặn cho ${rule.masked_value} (tự động hết hạn sau 30 phút).`
-          : `Đã chặn ${rule.masked_value} nhưng tạm thời chưa cập nhật được sơ đồ (hệ thống tự thử lại sau 5 giây).`,
+          ? `Đã áp dụng quy tắc chặn cho ${displayTarget} (hiệu lực ${payload.ttlMinutes} phút).`
+          : `Đã tạo quy tắc cho ${displayTarget} nhưng chưa đồng bộ được sơ đồ (đang tự thử lại).`,
       });
-      return true;
+      return null;
     } catch (e) {
-      setBanner({
-        kind: "err",
-        text: e instanceof Error ? e.message : "Yêu cầu chặn không được chấp nhận.",
-      });
-      return false;
+      return e instanceof Error ? e.message : "Không thể áp dụng quy tắc chặn lúc này.";
     } finally {
       setIsMutating(false);
     }
   }
 
-  async function handleRevokeRule(ruleId: string) {
-    if (anyWriteBusy) return;
-    const pinErr = validateAnalystPinInput(analystPin);
-    if (pinErr) {
-      setBanner({ kind: "err", text: pinErr });
-      return;
-    }
+  async function handleRevokeRule(ruleId: string, analystPin: string): Promise<string | null> {
     setIsMutating(true);
     setBanner(null);
     try {
@@ -192,26 +233,18 @@ export default function RadarPage() {
       setBanner({
         kind: refreshed ? "ok" : "err",
         text: refreshed
-          ? "Đã gỡ quy tắc chặn tạm thời khỏi hệ thống."
-          : "Đã gỡ quy tắc chặn nhưng tạm thời chưa cập nhật được sơ đồ.",
+          ? "Đã thu hồi quy tắc chặn và đồng bộ trạng thái mạng lưới."
+          : "Đã thu hồi quy tắc nhưng chưa đồng bộ được sơ đồ.",
       });
+      return null;
     } catch (e) {
-      setBanner({
-        kind: "err",
-        text: e instanceof Error ? e.message : "Không thể gỡ quy tắc chặn lúc này.",
-      });
+      return e instanceof Error ? e.message : "Không thể thu hồi quy tắc chặn lúc này.";
     } finally {
       setIsMutating(false);
     }
   }
 
-  async function handleReset() {
-    if (anyWriteBusy) return;
-    const pinErr = validateAnalystPinInput(analystPin);
-    if (pinErr) {
-      setBanner({ kind: "err", text: pinErr });
-      return;
-    }
+  async function handleResetDemoRules(analystPin: string): Promise<string | null> {
     setIsMutating(true);
     setBanner(null);
     try {
@@ -220,135 +253,273 @@ export default function RadarPage() {
       setBanner({
         kind: refreshed ? "ok" : "err",
         text: refreshed
-          ? `Đã đặt lại dữ liệu mẫu (đã gỡ ${res.cleared_rules} quy tắc chặn tạm thời).`
-          : `Đã gỡ ${res.cleared_rules} quy tắc chặn nhưng tạm thời chưa cập nhật được sơ đồ (hệ thống tự thử lại sau 5 giây).`,
+          ? `Đã khôi phục dữ liệu mẫu (đã thu hồi ${res.cleared_rules} quy tắc tạm thời).`
+          : `Đã thu hồi ${res.cleared_rules} quy tắc nhưng chưa đồng bộ được sơ đồ.`,
       });
+      return null;
     } catch (e) {
-      setBanner({
-        kind: "err",
-        text: e instanceof Error ? e.message : "Không thể đặt lại danh sách chặn lúc này.",
-      });
+      return e instanceof Error ? e.message : "Không thể khôi phục dữ liệu mẫu lúc này.";
     } finally {
       setIsMutating(false);
     }
   }
 
+  const detailCampaign = detailCampaignId
+    ? (graph?.campaigns.find((c) => c.campaign_id === detailCampaignId) ?? null)
+    : null;
+
+  const totalCases = graph?.stats.total_cases ?? 0;
+  const totalCampaigns = graph?.stats.emerging_campaigns ?? graph?.campaigns.length ?? 0;
+  const demoCampaigns = graph?.stats.demo_campaigns ?? 0;
+  const realCampaigns = graph?.stats.real_campaigns ?? Math.max(0, totalCampaigns - demoCampaigns);
+  const totalIocs = graph?.stats.tracked_iocs ?? 0;
+  const demoIocs = graph?.stats.demo_iocs ?? 0;
+  const realIocs = graph?.stats.real_iocs ?? Math.max(0, totalIocs - demoIocs);
+  const activeBlocks = graph?.active_block_rules.length ?? 0;
+  const hasDemoData =
+    graph?.data_scope === "demo_only" ||
+    graph?.data_scope === "mixed_with_demo" ||
+    demoCampaigns > 0 ||
+    demoIocs > 0;
+
   return (
     <div className="space-y-4 sm:space-y-5">
-      <section className="flex flex-col justify-between gap-3 rounded-2xl border border-border-subtle bg-gradient-to-r from-surface via-[#0f172a] to-[#0c1f2e] px-4 py-3.5 sm:flex-row sm:items-center sm:px-5 sm:py-4">
+      {/* Clean Security Operations Header */}
+      <section className="flex flex-col justify-between gap-3 rounded-2xl border border-border-subtle bg-gradient-to-r from-surface via-[#0f172a] to-[#0c1f2e] px-4 py-4 sm:flex-row sm:items-center sm:px-5">
         <div>
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-sky-300">
-            <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Quy trình xử lý gian lận toàn diện</span>
-          </div>
-          <h1 className="mt-1.5 text-lg font-bold text-ink sm:text-xl">
-            Trung tâm giám sát gian lận
-          </h1>
-          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-secondary">
-            Theo dõi các nhóm dấu hiệu nghi vấn và bật nhanh quy tắc chặn trên toàn hệ thống. Số
-            điện thoại và số tài khoản đều được che giấu, không lưu dữ liệu định danh cá nhân chưa
-            qua xử lý.
+          <h1 className="text-lg font-bold text-ink sm:text-xl">Giám sát gian lận</h1>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-ink-secondary">
+            Theo dõi các chiến dịch lừa đảo, phân tích mối liên hệ và quản lý quy tắc chặn.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            disabled={isRefreshing}
             onClick={() => void loadGraph()}
-            className="inline-flex min-h-[40px] cursor-pointer items-center gap-1.5 rounded-xl border border-border-strong bg-surface-subtle px-3.5 py-2 text-xs font-semibold text-ink hover:border-sky-400"
+            className="inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-xl border border-border-strong bg-surface-subtle px-3 py-2 text-xs font-semibold text-ink transition-colors hover:border-sky-400 disabled:opacity-60"
           >
-            <RefreshCw className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
-            <span>Làm mới dữ liệu</span>
+            <RefreshCw
+              className={`h-3.5 w-3.5 text-sky-400 ${isRefreshing ? "animate-spin" : ""}`}
+              aria-hidden="true"
+            />
+            <span>Làm mới</span>
           </button>
-          <Link
-            href="/"
-            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/15 px-3.5 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-500/25"
+
+          <button
+            type="button"
+            onClick={() => setSimulationOpen(true)}
+            className="inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-xl border border-sky-500/45 bg-sky-500/12 px-3 py-2 text-xs font-semibold text-sky-200 transition-colors hover:bg-sky-500/20"
           >
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Về kiểm tra lừa đảo</span>
-          </Link>
+            <FlaskConical className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
+            <span>Mô phỏng giao dịch</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={isMutating}
+            onClick={() => setRuleModal({ kind: "create_manual" })}
+            className="inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 py-2 text-xs font-bold text-slate-950 transition-colors hover:bg-amber-400 disabled:opacity-60"
+          >
+            <PlusCircle className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Thêm quy tắc</span>
+          </button>
         </div>
       </section>
 
-      {graph && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
-            <p className="text-xs text-ink-muted">Hồ sơ đã kiểm tra</p>
-            <p className="tabular-num mt-1 font-mono text-2xl font-bold text-ink">
-              {graph.stats.total_cases ?? 0}
-            </p>
-          </div>
-          <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
-            <p className="text-xs text-ink-muted">Nhóm chiến dịch nghi vấn</p>
-            <p className="tabular-num mt-1 font-mono text-2xl font-bold text-rose-400">
-              {graph.stats.emerging_campaigns ?? graph.campaigns.length}
-            </p>
-          </div>
-          <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
-            <p className="text-xs text-ink-muted">Dấu hiệu đang theo dõi</p>
-            <p className="tabular-num mt-1 font-mono text-2xl font-bold text-sky-300">
-              {graph.stats.tracked_iocs ?? graph.nodes.length}
-            </p>
-          </div>
-          <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
-            <p className="text-xs text-ink-muted">Quy tắc chặn đang bật</p>
-            <p className="tabular-num mt-1 font-mono text-2xl font-bold text-amber-300">
-              {graph.active_block_rules.length}
-            </p>
-          </div>
+      {/* 4 Standardized KPI Cards with transparent real vs. demo scope */}
+      {isLoading && !graph ? (
+        <div
+          aria-label="Đang tải thống kê giám sát"
+          className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+        >
+          {[0, 1, 2, 3].map((idx) => (
+            <div
+              key={idx}
+              className="h-24 animate-pulse rounded-xl border border-border-subtle bg-surface p-3.5"
+            />
+          ))}
         </div>
-      )}
+      ) : graph ? (
+        <div className="space-y-2.5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
+              <p className="text-xs font-medium text-ink-muted">Hồ sơ đã phân tích</p>
+              <p className="tabular-num mt-1 font-mono text-2xl font-bold text-ink">{totalCases}</p>
+              <p className="mt-1 text-[11px] text-ink-muted">
+                Từ kiểm tra thực tế (không tính mô phỏng)
+              </p>
+            </div>
 
+            <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
+              <p className="text-xs font-medium text-ink-muted">Chiến dịch nghi vấn</p>
+              <p className="tabular-num mt-1 font-mono text-2xl font-bold text-rose-400">
+                {totalCampaigns}
+              </p>
+              <p className="tabular-num mt-1 text-[11px] text-ink-muted">
+                {demoCampaigns > 0
+                  ? `${realCampaigns} thực tế · ${demoCampaigns} mẫu minh họa`
+                  : "Tổng hợp từ hồ sơ thực tế"}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
+              <p className="text-xs font-medium text-ink-muted">Dấu hiệu nghi vấn</p>
+              <p className="tabular-num mt-1 font-mono text-2xl font-bold text-sky-300">
+                {totalIocs}
+              </p>
+              <p className="tabular-num mt-1 text-[11px] text-ink-muted">
+                {demoIocs > 0
+                  ? `${realIocs} thực tế · ${demoIocs} mẫu minh họa`
+                  : "Ghi nhận từ phiên phân tích thực tế"}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
+              <p className="text-xs font-medium text-ink-muted">Quy tắc đang áp dụng</p>
+              <p className="tabular-num mt-1 font-mono text-2xl font-bold text-amber-300">
+                {activeBlocks}
+              </p>
+              <p className="mt-1 text-[11px] text-ink-muted">
+                Đang hiệu lực (tự hết hạn theo TTL)
+              </p>
+            </div>
+          </div>
+
+          {hasDemoData && (
+            <div className="flex items-start gap-2 rounded-xl border border-sky-500/30 bg-sky-500/8 px-3.5 py-2 text-[11px] text-sky-100">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-400" aria-hidden="true" />
+              <p>
+                Phạm vi dữ liệu hiện tại bao gồm <strong>dữ liệu mẫu minh họa</strong> (được gắn
+                nhãn riêng) nhằm phục vụ kiểm thử vận hành; các phiên chạy trong{" "}
+                <strong>Mô phỏng giao dịch</strong> không làm tăng thống kê thực tế.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {/* Operation feedback banner */}
       {banner && (
         <div
           role={banner.kind === "err" ? "alert" : "status"}
-          className={`flex items-center gap-2.5 rounded-xl border p-3.5 text-xs font-medium ${
+          className={`flex items-center justify-between gap-2.5 rounded-xl border p-3.5 text-xs font-medium ${
             banner.kind === "err"
               ? "border-rose-500/50 bg-rose-500/15 text-rose-100"
               : "border-emerald-500/50 bg-emerald-500/15 text-emerald-100"
           }`}
         >
-          {banner.kind === "err" ? (
-            <AlertCircle className="h-4 w-4 shrink-0 text-rose-300" aria-hidden="true" />
-          ) : (
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-300" aria-hidden="true" />
+          <div className="flex items-center gap-2.5">
+            {banner.kind === "err" ? (
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-300" aria-hidden="true" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-300" aria-hidden="true" />
+            )}
+            <span>{banner.text}</span>
+          </div>
+          {banner.kind === "err" && !graph && (
+            <button
+              type="button"
+              onClick={() => void loadGraph()}
+              className="shrink-0 cursor-pointer rounded-lg border border-rose-400/50 bg-rose-500/20 px-2.5 py-1 text-[11px] font-semibold text-rose-100 hover:bg-rose-500/30"
+            >
+              Thử lại
+            </button>
           )}
-          <span>{banner.text}</span>
         </div>
       )}
 
-      {/* Scene 4 Side-by-Side: clicking 1-Click Block turns graph nodes crimson in the exact same frame */}
+      {/* Primary Workspace: Threat Network + Campaigns to Review */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:items-start">
         <div className="xl:col-span-7">
-          {graph && <IocGraphSvg nodes={graph.nodes} edges={graph.edges} />}
+          {isLoading && !graph ? (
+            <div className="h-[460px] animate-pulse rounded-2xl border border-border-subtle bg-surface" />
+          ) : graph ? (
+            <IocGraphSvg
+              nodes={graph.nodes}
+              edges={graph.edges}
+              selectedNodeId={selectedNodeId}
+              onSelectNode={setSelectedNodeId}
+              onRequestBlockNode={openNodeBlockModal}
+            />
+          ) : null}
         </div>
+
         <div className="xl:col-span-5">
-          <CampaignQueue
-            campaigns={graph?.campaigns ?? []}
-            busyCampaignId={busyCampaignId}
-            isLocked={anyWriteBusy}
-            onBlockCampaign={(camp) => void handleBlockCampaign(camp)}
-          />
+          {isLoading && !graph ? (
+            <div className="h-[460px] animate-pulse rounded-2xl border border-border-subtle bg-surface" />
+          ) : (
+            <CampaignQueue
+              campaigns={graph?.campaigns ?? []}
+              selectedCampaignId={selectedNodeId}
+              isLocked={isMutating}
+              onInspectCampaign={(camp) => {
+                setSelectedNodeId(camp.campaign_id);
+                setDetailCampaignId(camp.campaign_id);
+              }}
+              onRequestBlockCampaign={(camp) => {
+                setSelectedNodeId(camp.campaign_id);
+                openCampaignBlockModal(camp);
+              }}
+            />
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:items-start">
-        <div className="xl:col-span-6">
-          <BlockRuleManager
-            rules={graph?.active_block_rules ?? []}
-            analystPin={analystPin}
-            nowMs={nowMs}
-            isBusy={anyWriteBusy}
-            onPinChange={setAnalystPin}
-            onCreateManualRule={handleManualBlock}
-            onRevokeRule={(ruleId) => void handleRevokeRule(ruleId)}
-            onResetRules={() => void handleReset()}
-          />
-        </div>
-        <div className="xl:col-span-6">
-          <ApiPlaygroundCard />
-        </div>
-      </div>
+      {/* Full-width Active Block Rules Table + Audit Log */}
+      <BlockRuleManager
+        rules={graph?.active_block_rules ?? []}
+        auditLogs={graph?.recent_audit_logs ?? []}
+        nowMs={nowMs}
+        isBusy={isMutating}
+        onOpenCreateModal={() => setRuleModal({ kind: "create_manual" })}
+        onRequestRevokeRule={(rule: BlockRule) => setRuleModal({ kind: "revoke", rule })}
+      />
+
+      {/* Campaign Evidence & IOC Detail Drawer */}
+      <CampaignDetailDrawer
+        campaign={detailCampaign}
+        nodes={graph?.nodes ?? []}
+        edges={graph?.edges ?? []}
+        onClose={() => setDetailCampaignId(null)}
+        onRequestBlockTarget={(target) => {
+          setRuleModal({
+            kind: "create_targeted",
+            title: detailCampaign?.title_vi ?? "Chiến dịch nghi vấn",
+            targets: [
+              {
+                iocType: target.iocType,
+                iocHash: target.iocHash,
+                maskedLabel: target.maskedLabel,
+              },
+            ],
+            initialHash: target.iocHash,
+            defaultReason: target.defaultReason,
+          });
+        }}
+      />
+
+      {/* Privileged Action Confirmation Modal (Create / Revoke / Reset Demo) */}
+      <RuleActionModal
+        modal={ruleModal}
+        isBusy={isMutating}
+        onClose={() => setRuleModal(null)}
+        onCreateRule={handleCreateRule}
+        onRevokeRule={handleRevokeRule}
+        onResetDemoRules={handleResetDemoRules}
+      />
+
+      {/* On-Demand Transaction Simulation Drawer (non-polluting + isolated demo reset) */}
+      <ApiPlaygroundCard
+        open={simulationOpen}
+        activeRuleCount={activeBlocks}
+        showDemoControls={hasDemoData || graph?.app_env !== "production"}
+        onClose={() => setSimulationOpen(false)}
+        onRequestResetDemo={() =>
+          setRuleModal({ kind: "reset_demo", activeCount: activeBlocks })
+        }
+      />
     </div>
   );
 }

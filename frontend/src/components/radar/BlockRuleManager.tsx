@@ -1,264 +1,211 @@
 "use client";
 
-import { KeyRound, Lock, PlusCircle, RotateCcw, ShieldAlert, Trash2 } from "lucide-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { History, Lock, PlusCircle, ShieldAlert, Trash2 } from "lucide-react";
 
 import { IOC_TYPE_COPY } from "@/lib/copy";
-import { formatRemainingTtl } from "@/lib/radarLayout";
-import type { BlockRule, IocType } from "@/lib/types";
+import {
+  computeRuleStatus,
+  formatMaskedIoc,
+  formatRadarTimestamp,
+  formatRemainingTtl,
+} from "@/lib/radarLayout";
+import type { BlockRule, RadarAuditEvent } from "@/lib/types";
 
 interface BlockRuleManagerProps {
   rules: BlockRule[];
-  analystPin: string;
+  auditLogs?: RadarAuditEvent[];
   nowMs: number;
   isBusy: boolean;
-  onPinChange: (pin: string) => void;
-  onCreateManualRule: (iocType: IocType, rawValue: string, reason: string) => Promise<boolean>;
-  onRevokeRule: (ruleId: string) => void;
-  onResetRules: () => void;
+  onOpenCreateModal: () => void;
+  onRequestRevokeRule: (rule: BlockRule) => void;
 }
 
-const DEFAULT_TTL_MS = 30 * 60 * 1000;
-
-function computeTtlProgressPct(expiresAt: string | null | undefined, nowMs: number): number | null {
-  if (!expiresAt) return null;
-  const expMs = Date.parse(expiresAt);
-  if (!Number.isFinite(expMs)) return null;
-  const rem = Math.max(0, expMs - nowMs);
-  return Math.min(100, Math.max(2, Math.round((rem / DEFAULT_TTL_MS) * 100)));
-}
+const AUDIT_ACTION_LABELS: Record<RadarAuditEvent["action"], string> = {
+  create_rule: "Tạo quy tắc",
+  revoke_rule: "Thu hồi quy tắc",
+  reset_rules: "Đặt lại quy tắc mẫu",
+  auth_failed: "Xác thực thất bại",
+  protected_ioc_blocked: "Chống chặn nhầm",
+};
 
 export function BlockRuleManager({
   rules,
-  analystPin,
+  auditLogs = [],
   nowMs,
   isBusy,
-  onPinChange,
-  onCreateManualRule,
-  onRevokeRule,
-  onResetRules,
+  onOpenCreateModal,
+  onRequestRevokeRule,
 }: BlockRuleManagerProps) {
-  const [iocType, setIocType] = useState<IocType>("bank_account");
-  const [rawValue, setRawValue] = useState("");
-  const [reason, setReason] = useState("Tài khoản nghi vấn nhận tiền liên quan đến lừa đảo");
-  const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!confirmRevokeId) return;
-    const timer = window.setTimeout(() => setConfirmRevokeId(null), 4000);
-    return () => window.clearTimeout(timer);
-  }, [confirmRevokeId]);
-
-  async function handleSubmit(ev: FormEvent) {
-    ev.preventDefault();
-    if (!rawValue.trim() || !reason.trim()) return;
-    const created = await onCreateManualRule(iocType, rawValue.trim(), reason.trim());
-    if (created) {
-      setRawValue("");
-    }
-  }
-
   return (
     <section
       aria-labelledby="block-manager-heading"
       className="space-y-4 rounded-2xl border border-border-subtle bg-surface/95 p-4 shadow-lg sm:p-5"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Lock className="h-5 w-5 text-rose-400" aria-hidden="true" />
-          <h2 id="block-manager-heading" className="text-sm font-bold text-ink">
-            Quản lý quy tắc chặn tạm thời
-          </h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-start gap-2">
+          <Lock className="mt-0.5 h-5 w-5 shrink-0 text-rose-400" aria-hidden="true" />
+          <div>
+            <h2 id="block-manager-heading" className="text-sm font-bold text-ink">
+              Quy tắc chặn
+            </h2>
+            <p className="text-xs text-ink-muted">
+              Danh sách các đối tượng đang áp dụng quy tắc chặn tạm thời có thời hạn tự động (TTL).
+            </p>
+          </div>
         </div>
 
         <button
           type="button"
           disabled={isBusy}
-          onClick={onResetRules}
-          className="inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-lg border border-border-strong bg-surface-subtle px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={onOpenCreateModal}
+          className="inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 py-2 text-xs font-bold text-slate-950 transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <RotateCcw className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
-          <span>Đặt lại dữ liệu mẫu</span>
+          <PlusCircle className="h-4 w-4" aria-hidden="true" />
+          <span>Thêm quy tắc</span>
         </button>
       </div>
 
-      <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 p-3">
-        <label
-          htmlFor="radar-analyst-pin"
-          className="flex items-center gap-1.5 text-xs font-semibold text-amber-200"
-        >
-          <KeyRound className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
-          <span>Mã PIN xác thực quản trị viên</span>
-        </label>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <input
-            id="radar-analyst-pin"
-            type="password"
-            autoComplete="off"
-            value={analystPin}
-            onChange={(e) => onPinChange(e.target.value)}
-            placeholder="Nhập mã PIN..."
-            className="tabular-num w-36 rounded-lg border border-amber-500/45 bg-surface-subtle px-3 py-2 font-mono text-xs font-bold text-amber-200 placeholder:text-ink-muted"
-          />
-          <span className="text-[11px] text-ink-secondary">
-            Bạn có thể thử nhập sai mã PIN hoặc thử chặn tên miền chính thức{" "}
-            <button
-              type="button"
-              onClick={() => {
-                setIocType("domain");
-                setRawValue("vietcombank.com.vn");
-              }}
-              className="cursor-pointer font-mono text-sky-300 underline hover:text-sky-200"
-            >
-              vietcombank.com.vn
-            </button>{" "}
-            để kiểm tra cơ chế chống chặn nhầm.
-          </span>
-        </div>
-      </div>
+      <div className="overflow-x-auto rounded-xl border border-border-subtle bg-surface-deep">
+        <table className="w-full min-w-[760px] border-collapse text-left text-xs">
+          <caption className="sr-only">Bảng quản lý các quy tắc chặn đang áp dụng</caption>
+          <thead>
+            <tr className="border-b border-border-subtle bg-surface-subtle text-[11px] font-semibold text-ink-secondary">
+              <th scope="col" className="px-3.5 py-2.5">
+                Loại đối tượng
+              </th>
+              <th scope="col" className="px-3.5 py-2.5">
+                Định danh đã che giấu
+              </th>
+              <th scope="col" className="px-3.5 py-2.5">
+                Lý do áp dụng
+              </th>
+              <th scope="col" className="px-3.5 py-2.5">
+                Trạng thái
+              </th>
+              <th scope="col" className="px-3.5 py-2.5">
+                Thời điểm tạo
+              </th>
+              <th scope="col" className="px-3.5 py-2.5">
+                Thời gian hết hạn
+              </th>
+              <th scope="col" className="px-3.5 py-2.5 text-right">
+                Thao tác
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border-subtle/60">
+            {rules.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-xs text-ink-muted">
+                  Hiện chưa có quy tắc chặn nào đang áp dụng. Chọn một chiến dịch cần xem xét hoặc
+                  nhấn &ldquo;Thêm quy tắc&rdquo; để khởi tạo.
+                </td>
+              </tr>
+            ) : (
+              rules.map((rule) => {
+                const status = computeRuleStatus(rule.expires_at, nowMs);
+                const statusBadgeStyle =
+                  status.code === "expired"
+                    ? "bg-surface-elevated text-ink-muted"
+                    : status.code === "expiring"
+                      ? "bg-amber-500/20 text-amber-200"
+                      : "bg-rose-500/20 text-rose-200";
 
-      <form
-        onSubmit={(ev) => void handleSubmit(ev)}
-        className="space-y-2.5 rounded-xl border border-border-subtle bg-surface-subtle p-3.5"
-      >
-        <p className="text-xs font-semibold text-ink">Thêm quy tắc chặn thủ công:</p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          <div>
-            <label htmlFor="manual-ioc-type" className="sr-only">
-              Loại dấu hiệu cần chặn
-            </label>
-            <select
-              id="manual-ioc-type"
-              value={iocType}
-              onChange={(e) => setIocType(e.target.value as IocType)}
-              className="w-full rounded-lg border border-border-strong bg-surface-elevated px-2.5 py-2 text-xs text-ink"
-            >
-              <option value="bank_account">{IOC_TYPE_COPY.bank_account}</option>
-              <option value="domain">{IOC_TYPE_COPY.domain}</option>
-              <option value="phone">{IOC_TYPE_COPY.phone}</option>
-            </select>
-          </div>
-          <div className="sm:col-span-2">
-            <label htmlFor="manual-ioc-value" className="sr-only">
-              Giá trị cần chặn
-            </label>
-            <input
-              id="manual-ioc-value"
-              type="text"
-              value={rawValue}
-              onChange={(e) => setRawValue(e.target.value)}
-              placeholder="Nhập số tài khoản, tên miền hoặc số điện thoại (hệ thống tự che giấu thông tin)"
-              className="w-full rounded-lg border border-border-strong bg-surface-elevated px-3 py-2 font-mono text-xs text-ink placeholder:text-ink-muted"
-            />
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor="manual-ioc-reason" className="sr-only">
-            Lý do chặn
-          </label>
-          <input
-            id="manual-ioc-reason"
-            type="text"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            className="min-w-0 flex-1 rounded-lg border border-border-strong bg-surface-elevated px-3 py-2 text-xs text-ink"
-          />
-          <button
-            type="submit"
-            disabled={isBusy || !rawValue.trim()}
-            className="inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-lg bg-amber-500 px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <PlusCircle className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Thêm quy tắc chặn</span>
-          </button>
-        </div>
-      </form>
-
-      <div className="space-y-2">
-        <p className="tabular-num text-xs font-semibold text-ink-secondary">
-          Quy tắc chặn đang hoạt động ({rules.length}):
-        </p>
-        {rules.length === 0 ? (
-          <p className="rounded-xl border border-border-subtle bg-surface-subtle p-3 text-xs text-ink-muted">
-            Chưa có quy tắc chặn tạm thời nào. Bạn có thể bấm &ldquo;Chặn ngay&rdquo; ở danh sách
-            chiến dịch phía trên để thử nghiệm.
-          </p>
-        ) : (
-          rules.map((rule) => {
-            const ttlPct = computeTtlProgressPct(rule.expires_at, nowMs);
-            const isConfirming = confirmRevokeId === rule.rule_id;
-
-            return (
-              <div
-                key={rule.rule_id}
-                className="space-y-2 rounded-xl border border-rose-500/45 bg-rose-500/10 px-3.5 py-2.5 text-xs"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <ShieldAlert className="h-4 w-4 shrink-0 text-rose-400" aria-hidden="true" />
-                    <div>
-                      <span className="tabular-num font-mono font-bold text-rose-200">
-                        {rule.masked_value}
+                return (
+                  <tr key={rule.rule_id} className="transition-colors hover:bg-surface-subtle/60">
+                    <td className="px-3.5 py-3 text-ink-secondary">
+                      {IOC_TYPE_COPY[rule.ioc_type]}
+                    </td>
+                    <td className="tabular-num px-3.5 py-3 font-mono font-bold text-rose-200">
+                      <span className="inline-flex items-center gap-1.5">
+                        <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-rose-400" aria-hidden="true" />
+                        <span>{formatMaskedIoc(rule.masked_value, rule.rule_id)}</span>
                       </span>
-                      <span className="ml-2 rounded bg-surface-elevated px-1.5 py-0.5 text-[10px] text-ink-secondary">
-                        {IOC_TYPE_COPY[rule.ioc_type]}
+                    </td>
+                    <td className="max-w-[260px] px-3.5 py-3 text-ink-secondary">
+                      <p className="line-clamp-2" title={rule.reason}>
+                        {rule.reason}
+                      </p>
+                    </td>
+                    <td className="px-3.5 py-3">
+                      <span
+                        className={`inline-block rounded-md px-2 py-0.5 text-[10px] font-bold ${statusBadgeStyle}`}
+                      >
+                        {status.label}
                       </span>
-                      <p className="text-[11px] text-ink-secondary">{rule.reason}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="tabular-num rounded bg-surface-deep px-2 py-1 font-mono text-[10px] text-amber-300">
-                      {formatRemainingTtl(rule.expires_at, nowMs)}
-                    </span>
-                    {isConfirming ? (
-                      <div className="inline-flex items-center gap-1">
-                        <button
-                          type="button"
-                          disabled={isBusy}
-                          onClick={() => {
-                            setConfirmRevokeId(null);
-                            onRevokeRule(rule.rule_id);
-                          }}
-                          className="min-h-[32px] cursor-pointer rounded bg-rose-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-rose-500 disabled:opacity-50"
-                        >
-                          Xác nhận gỡ
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmRevokeId(null)}
-                          className="min-h-[32px] cursor-pointer rounded border border-border-strong bg-surface-subtle px-2 py-1 text-[10px] text-ink-secondary hover:text-ink"
-                        >
-                          Hủy
-                        </button>
+                    </td>
+                    <td className="tabular-num px-3.5 py-3 font-mono text-[11px] text-ink-muted">
+                      {formatRadarTimestamp(rule.created_at)}
+                    </td>
+                    <td className="tabular-num px-3.5 py-3">
+                      <div className="font-mono text-[11px] text-ink">
+                        {formatRadarTimestamp(rule.expires_at)}
                       </div>
-                    ) : (
+                      <div className="text-[10px] text-amber-300">
+                        {formatRemainingTtl(rule.expires_at, nowMs)}
+                      </div>
+                    </td>
+                    <td className="px-3.5 py-3 text-right">
                       <button
                         type="button"
                         disabled={isBusy}
-                        onClick={() => setConfirmRevokeId(rule.rule_id)}
-                        aria-label={`Thu hồi lệnh chặn ${rule.masked_value}`}
-                        className="inline-flex min-h-[32px] cursor-pointer items-center gap-1 rounded border border-border-strong bg-surface-subtle px-2.5 py-1 text-[10px] font-semibold text-ink-secondary hover:border-rose-400 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={() => onRequestRevokeRule(rule)}
+                        aria-label={`Thu hồi quy tắc chặn ${rule.masked_value}`}
+                        className="inline-flex min-h-[32px] cursor-pointer items-center gap-1 rounded-lg border border-border-strong bg-surface-subtle px-2.5 py-1 text-[11px] font-semibold text-ink-secondary transition-colors hover:border-rose-400 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        <Trash2 className="h-3 w-3" aria-hidden="true" />
-                        <span>Gỡ</span>
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>Thu hồi</span>
                       </button>
-                    )}
-                  </div>
-                </div>
-
-                {ttlPct !== null && (
-                  <div className="h-1 w-full overflow-hidden rounded-full bg-surface-deep/80">
-                    <div
-                      className="h-full rounded-full bg-amber-400/80 transition-all duration-300"
-                      style={{ width: `${ttlPct}%` }}
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
+
+      {auditLogs.length > 0 && (
+        <details className="rounded-xl border border-border-subtle bg-surface-subtle/70 px-3.5 py-2.5 text-xs">
+          <summary className="flex cursor-pointer items-center justify-between gap-2 font-semibold text-ink-secondary hover:text-ink">
+            <span className="inline-flex items-center gap-1.5">
+              <History className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
+              <span>Nhật ký thao tác quản trị ({auditLogs.length})</span>
+            </span>
+            <span className="text-[11px] font-normal text-ink-muted">Mở rộng</span>
+          </summary>
+
+          <div className="mt-2.5 divide-y divide-border-subtle/60 border-t border-border-subtle pt-2">
+            {auditLogs.slice(0, 8).map((ev) => (
+              <div
+                key={ev.audit_id}
+                className="flex flex-wrap items-center justify-between gap-2 py-2 text-[11px]"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                      ev.outcome === "allowed"
+                        ? "bg-emerald-500/15 text-emerald-300"
+                        : "bg-rose-500/15 text-rose-300"
+                    }`}
+                  >
+                    {AUDIT_ACTION_LABELS[ev.action]}
+                  </span>
+                  {ev.masked_target && (
+                    <code className="rounded bg-surface-elevated px-1.5 py-0.5 font-mono text-ink">
+                      {formatMaskedIoc(ev.masked_target)}
+                    </code>
+                  )}
+                  <span className="text-ink-secondary">{ev.detail}</span>
+                </div>
+                <span className="tabular-num shrink-0 font-mono text-[10px] text-ink-muted">
+                  {formatRadarTimestamp(ev.created_at)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
     </section>
   );
 }

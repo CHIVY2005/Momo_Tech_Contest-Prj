@@ -3,10 +3,13 @@ import test from "node:test";
 
 import {
   computeRadarLayout,
+  computeRuleStatus,
+  formatNodeDisplayLabel,
+  formatRadarTimestamp,
   formatRemainingTtl,
   getNextRuleExpiryDelayMs,
 } from "../radarLayout.ts";
-import type { RadarNode } from "../types.ts";
+import type { RadarEdge, RadarNode } from "../types.ts";
 
 test("computeRadarLayout places campaign hubs inside inner ring and IOC nodes within SVG bounds", () => {
   const sampleNodes: RadarNode[] = [
@@ -83,4 +86,78 @@ test("computeRadarLayout staggers high IOC counts onto two concentric rings with
     positioned.map((n) => Math.round(Math.hypot((n.x - 380) / 760, (n.y - 210) / 420) * 10)),
   );
   assert.ok(radii.size >= 2, "Expected at least two staggered concentric rings for 24 IOCs");
+});
+
+test("computeRadarLayout groups IOCs around parent campaign clusters when edges are provided", () => {
+  const nodes: RadarNode[] = [
+    {
+      node_id: "camp_a",
+      kind: "campaign",
+      label: "Giả mạo NAPAS",
+      hit_count: 7,
+      risk_level: "CRITICAL_SCAM",
+      blocked: false,
+    },
+    {
+      node_id: "camp_b",
+      kind: "campaign",
+      label: "Giả danh công an",
+      hit_count: 5,
+      risk_level: "CRITICAL_SCAM",
+      blocked: false,
+    },
+    {
+      node_id: "ioc_a1",
+      kind: "domain",
+      label: "na****.top",
+      hit_count: 7,
+      risk_level: "HIGH_RISK",
+      blocked: false,
+    },
+    {
+      node_id: "ioc_b1",
+      kind: "bank_account",
+      label: "99****66",
+      hit_count: 5,
+      risk_level: "HIGH_RISK",
+      blocked: false,
+    },
+  ];
+  const edges: RadarEdge[] = [
+    { source: "camp_a", target: "ioc_a1", relation: "primary_ioc" },
+    { source: "camp_b", target: "ioc_b1", relation: "primary_ioc" },
+  ];
+
+  const laid = computeRadarLayout(nodes, 860, 480, edges);
+  const byId = new Map(laid.map((n) => [n.node_id, n]));
+  const campA = byId.get("camp_a")!;
+  const campB = byId.get("camp_b")!;
+  const iocA1 = byId.get("ioc_a1")!;
+  const iocB1 = byId.get("ioc_b1")!;
+
+  const distA1ToA = Math.hypot(iocA1.x - campA.x, iocA1.y - campA.y);
+  const distA1ToB = Math.hypot(iocA1.x - campB.x, iocA1.y - campB.y);
+  const distB1ToB = Math.hypot(iocB1.x - campB.x, iocB1.y - campB.y);
+  const distB1ToA = Math.hypot(iocB1.x - campA.x, iocB1.y - campA.y);
+
+  assert.ok(distA1ToA < distA1ToB, "ioc_a1 should cluster closer to camp_a than camp_b");
+  assert.ok(distB1ToB < distB1ToA, "ioc_b1 should cluster closer to camp_b than camp_a");
+});
+
+test("formatNodeDisplayLabel, computeRuleStatus, and formatRadarTimestamp format operational metadata", () => {
+  assert.equal(
+    formatNodeDisplayLabel({ kind: "domain", label: "dom_a1b2c3****", node_id: "a1b2c3" }),
+    "Tên miền #A1B2C3",
+  );
+  assert.equal(
+    formatNodeDisplayLabel({ kind: "bank_account", label: "99****66", node_id: "deadbeef" }),
+    "99****66",
+  );
+
+  const nowMs = Date.parse("2026-11-26T10:00:00Z");
+  assert.equal(computeRuleStatus("2026-11-26T10:25:00Z", nowMs).code, "active");
+  assert.equal(computeRuleStatus("2026-11-26T10:03:00Z", nowMs).code, "expiring");
+  assert.equal(computeRuleStatus("2026-11-26T09:59:00Z", nowMs).code, "expired");
+  assert.equal(formatRadarTimestamp(null), "—");
+  assert.match(formatRadarTimestamp("2026-11-26T10:00:00Z"), /^\d{2}:\d{2} · \d{2}\/\d{2}$/);
 });
