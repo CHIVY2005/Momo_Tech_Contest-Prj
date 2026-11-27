@@ -277,7 +277,8 @@ export default function HomePage() {
         alreadyScrolledForCase,
       })
     ) {
-      scrollToElement(el, { offset: -ANCHOR_OFFSET_PX });
+      // Offset comes from the container's scroll-margin (honored by Lenis and native scrollIntoView).
+      scrollToElement(el);
     }
   }, [reportCaseId, scrollToElement]);
 
@@ -387,7 +388,7 @@ export default function HomePage() {
       <LiveTracePanel steps={traceSteps} isAnalyzing={isAnalyzing} hasReport={Boolean(report)} />
 
       {report && (
-        <div id="verdict-result" ref={resultRef} className="space-y-5">
+        <div id="verdict-result" ref={resultRef} className="scroll-mt-[84px] space-y-5">
           <VerdictDashboard report={report} onOpenAssistant={handleOpenAssistant} />
 
           <WalletPreTransferSim
