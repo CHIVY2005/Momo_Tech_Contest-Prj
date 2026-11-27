@@ -1272,6 +1272,7 @@ export const IocGraphSvg = memo(function IocGraphSvg({
             ) : (
               <svg
                 ref={svgRef}
+                data-lenis-prevent
                 viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
                 preserveAspectRatio="xMidYMid meet"
                 role="group"

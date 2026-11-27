@@ -217,7 +217,7 @@ export function ElaCompareView({ forensics, originalPreviewUrl }: ElaCompareView
       {forensics.ocr_text && (
         <div className="rounded-xl border border-border-subtle bg-surface-subtle p-3">
           <p className="mb-1 text-xs font-semibold text-ink-secondary">Văn bản đọc được từ ảnh</p>
-          <pre className="max-h-36 overflow-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-ink-secondary">
+          <pre data-lenis-prevent className="max-h-36 overflow-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-ink-secondary">
             {forensics.ocr_text}
           </pre>
         </div>

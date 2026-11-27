@@ -3,10 +3,12 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 
+import { MotionProviders } from "@/components/motion/MotionProviders";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { TopNav } from "@/components/layout/TopNav";
 import { BRAND_COPY } from "@/lib/copy";
 
+import "lenis/dist/lenis.css";
 import "./globals.css";
 
 const inter = Inter({
@@ -34,6 +36,7 @@ export default function RootLayout({
   return (
     <html lang="vi" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body className="font-sans text-ink antialiased selection:bg-amber-500/30 selection:text-amber-100">
+        <MotionProviders>
         <a href="#main-content" className="skip-link">
           Bỏ qua điều hướng, tới nội dung chính
         </a>
@@ -70,6 +73,7 @@ export default function RootLayout({
         </main>
 
         <SiteFooter />
+        </MotionProviders>
       </body>
     </html>
   );

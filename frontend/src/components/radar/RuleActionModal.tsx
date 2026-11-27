@@ -3,6 +3,7 @@
 import { AlertCircle, Ban, KeyRound, Loader2, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 
+import { useScrollLock } from "@/components/motion/SmoothScrollProvider";
 import { validateAnalystPinInput } from "@/lib/api";
 import { IOC_TYPE_COPY } from "@/lib/copy";
 import type { BlockRule, IocType } from "@/lib/types";
@@ -102,6 +103,8 @@ export function RuleActionModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [modal, isBusy, onClose]);
 
+  useScrollLock(modal !== null);
+
   if (!modal) return null;
 
   async function handleSubmit(ev: FormEvent) {
@@ -183,6 +186,7 @@ export function RuleActionModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="rule-modal-title"
+        data-lenis-prevent
         className="relative z-10 w-full max-w-md rounded-2xl border border-border-strong bg-surface p-5 shadow-2xl"
       >
         <div className="flex items-start justify-between gap-3">

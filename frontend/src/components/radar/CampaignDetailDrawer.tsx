@@ -3,6 +3,7 @@
 import { Ban, CheckCircle2, Flame, ShieldAlert, X } from "lucide-react";
 import { useEffect } from "react";
 
+import { useScrollLock } from "@/components/motion/SmoothScrollProvider";
 import { IOC_TYPE_COPY, VERDICT_COPY } from "@/lib/copy";
 import { formatNodeDisplayLabel } from "@/lib/radarLayout";
 import type { EmergingCampaign, IocType, RadarEdge, RadarNode } from "@/lib/types";
@@ -35,6 +36,8 @@ export function CampaignDetailDrawer({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [campaign, onClose]);
+
+  useScrollLock(campaign !== null);
 
   if (!campaign) return null;
 
@@ -88,7 +91,7 @@ export function CampaignDetailDrawer({
           </button>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 text-xs">
+        <div data-lenis-prevent className="flex-1 space-y-4 overflow-y-auto px-5 py-4 text-xs">
           <div className="grid grid-cols-3 gap-2.5">
             <div className="rounded-xl border border-border-subtle bg-surface-subtle p-3">
               <p className="text-[11px] text-ink-muted">Hồ sơ liên quan</p>

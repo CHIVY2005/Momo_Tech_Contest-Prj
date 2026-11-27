@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { useScrollLock } from "@/components/motion/SmoothScrollProvider";
 import { analyzeSync } from "@/lib/api";
 import { IOC_TYPE_COPY, VERDICT_COPY } from "@/lib/copy";
 import { formatMaskedIoc, formatRemainingTtl } from "@/lib/radarLayout";
@@ -74,6 +75,8 @@ export function ApiPlaygroundCard({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  useScrollLock(open);
 
   if (!open) return null;
 
@@ -160,7 +163,7 @@ export function ApiPlaygroundCard({
           </button>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 text-xs">
+        <div data-lenis-prevent className="flex-1 space-y-4 overflow-y-auto px-5 py-4 text-xs">
           {/* Preset scenarios */}
           <div>
             <p className="mb-2 text-[11px] font-semibold text-ink-secondary">

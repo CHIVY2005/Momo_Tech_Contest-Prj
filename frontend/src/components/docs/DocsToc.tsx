@@ -95,6 +95,7 @@ export function DocsToc({ items, title = "Mục lục" }: DocsTocProps) {
       <aside className="hidden lg:block">
         <nav
           aria-label={title}
+          data-lenis-prevent
           className="sticky top-24 max-h-[calc(100vh-7.5rem)] overflow-y-auto pr-2"
         >
           <p className="mb-3 text-[11px] font-semibold tracking-wider text-ink-muted uppercase">

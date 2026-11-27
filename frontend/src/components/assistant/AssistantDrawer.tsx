@@ -21,6 +21,7 @@ import {
   useState,
 } from "react";
 
+import { useScrollLock } from "@/components/motion/SmoothScrollProvider";
 import {
   AssistantApiError,
   streamAssistantChat,
@@ -268,6 +269,8 @@ export function AssistantDrawer({
       setIsStreaming(false);
     }
   }, [isOpen]);
+
+  useScrollLock(isOpen);
 
   // Reset conversation state cleanly when switching to a different analysis report
   useEffect(() => {
@@ -960,7 +963,7 @@ export function AssistantDrawer({
         )}
 
         {/* Scrollable Message Thread */}
-        <div className="flex-1 space-y-3.5 overflow-y-auto px-4 py-4 sm:px-5">
+        <div data-lenis-prevent className="flex-1 space-y-3.5 overflow-y-auto px-4 py-4 sm:px-5">
           {messages.length === 0 ? (
             <div className="space-y-4">
               <div className="rounded-2xl border border-border-subtle bg-surface-subtle p-4">
