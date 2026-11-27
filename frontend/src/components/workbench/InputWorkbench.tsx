@@ -9,6 +9,7 @@ import {
   RotateCcw,
   SlidersHorizontal,
 } from "lucide-react";
+import Link from "next/link";
 import { type FormEvent, useState } from "react";
 
 import { formatVndInputDisplay, parseRawAmountDigits } from "@/lib/formatters";
@@ -312,9 +313,16 @@ export function InputWorkbench({
           )}
         </div>
 
-        <p className="text-[11px] text-ink-muted">
-          Số điện thoại và số tài khoản được che giấu trước khi lưu hồ sơ; dữ liệu tải lên gửi trực
-          tiếp qua multipart/form-data và không lưu bản gốc trong cơ sở dữ liệu.
+        <p className="text-[11px] leading-relaxed text-ink-muted">
+          Số điện thoại và số tài khoản được che giấu trước khi lưu hồ sơ; tệp ảnh và ghi âm gốc
+          không lưu trong cơ sở dữ liệu. Xem chi tiết tại{" "}
+          <Link
+            href="/privacy"
+            className="font-medium text-ink-secondary underline decoration-border-strong underline-offset-2 transition-colors hover:text-ink"
+          >
+            Chính sách quyền riêng tư
+          </Link>
+          .
         </p>
       </div>
     </form>

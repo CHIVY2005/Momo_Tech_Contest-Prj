@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 
+import { SiteFooter } from "@/components/layout/SiteFooter";
 import { TopNav } from "@/components/layout/TopNav";
 import { BRAND_COPY } from "@/lib/copy";
 
@@ -68,31 +69,7 @@ export default function RootLayout({
           {children}
         </main>
 
-        <footer className="mt-12 border-t border-border-subtle/80 bg-surface-deep py-6">
-          <div className="mx-auto max-w-7xl space-y-3 px-4 text-xs text-ink-muted sm:px-6 lg:px-8">
-            <p className="text-ink-secondary">
-              <strong className="font-semibold text-ink">{BRAND_COPY.name}</strong> —{" "}
-              {BRAND_COPY.footerSummary}
-            </p>
-
-            <div className="space-y-1 text-[11px] leading-relaxed text-ink-muted">
-              <p>{BRAND_COPY.footerLimitation}</p>
-              <p>
-                <span className="font-medium text-ink-secondary">Quyền riêng tư:</span>{" "}
-                {BRAND_COPY.privacySummary}
-              </p>
-            </div>
-
-            <details className="text-[11px] text-ink-muted">
-              <summary className="inline-flex cursor-pointer items-center font-medium text-ink-secondary transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400">
-                Thông tin kỹ thuật
-              </summary>
-              <p className="mt-1.5 max-w-4xl leading-relaxed text-ink-muted">
-                {BRAND_COPY.technicalArchitectureSummary}
-              </p>
-            </details>
-          </div>
-        </footer>
+        <SiteFooter />
       </body>
     </html>
   );

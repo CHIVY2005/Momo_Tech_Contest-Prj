@@ -10,7 +10,6 @@ import type {
 
 export const BRAND_COPY = {
   name: "VeriShield AI",
-  version: "2.0",
   tagline: "Trợ lý phòng chống lừa đảo trực tuyến",
   pageTitle: "VeriShield AI — Kiểm tra trước khi chuyển tiền",
   pageDescription:
@@ -22,10 +21,6 @@ export const BRAND_COPY = {
     "Trợ lý hỗ trợ nhận diện dấu hiệu lừa đảo trước khi chuyển tiền.",
   footerLimitation:
     "Kết quả chỉ mang tính tham khảo, không thay thế việc xác minh trực tiếp từ ngân hàng hoặc cơ quan chức năng.",
-  privacySummary:
-    "Số điện thoại và số tài khoản được che giấu trước khi lưu hồ sơ; ảnh tải lên không lưu bản gốc trong cơ sở dữ liệu.",
-  technicalArchitectureSummary:
-    "Phân tích kết hợp kiểm tra bằng chứng xác định (ELA, dHash, chuẩn VietQR, kiểm tra đường dẫn và môi trường cách ly), phân loại ngữ nghĩa cục bộ (multilingual-e5-small INT8 ONNX) và suy luận ngữ cảnh đa phương thức.",
 } as const;
 
 export const SHARED_DISCLAIMERS = {
