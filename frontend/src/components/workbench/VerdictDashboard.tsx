@@ -12,6 +12,7 @@ import {
   Users,
   Volume2,
 } from "lucide-react";
+import { m } from "motion/react";
 
 import { buildContextQuickActions } from "@/components/assistant/AssistantQuickActions";
 import { AnimatedNumber } from "@/components/motion/AnimatedNumber";
@@ -20,7 +21,11 @@ import {
   SHARED_DISCLAIMERS,
   VERDICT_COPY,
 } from "@/lib/copy";
+import { staggerDelaysMs } from "@/lib/motion/motionMath";
 import type { AnalysisReport, AssistantQuickIntent, VerdictLevel } from "@/lib/types";
+
+/** Entrance delays for secondary blocks only; alerts, verdict badge and score never wait. */
+const SECONDARY_DELAYS = staggerDelaysMs(3, 60, 180);
 
 export interface VerdictDashboardProps {
   report: AnalysisReport;
@@ -250,7 +255,13 @@ export function VerdictDashboard({ report, onOpenAssistant }: VerdictDashboardPr
       </div>
 
       {onOpenAssistant && (
-        <div className="mt-4 flex flex-col gap-2.5 rounded-xl border border-amber-500/30 bg-surface-subtle/90 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <m.div
+          key={`qa-${report.case_id}`}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.24, delay: (SECONDARY_DELAYS[0] ?? 0) / 1000 }}
+          className="mt-4 flex flex-col gap-2.5 rounded-xl border border-amber-500/30 bg-surface-subtle/90 p-3 sm:flex-row sm:items-center sm:justify-between"
+        >
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="mr-1 text-[11px] font-semibold text-ink-secondary">
               Hỏi nhanh Trợ lý VeriShield:
@@ -275,11 +286,17 @@ export function VerdictDashboard({ report, onOpenAssistant }: VerdictDashboardPr
             <Sparkles className="h-3.5 w-3.5 text-amber-300" aria-hidden="true" />
             <span>Hỏi Trợ lý VeriShield</span>
           </button>
-        </div>
+        </m.div>
       )}
 
       {(report.matched_playbooks.length > 0 || report.manipulation_tactics.length > 0) && (
-        <div className="mt-4 grid grid-cols-1 gap-3 border-t border-border-subtle/80 pt-4 sm:grid-cols-2">
+        <m.div
+          key={`pb-${report.case_id}`}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.24, delay: (SECONDARY_DELAYS[1] ?? 0) / 1000 }}
+          className="mt-4 grid grid-cols-1 gap-3 border-t border-border-subtle/80 pt-4 sm:grid-cols-2"
+        >
           <div>
             <p className="mb-1.5 text-xs font-semibold text-ink-secondary">
               Kịch bản lừa đảo tương tự
@@ -319,11 +336,17 @@ export function VerdictDashboard({ report, onOpenAssistant }: VerdictDashboardPr
               <p className="text-xs text-ink-muted">Chưa ghi nhận dấu hiệu thao túng tâm lý rõ rệt.</p>
             )}
           </div>
-        </div>
+        </m.div>
       )}
 
       {report.transcript && (
-        <div className="mt-4 rounded-xl border border-border-subtle bg-surface-subtle p-3.5">
+        <m.div
+          key={`tr-${report.case_id}`}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.24, delay: (SECONDARY_DELAYS[2] ?? 0) / 1000 }}
+          className="mt-4 rounded-xl border border-border-subtle bg-surface-subtle p-3.5"
+        >
           <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-sky-300">
             <Volume2 className="h-4 w-4" aria-hidden="true" />
             <span>Nội dung chuyển từ tệp ghi âm</span>
@@ -331,7 +354,7 @@ export function VerdictDashboard({ report, onOpenAssistant }: VerdictDashboardPr
           <p className="text-xs leading-relaxed text-ink-secondary italic">
             &ldquo;{report.transcript}&rdquo;
           </p>
-        </div>
+        </m.div>
       )}
 
       <div className="mt-4 space-y-2.5 border-t border-border-subtle/70 pt-3 text-[11px]">

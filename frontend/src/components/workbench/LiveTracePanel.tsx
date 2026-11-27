@@ -8,10 +8,14 @@ import {
   Loader2,
   MinusCircle,
 } from "lucide-react";
+import { m } from "motion/react";
 import { useEffect, useState } from "react";
 
 import { TRACE_STAGES } from "@/lib/copy";
+import { staggerDelaysMs } from "@/lib/motion/motionMath";
 import type { TraceStep } from "@/lib/types";
+
+const stageDelays = staggerDelaysMs(TRACE_STAGES.length, 40, 200);
 
 interface LiveTracePanelProps {
   steps: TraceStep[];
@@ -108,7 +112,7 @@ export function LiveTracePanel({
           {isAnalyzing && (
             <span className="inline-flex items-center gap-1.5 text-xs text-amber-300">
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-              <span>Đang kiểm tra...</span>
+              <span className="vs-shimmer-text">Đang kiểm tra...</span>
             </span>
           )}
           {canCompact && (
@@ -136,8 +140,11 @@ export function LiveTracePanel({
           const isRunning = isExplicitRunning || isInferredRunning;
 
           return (
-            <li
+            <m.li
               key={stage.step_id}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, delay: (stageDelays[idx] ?? 0) / 1000 }}
               className={`rounded-xl border p-3 transition-colors ${
                 step?.status === "warning"
                   ? "border-amber-500/45 bg-amber-500/10"
@@ -179,7 +186,7 @@ export function LiveTracePanel({
                     ? "Đang thực hiện kiểm tra..."
                     : "Chờ bước trước hoàn tất..."}
               </p>
-            </li>
+            </m.li>
           );
         })}
       </ol>

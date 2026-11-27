@@ -177,6 +177,30 @@ body {
   }
 }
 
+/* Subtle "working" sheen for in-progress labels (falls back to solid amber under reduced motion) */
+.vs-shimmer-text {
+  background-image: linear-gradient(
+    90deg,
+    var(--accent-amber) 0%,
+    #fef3c7 50%,
+    var(--accent-amber) 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: vs-shimmer 1.6s linear infinite;
+}
+
+@keyframes vs-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
 @keyframes vs-spin {
   from {
     transform: rotate(0deg);
@@ -200,5 +224,11 @@ body {
   .animate-spin {
     animation: vs-spin 1s linear infinite !important;
     transform-origin: center;
+  }
+
+  .vs-shimmer-text {
+    animation: none !important;
+    background-image: none;
+    color: var(--accent-amber);
   }
 }

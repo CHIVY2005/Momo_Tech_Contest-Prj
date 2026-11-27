@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AssistantDrawer } from "@/components/assistant/AssistantDrawer";
 import { ActionCopilotPanel } from "@/components/copilot/ActionCopilotPanel";
 import { EvidenceTabs } from "@/components/evidence/EvidenceTabs";
+import { useSmoothScroll } from "@/components/motion/SmoothScrollProvider";
 import { WalletPreTransferSim } from "@/components/wallet/WalletPreTransferSim";
 import { DemoScenarioBar } from "@/components/workbench/DemoScenarioBar";
 import { InputWorkbench, type WorkbenchFormState } from "@/components/workbench/InputWorkbench";
@@ -15,6 +16,7 @@ import { VerdictDashboard } from "@/components/workbench/VerdictDashboard";
 import { analyzeStream, fetchDemos, fetchHealth } from "@/lib/api";
 import { inferAnalyzeMode } from "@/lib/composerUtils";
 import { BRAND_COPY } from "@/lib/copy";
+import { ANCHOR_OFFSET_PX, shouldAutoScrollIntoView } from "@/lib/motion/scrollControl";
 import type {
   AnalysisReport,
   AssistantQuickIntent,
@@ -58,6 +60,9 @@ export default function HomePage() {
     useState<AssistantQuickIntent | null>(null);
   const [assistantPromptNonce, setAssistantPromptNonce] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
+  const resultRef = useRef<HTMLDivElement | null>(null);
+  const scrolledCaseRef = useRef<string | null>(null);
+  const { scrollToElement } = useSmoothScroll();
 
   useEffect(() => {
     void fetchDemos()
@@ -256,6 +261,25 @@ export default function HomePage() {
   const report = submittedSnapshot?.report ?? null;
   const caseAccessToken = submittedSnapshot?.caseAccessToken ?? null;
   const canCollapseForm = isAnalyzing || Boolean(report) || traceSteps.length > 0;
+  const reportCaseId = report?.case_id ?? null;
+
+  // Bring the verdict into view once per case, only when it landed off-screen. Never moves focus.
+  useEffect(() => {
+    const el = resultRef.current;
+    if (!reportCaseId || !el) return;
+    const alreadyScrolledForCase = scrolledCaseRef.current === reportCaseId;
+    scrolledCaseRef.current = reportCaseId;
+    if (
+      shouldAutoScrollIntoView({
+        targetTop: el.getBoundingClientRect().top,
+        viewportHeight: window.innerHeight,
+        headerHeight: ANCHOR_OFFSET_PX,
+        alreadyScrolledForCase,
+      })
+    ) {
+      scrollToElement(el, { offset: -ANCHOR_OFFSET_PX });
+    }
+  }, [reportCaseId, scrollToElement]);
 
   return (
     <div className="space-y-4">
@@ -363,7 +387,7 @@ export default function HomePage() {
       <LiveTracePanel steps={traceSteps} isAnalyzing={isAnalyzing} hasReport={Boolean(report)} />
 
       {report && (
-        <div className="space-y-5">
+        <div id="verdict-result" ref={resultRef} className="space-y-5">
           <VerdictDashboard report={report} onOpenAssistant={handleOpenAssistant} />
 
           <WalletPreTransferSim
