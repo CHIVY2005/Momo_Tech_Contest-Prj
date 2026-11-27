@@ -8,7 +8,7 @@ import {
   Loader2,
   MinusCircle,
 } from "lucide-react";
-import { m } from "motion/react";
+import * as m from "motion/react-m";
 import { useEffect, useState } from "react";
 
 import { TRACE_STAGES } from "@/lib/copy";
