@@ -1247,6 +1247,8 @@ export const IocGraphSvg = memo(function IocGraphSvg({
         {viewMode === "graph" ? (
           <div
             ref={canvasBoxRef}
+            /* Lenis only honors this on HTMLElement ancestors (not <svg>); keeps wheel = zoom. */
+            data-lenis-prevent-wheel
             style={{ contain: "layout paint style" }}
             className={`radar-canvas-grid relative overflow-hidden rounded-xl border border-border-subtle ${
               isFullscreen ? "flex min-h-0 flex-1 flex-col" : ""
@@ -1272,7 +1274,6 @@ export const IocGraphSvg = memo(function IocGraphSvg({
             ) : (
               <svg
                 ref={svgRef}
-                data-lenis-prevent
                 viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
                 preserveAspectRatio="xMidYMid meet"
                 role="group"

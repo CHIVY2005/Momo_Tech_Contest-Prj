@@ -122,8 +122,14 @@ export function SmoothScrollProvider({ children }: { children: ReactNode }) {
   const scrollToElement = useCallback((el: HTMLElement, opts?: ScrollToOptions) => {
     const lenis = lenisRef.current;
     if (lenis) {
+      // Lenis clamps to a cached, debounced scroll limit; content that just rendered (verdict,
+      // late sections) would otherwise cut the scroll short. Re-measure synchronously first.
+      lenis.resize();
+      // Lenis already subtracts the target's CSS scroll-margin-top (e.g. `scroll-mt-24`), so only
+      // apply the header offset when the element has no scroll margin of its own.
+      const ownMargin = Number.parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
       lenis.scrollTo(el, {
-        offset: opts?.offset ?? -ANCHOR_OFFSET_PX,
+        offset: opts?.offset ?? (ownMargin > 0 ? 0 : -ANCHOR_OFFSET_PX),
         immediate: opts?.immediate ?? false,
         force: true,
       });
