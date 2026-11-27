@@ -9,6 +9,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
+import { SpotlightGroup } from "@/components/motion/SpotlightGroup";
 import type { DemoScenario } from "@/lib/types";
 
 interface DemoScenarioBarProps {
@@ -56,7 +57,7 @@ export function DemoScenarioBar({
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+      <SpotlightGroup className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
         {visibleDemos.map((demo) => {
           const Icon = pickScenarioIcon(demo);
           const isSelected = activeDemoId === demo.demo_id;
@@ -68,7 +69,7 @@ export function DemoScenarioBar({
               disabled={isAnalyzing}
               onClick={() => onSelectDemo(demo)}
               aria-pressed={isSelected}
-              className={`group flex h-full cursor-pointer flex-col justify-between rounded-xl border p-3.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400 disabled:cursor-not-allowed disabled:opacity-60 ${
+              className={`vs-spotlight group flex h-full cursor-pointer flex-col justify-between rounded-xl border p-3.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400 disabled:cursor-not-allowed disabled:opacity-60 ${
                 isSelected
                   ? "border-amber-400 bg-amber-500/12"
                   : "border-border-subtle bg-surface-subtle hover:border-amber-400/60 hover:bg-surface-elevated"
@@ -112,7 +113,7 @@ export function DemoScenarioBar({
             </button>
           );
         })}
-      </div>
+      </SpotlightGroup>
     </section>
   );
 }

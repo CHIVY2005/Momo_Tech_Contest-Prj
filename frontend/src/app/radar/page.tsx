@@ -11,6 +11,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AnimatedNumber } from "@/components/motion/AnimatedNumber";
+import { SpotlightGroup } from "@/components/motion/SpotlightGroup";
 import { ApiPlaygroundCard } from "@/components/radar/ApiPlaygroundCard";
 import { BlockRuleManager } from "@/components/radar/BlockRuleManager";
 import { CampaignDetailDrawer } from "@/components/radar/CampaignDetailDrawer";
@@ -344,8 +345,8 @@ export default function RadarPage() {
         </div>
       ) : graph ? (
         <div className="space-y-2.5">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
+          <SpotlightGroup className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="vs-spotlight vs-spotlight-cyan rounded-xl border border-border-subtle bg-surface p-3.5">
               <p className="text-xs font-medium text-ink-muted">Hồ sơ đã phân tích</p>
               <p className="tabular-num mt-1 font-mono text-2xl font-bold text-ink">
                 <AnimatedNumber value={totalCases} />
@@ -355,7 +356,7 @@ export default function RadarPage() {
               </p>
             </div>
 
-            <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
+            <div className="vs-spotlight vs-spotlight-cyan rounded-xl border border-border-subtle bg-surface p-3.5">
               <p className="text-xs font-medium text-ink-muted">Chiến dịch nghi vấn</p>
               <p className="tabular-num mt-1 font-mono text-2xl font-bold text-rose-400">
                 <AnimatedNumber value={totalCampaigns} />
@@ -367,7 +368,7 @@ export default function RadarPage() {
               </p>
             </div>
 
-            <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
+            <div className="vs-spotlight vs-spotlight-cyan rounded-xl border border-border-subtle bg-surface p-3.5">
               <p className="text-xs font-medium text-ink-muted">Dấu hiệu nghi vấn</p>
               <p className="tabular-num mt-1 font-mono text-2xl font-bold text-sky-300">
                 <AnimatedNumber value={totalIocs} />
@@ -379,7 +380,7 @@ export default function RadarPage() {
               </p>
             </div>
 
-            <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
+            <div className="vs-spotlight vs-spotlight-cyan rounded-xl border border-border-subtle bg-surface p-3.5">
               <p className="text-xs font-medium text-ink-muted">Quy tắc đang áp dụng</p>
               <p className="tabular-num mt-1 font-mono text-2xl font-bold text-amber-300">
                 <AnimatedNumber value={activeBlocks} />
@@ -388,7 +389,7 @@ export default function RadarPage() {
                 Đang hiệu lực (tự hết hạn theo TTL)
               </p>
             </div>
-          </div>
+          </SpotlightGroup>
 
           {hasDemoData && (
             <div className="flex items-start gap-2 rounded-xl border border-sky-500/30 bg-sky-500/8 px-3.5 py-2 text-[11px] text-sky-100">

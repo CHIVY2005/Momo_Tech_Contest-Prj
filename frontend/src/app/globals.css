@@ -139,6 +139,44 @@ body {
   transition: stroke-opacity 150ms ease-out, stroke-width 150ms ease-out;
 }
 
+/* Pointer spotlight for card grids (vars set by <SpotlightGroup>; pure CSS glow, GPU-cheap) */
+.vs-spotlight {
+  position: relative;
+  isolation: isolate;
+  --spot-color: rgba(245, 158, 11, 0.1);
+}
+
+.vs-spotlight-cyan {
+  --spot-color: rgba(14, 165, 233, 0.1);
+}
+
+.vs-spotlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease-out;
+  background: radial-gradient(
+    220px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+    var(--spot-color),
+    transparent 70%
+  );
+}
+
+.vs-spotlight:hover::before,
+.vs-spotlight:focus-visible::before {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .vs-spotlight::before {
+    display: none;
+  }
+}
+
 @keyframes vs-spin {
   from {
     transform: rotate(0deg);
