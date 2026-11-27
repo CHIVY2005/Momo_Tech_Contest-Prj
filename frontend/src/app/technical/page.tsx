@@ -11,6 +11,7 @@ import {
 import type { TocItem } from "@/components/docs/DocsToc";
 import { SystemArchitectureSvg } from "@/components/docs/SystemArchitectureSvg";
 import { ThreeTierFusionSvg } from "@/components/docs/ThreeTierFusionSvg";
+import { DrawOnView } from "@/components/motion/DrawOnView";
 
 export const metadata: Metadata = {
   title: "Công nghệ và kiến trúc hệ thống — VeriShield AI",
@@ -115,7 +116,9 @@ export default function TechnicalPage() {
           tuyến và bộ kịch bản đánh giá thực nghiệm.
         </p>
 
-        <SystemArchitectureSvg />
+        <DrawOnView>
+          <SystemArchitectureSvg />
+        </DrawOnView>
 
         <p>
           Lưu lượng sản xuất đi qua reverse proxy Caddy 2 thực hiện xử lý kết nối TLS (TLS
@@ -197,7 +200,9 @@ export default function TechnicalPage() {
           2) để ra kết luận và gói hành động ứng phó.
         </p>
 
-        <ThreeTierFusionSvg />
+        <DrawOnView>
+          <ThreeTierFusionSvg />
+        </DrawOnView>
 
         <ul className="list-disc space-y-1.5 pl-5">
           <li>
@@ -1191,9 +1196,9 @@ export default function TechnicalPage() {
             ],
             [
               "Thư viện Frontend",
-              "Next.js 15, React 19, Tailwind CSS v4 (MIT) · TypeScript 5.8 (Apache-2.0) · Lucide React (ISC)",
+              "Next.js 15, React 19, Tailwind CSS v4, Lenis (cuộn mượt), Motion (hiệu ứng xuất hiện) (MIT) · TypeScript 5.8 (Apache-2.0) · Lucide React (ISC)",
               "MIT / Apache-2.0 / ISC",
-              "Đối chiếu từ khai báo phụ thuộc của ứng dụng web.",
+              "Đối chiếu từ khai báo phụ thuộc của ứng dụng web. Các hiệu ứng nhỏ (bộ đếm số, quầng sáng thẻ, vẽ luồng sơ đồ) do nhóm tự viết, không sao chép mã nguồn bên thứ ba.",
             ],
             [
               "Phông chữ",

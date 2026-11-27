@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { DataLifecycleSvg } from "@/components/docs/DataLifecycleSvg";
+import { DrawOnView } from "@/components/motion/DrawOnView";
 import {
   DocCallout,
   DocSection,
@@ -188,7 +189,9 @@ export default function PrivacyPage() {
           theo mặc định hoàn toàn cục bộ trên máy chủ.
         </p>
 
-        <DataLifecycleSvg />
+        <DrawOnView>
+          <DataLifecycleSvg />
+        </DrawOnView>
 
         <ul className="list-disc space-y-2 pl-5 pt-1">
           <li>

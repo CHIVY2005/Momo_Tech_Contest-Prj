@@ -201,6 +201,21 @@ body {
   }
 }
 
+/* Architecture diagram arrows drawn on first view (state attributes set by <DrawOnView>) */
+.vs-draw[data-draw-ready="true"] :is(line, path, polyline)[marker-end]:not([stroke-dasharray]) {
+  stroke-dasharray: var(--len);
+  stroke-dashoffset: var(--len);
+  opacity: 0;
+}
+
+.vs-draw[data-drawn="true"] :is(line, path, polyline)[marker-end]:not([stroke-dasharray]) {
+  stroke-dashoffset: 0;
+  opacity: 1;
+  transition:
+    stroke-dashoffset 520ms ease-out var(--delay, 0ms),
+    opacity 160ms ease-out var(--delay, 0ms);
+}
+
 @keyframes vs-spin {
   from {
     transform: rotate(0deg);
