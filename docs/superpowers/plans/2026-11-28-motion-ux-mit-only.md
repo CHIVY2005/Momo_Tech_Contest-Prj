@@ -406,7 +406,9 @@ Quyết định cố định:
 
 | Route | First Load JS trước | Sau | Chênh lệch |
 | :--- | :--- | :--- | :--- |
-| `/` | | | |
-| `/radar` | | | |
-| `/technical` | | | |
-| `/privacy` | | | |
+| `/` | 153 kB | 177 kB | +24 kB (≤ 30) |
+| `/radar` | 135 kB | 144 kB | +9 kB |
+| `/technical` | 108 kB | 109 kB | +1 kB (≤ 12) |
+| `/privacy` | 108 kB | 109 kB | +1 kB (≤ 12) |
+
+QA trình duyệt (Playwright + Edge cục bộ, `next start`): 23/23 kiểm tra Review Focus 1–5 PASS.
