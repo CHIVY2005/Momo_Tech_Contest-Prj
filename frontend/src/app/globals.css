@@ -114,6 +114,32 @@ body {
   left: 0.75rem;
 }
 
+/* Static dot-grid background for Radar graph (zero SVG pattern repaint during pan/zoom) */
+.radar-canvas-grid {
+  background-color: var(--bg-deep);
+  background-image: radial-gradient(rgba(51, 65, 85, 0.55) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Targeted, non-competing graph transitions (never transition: all or transform during drag/wheel) */
+.radar-node {
+  transition: opacity 150ms ease-out;
+}
+
+.radar-node-shape {
+  transition: stroke 110ms ease-out, stroke-width 110ms ease-out;
+}
+
+.radar-node:hover .radar-node-shape,
+.radar-node:focus-visible .radar-node-shape {
+  stroke: #ffffff;
+  stroke-width: 2.8px;
+}
+
+.radar-edge {
+  transition: stroke-opacity 150ms ease-out, stroke-width 150ms ease-out;
+}
+
 @keyframes vs-spin {
   from {
     transform: rotate(0deg);

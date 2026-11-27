@@ -171,7 +171,7 @@ export default function RadarPage() {
     });
   }
 
-  function openNodeBlockModal(node: RadarNode) {
+  const openNodeBlockModal = useCallback((node: RadarNode) => {
     if (node.kind === "campaign") return;
     const label = formatNodeDisplayLabel(node);
     setRuleModal({
@@ -187,7 +187,7 @@ export default function RadarPage() {
       initialHash: node.node_id,
       defaultReason: `Áp dụng quy tắc chặn tạm thời cho dấu hiệu ${label}`,
     });
-  }
+  }, []);
 
   async function handleCreateRule(payload: {
     iocType: IocType;

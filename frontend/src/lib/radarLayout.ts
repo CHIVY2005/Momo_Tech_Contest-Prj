@@ -6,8 +6,152 @@ export interface PositionedRadarNode extends RadarNode {
   clusterId?: string | null;
 }
 
+export interface GraphViewport {
+  scale: number;
+  x: number;
+  y: number;
+}
+
+export interface GraphExtent {
+  width: number;
+  height: number;
+}
+
 function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
+}
+
+/**
+ * Return an adaptive virtual layout plane so small graphs fill the default canvas
+ * while larger graphs (50, 100, 500+ nodes) expand cleanly without cramming or overlap.
+ */
+export function computeOptimalGraphExtent(
+  nodeCount: number,
+  baseWidth: number = 860,
+  baseHeight: number = 480,
+): GraphExtent {
+  if (nodeCount <= 26) {
+    return { width: baseWidth, height: baseHeight };
+  }
+  const factor = Math.sqrt(nodeCount / 14);
+  return {
+    width: Math.round(baseWidth * factor),
+    height: Math.round(baseHeight * factor),
+  };
+}
+
+/**
+ * Compute a deterministic structural topology signature so layout only recomputes
+ * when node IDs/kinds or edges actually change (ignoring hover, selection, or block toggles).
+ */
+export function buildGraphTopologyKey(
+  nodes: ReadonlyArray<Pick<RadarNode, "node_id" | "kind">>,
+  edges: ReadonlyArray<Pick<RadarEdge, "source" | "target" | "relation">>,
+): string {
+  const nodePart = nodes.map((n) => `${n.node_id}:${n.kind}`).join("|");
+  const edgePart = edges.map((e) => `${e.source}>${e.target}:${e.relation}`).join("|");
+  return `${nodes.length}#${edges.length}#${nodePart}#${edgePart}`;
+}
+
+/**
+ * Compute the viewport transform (matrix scale + translation in SVG viewBox units)
+ * that centers and fits all positioned nodes inside the visible SVG viewBox.
+ */
+export function computeFitViewport(
+  positioned: ReadonlyArray<Pick<PositionedRadarNode, "x" | "y" | "kind">>,
+  viewWidth: number,
+  viewHeight: number,
+  minScale: number = 0.2,
+  maxScale: number = 1.15,
+  padding: number = 56,
+): GraphViewport {
+  if (positioned.length === 0) {
+    return { scale: 1, x: 0, y: 0 };
+  }
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const n of positioned) {
+    const padX = n.kind === "campaign" ? 88 : 68;
+    const padTop = n.kind === "campaign" ? 32 : 24;
+    const padBottom = n.kind === "campaign" ? 50 : 42;
+    if (n.x - padX < minX) minX = n.x - padX;
+    if (n.x + padX > maxX) maxX = n.x + padX;
+    if (n.y - padTop < minY) minY = n.y - padTop;
+    if (n.y + padBottom > maxY) maxY = n.y + padBottom;
+  }
+
+  const contentW = Math.max(120, maxX - minX);
+  const contentH = Math.max(120, maxY - minY);
+  const availW = Math.max(120, viewWidth - padding);
+  const availH = Math.max(120, viewHeight - padding);
+  const rawScale = Math.min(availW / contentW, availH / contentH);
+  const scale = clamp(Number(rawScale.toFixed(4)), minScale, maxScale);
+
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  const x = viewWidth / 2 - centerX * scale;
+  const y = viewHeight / 2 - centerY * scale;
+
+  return { scale, x, y };
+}
+
+/**
+ * Zoom around a specific SVG viewBox anchor coordinate so the point under the cursor stays fixed.
+ */
+export function zoomViewportAroundPoint(
+  current: GraphViewport,
+  targetScale: number,
+  anchorSvgX: number,
+  anchorSvgY: number,
+  minScale: number,
+  maxScale: number,
+): GraphViewport {
+  const nextScale = clamp(targetScale, minScale, maxScale);
+  if (Math.abs(nextScale - current.scale) < 1e-5) {
+    return current;
+  }
+  const worldX = (anchorSvgX - current.x) / current.scale;
+  const worldY = (anchorSvgY - current.y) / current.scale;
+  return {
+    scale: nextScale,
+    x: anchorSvgX - worldX * nextScale,
+    y: anchorSvgY - worldY * nextScale,
+  };
+}
+
+/**
+ * Clamp floating tooltip coordinates inside the graph container with edge collision avoidance.
+ */
+export function clampFloatingTooltip(
+  anchorX: number,
+  anchorY: number,
+  tooltipWidth: number,
+  tooltipHeight: number,
+  containerWidth: number,
+  containerHeight: number,
+  margin: number = 10,
+): { left: number; top: number; placement: "top" | "bottom" } {
+  const gap = 14;
+  const preferredTop = anchorY - tooltipHeight - gap;
+  let placement: "top" | "bottom" = "top";
+  let top = preferredTop;
+
+  if (preferredTop < margin) {
+    placement = "bottom";
+    top = anchorY + gap;
+  }
+  if (top + tooltipHeight > containerHeight - margin) {
+    top = Math.max(margin, containerHeight - tooltipHeight - margin);
+  }
+
+  const centeredLeft = anchorX - tooltipWidth / 2;
+  const maxLeft = Math.max(margin, containerWidth - tooltipWidth - margin);
+  const left = clamp(centeredLeft, margin, maxLeft);
+
+  return { left: Math.round(left), top: Math.round(top), placement };
 }
 
 function layoutConcentricFallback(
@@ -60,9 +204,92 @@ function layoutConcentricFallback(
 }
 
 /**
+ * Spatial-hash O(N) label-aware repulsion pass.
+ * Checks only 3x3 neighboring grid cells instead of all O(N^2) pairs.
+ */
+function runSpatialRepulsion(
+  positioned: PositionedRadarNode[],
+  minDx: number,
+  minDy: number,
+  padX: number,
+  padY: number,
+  width: number,
+  height: number,
+  iterations: number,
+): void {
+  const count = positioned.length;
+  if (count <= 1) return;
+
+  const invDx = 1 / minDx;
+  const invDy = 1 / minDy;
+  const grid = new Map<number, number[]>();
+
+  const packCell = (gx: number, gy: number): number => ((gx + 2048) << 12) | (gy + 2048);
+
+  for (let iter = 0; iter < iterations; iter += 1) {
+    grid.clear();
+    for (let i = 0; i < count; i += 1) {
+      const node = positioned[i]!;
+      const gx = Math.floor(node.x * invDx);
+      const gy = Math.floor(node.y * invDy);
+      const key = packCell(gx, gy);
+      const bucket = grid.get(key);
+      if (bucket) {
+        bucket.push(i);
+      } else {
+        grid.set(key, [i]);
+      }
+    }
+
+    let movedAny = false;
+    for (let i = 0; i < count; i += 1) {
+      const a = positioned[i]!;
+      const gx = Math.floor(a.x * invDx);
+      const gy = Math.floor(a.y * invDy);
+
+      for (let ox = -1; ox <= 1; ox += 1) {
+        for (let oy = -1; oy <= 1; oy += 1) {
+          const bucket = grid.get(packCell(gx + ox, gy + oy));
+          if (!bucket) continue;
+          for (let bIdx = 0; bIdx < bucket.length; bIdx += 1) {
+            const j = bucket[bIdx]!;
+            if (j <= i) continue;
+            const b = positioned[j]!;
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const absDx = Math.abs(dx);
+            const absDy = Math.abs(dy);
+            if (absDx < minDx && absDy < minDy) {
+              movedAny = true;
+              const overlapX = (minDx - absDx) * 0.42;
+              const overlapY = (minDy - absDy) * 0.48;
+              const pushX = dx === 0 ? (i % 2 === 0 ? 1 : -1) : Math.sign(dx);
+              const pushY = dy === 0 ? (j % 2 === 0 ? 1 : -1) : Math.sign(dy);
+              const aWeight = a.kind === "campaign" ? 0.2 : 0.5;
+              const bWeight = b.kind === "campaign" ? 0.2 : 0.5;
+              if (absDx * invDx > absDy * invDy) {
+                a.x = clamp(a.x - pushX * overlapX * aWeight, padX, width - padX);
+                b.x = clamp(b.x + pushX * overlapX * bWeight, padX, width - padX);
+              } else {
+                a.y = clamp(a.y - pushY * overlapY * aWeight, padY, height - padY);
+                b.y = clamp(b.y + pushY * overlapY * bWeight, padY, height - padY);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (!movedAny) {
+      break;
+    }
+  }
+}
+
+/**
  * Compute cluster-aware coordinates for the threat network.
- * When edges are supplied, IOCs are grouped around their parent campaign hubs with outward fans
- * and deterministic label-overlap separation to minimize edge crossings and label clipping.
+ * When edges are supplied, IOCs are grouped around their parent campaign hubs with multi-ring
+ * outward fans and O(N) spatial-grid separation to eliminate overlaps across 14 to 500+ nodes.
  */
 export function computeRadarLayout(
   nodes: RadarNode[],
@@ -104,13 +331,13 @@ export function computeRadarLayout(
 
   const cx = width / 2;
   const cy = height / 2;
-  const padX = Math.max(82, Math.round(width * 0.11));
-  const padY = Math.max(58, Math.round(height * 0.13));
+  const padX = Math.max(82, Math.min(130, Math.round(width * 0.08)));
+  const padY = Math.max(58, Math.min(96, Math.round(height * 0.09)));
 
   const hubCoords = new Map<string, { x: number; y: number }>();
   const positioned: PositionedRadarNode[] = [];
 
-  // Place campaign hubs in well-separated cluster anchors
+  // Place campaign hubs in well-separated cluster anchors (grid for > 4 clusters so 500-node graphs stay clean)
   if (campaigns.length === 1) {
     const only = campaigns[0]!;
     hubCoords.set(only.node_id, { x: cx, y: cy });
@@ -137,13 +364,18 @@ export function computeRadarLayout(
       positioned.push({ ...camp, x: Math.round(pt.x), y: Math.round(pt.y), clusterId: camp.node_id });
     });
   } else {
-    const rx = width * 0.27;
-    const ry = height * 0.25;
+    const cols = Math.ceil(Math.sqrt((campaigns.length * width) / Math.max(1, height)));
+    const rows = Math.ceil(campaigns.length / cols);
+    const cellW = width / cols;
+    const cellH = height / rows;
     campaigns.forEach((camp, idx) => {
-      const angle = (2 * Math.PI * idx) / campaigns.length - Math.PI / 2;
+      const col = idx % cols;
+      const row = Math.floor(idx / cols);
+      const rowCount = row === rows - 1 ? campaigns.length - row * cols : cols;
+      const rowOffset = rowCount < cols ? ((cols - rowCount) * cellW) / 2 : 0;
       const pt = {
-        x: clamp(cx + rx * Math.cos(angle), padX + 45, width - padX - 45),
-        y: clamp(cy + ry * Math.sin(angle), padY + 35, height - padY - 35),
+        x: clamp(rowOffset + (col + 0.5) * cellW, padX + 45, width - padX - 45),
+        y: clamp((row + 0.5) * cellH, padY + 35, height - padY - 35),
       };
       hubCoords.set(camp.node_id, pt);
       positioned.push({ ...camp, x: Math.round(pt.x), y: Math.round(pt.y), clusterId: camp.node_id });
@@ -164,7 +396,7 @@ export function computeRadarLayout(
     }
   }
 
-  // Place exclusive IOCs in clean outward arcs around their parent campaign hub
+  // Place exclusive IOCs around their parent campaign hub using multi-ring packing when dense
   for (const camp of campaigns) {
     const hub = hubCoords.get(camp.node_id)!;
     const exclusiveIds = (campaignToIocs.get(camp.node_id) ?? []).filter(
@@ -172,33 +404,61 @@ export function computeRadarLayout(
     );
     if (exclusiveIds.length === 0) continue;
 
-    const outwardAngle =
-      campaigns.length === 1 ? -Math.PI / 2 : Math.atan2(hub.y - cy, hub.x - cx);
-    const span =
-      campaigns.length === 1
-        ? 2 * Math.PI
-        : Math.min(Math.PI * 1.18, Math.max(Math.PI * 0.55, exclusiveIds.length * 0.58));
-    const baseRadius = Math.min(width, height) * (exclusiveIds.length > 4 ? 0.24 : 0.22);
+    if (exclusiveIds.length <= 8 && campaigns.length <= 3) {
+      const outwardAngle =
+        campaigns.length === 1 ? -Math.PI / 2 : Math.atan2(hub.y - cy, hub.x - cx);
+      const span =
+        campaigns.length === 1
+          ? 2 * Math.PI
+          : Math.min(Math.PI * 1.18, Math.max(Math.PI * 0.55, exclusiveIds.length * 0.58));
+      const baseRadius = Math.min(width, height) * (exclusiveIds.length > 4 ? 0.24 : 0.22);
 
-    exclusiveIds.forEach((iocId, idx) => {
-      const node = iocById.get(iocId);
-      if (!node) return;
-      const ratio =
-        exclusiveIds.length === 1
-          ? 0
-          : campaigns.length === 1
-            ? idx / exclusiveIds.length - 0.5
-            : idx / (exclusiveIds.length - 1) - 0.5;
-      const angle = outwardAngle + ratio * span;
-      const r = baseRadius + (exclusiveIds.length > 4 && idx % 2 === 1 ? 26 : 0);
-      positioned.push({
-        ...node,
-        x: Math.round(clamp(hub.x + r * Math.cos(angle), padX, width - padX)),
-        y: Math.round(clamp(hub.y + r * Math.sin(angle), padY, height - padY)),
-        clusterId: camp.node_id,
+      exclusiveIds.forEach((iocId, idx) => {
+        const node = iocById.get(iocId);
+        if (!node) return;
+        const ratio =
+          exclusiveIds.length === 1
+            ? 0
+            : campaigns.length === 1
+              ? idx / exclusiveIds.length - 0.5
+              : idx / (exclusiveIds.length - 1) - 0.5;
+        const angle = outwardAngle + ratio * span;
+        const r = baseRadius + (exclusiveIds.length > 4 && idx % 2 === 1 ? 26 : 0);
+        positioned.push({
+          ...node,
+          x: Math.round(clamp(hub.x + r * Math.cos(angle), padX, width - padX)),
+          y: Math.round(clamp(hub.y + r * Math.sin(angle), padY, height - padY)),
+          clusterId: camp.node_id,
+        });
+        placedIocs.add(iocId);
       });
-      placedIocs.add(iocId);
-    });
+    } else {
+      // Multi-ring spiral around cluster anchor for medium/large clusters (50–500+ nodes)
+      let cursor = 0;
+      let ring = 0;
+      while (cursor < exclusiveIds.length) {
+        const radiusX = 112 + ring * 94;
+        const radiusY = 82 + ring * 68;
+        const ringCapacity = Math.max(6, Math.floor((2 * Math.PI * ((radiusX + radiusY) / 2)) / 106));
+        const sliceCount = Math.min(ringCapacity, exclusiveIds.length - cursor);
+        const phase = ring * 0.45;
+        for (let k = 0; k < sliceCount; k += 1) {
+          const iocId = exclusiveIds[cursor + k]!;
+          const node = iocById.get(iocId);
+          if (!node) continue;
+          const angle = phase + (2 * Math.PI * k) / sliceCount;
+          positioned.push({
+            ...node,
+            x: Math.round(clamp(hub.x + radiusX * Math.cos(angle), padX, width - padX)),
+            y: Math.round(clamp(hub.y + radiusY * Math.sin(angle), padY, height - padY)),
+            clusterId: camp.node_id,
+          });
+          placedIocs.add(iocId);
+        }
+        cursor += sliceCount;
+        ring += 1;
+      }
+    }
   }
 
   // Place shared IOCs near the midpoint between their parent hubs
@@ -211,11 +471,12 @@ export function computeRadarLayout(
       parents.length > 0 ? parents.reduce((s, p) => s + p.x, 0) / parents.length : cx;
     const avgY =
       parents.length > 0 ? parents.reduce((s, p) => s + p.y, 0) / parents.length : cy;
-    const offset = (idx - (sharedIocs.length - 1) / 2) * 34;
+    const ringAngle = (idx * 2.399963) % (2 * Math.PI);
+    const ringDist = 28 + Math.floor(idx / 6) * 32;
     positioned.push({
       ...node,
-      x: Math.round(clamp(avgX + offset, padX, width - padX)),
-      y: Math.round(clamp(avgY + (idx % 2 === 0 ? -18 : 18), padY, height - padY)),
+      x: Math.round(clamp(avgX + ringDist * Math.cos(ringAngle), padX, width - padX)),
+      y: Math.round(clamp(avgY + ringDist * Math.sin(ringAngle), padY, height - padY)),
       clusterId: null,
     });
     placedIocs.add(node.node_id);
@@ -226,8 +487,7 @@ export function computeRadarLayout(
     if (placedIocs.has(node.node_id)) return;
     const cols = Math.max(1, orphanIocs.length);
     const usableW = Math.max(120, width - padX * 2);
-    const x =
-      cols === 1 ? cx : padX + (usableW * idx) / Math.max(1, cols - 1);
+    const x = cols === 1 ? cx : padX + (usableW * idx) / Math.max(1, cols - 1);
     const y = height - padY + (idx % 2 === 0 ? 0 : -24);
     positioned.push({
       ...node,
@@ -237,36 +497,12 @@ export function computeRadarLayout(
     });
   });
 
-  // Deterministic label-aware repulsion pass to eliminate overlapping nodes/labels
-  const minDx = 114;
-  const minDy = 56;
-  for (let iter = 0; iter < 24; iter += 1) {
-    for (let i = 0; i < positioned.length; i += 1) {
-      for (let j = i + 1; j < positioned.length; j += 1) {
-        const a = positioned[i]!;
-        const b = positioned[j]!;
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const absDx = Math.abs(dx);
-        const absDy = Math.abs(dy);
-        if (absDx < minDx && absDy < minDy) {
-          const overlapX = (minDx - absDx) * 0.35;
-          const overlapY = (minDy - absDy) * 0.45;
-          const pushX = dx === 0 ? (i % 2 === 0 ? 1 : -1) : Math.sign(dx);
-          const pushY = dy === 0 ? (j % 2 === 0 ? 1 : -1) : Math.sign(dy);
-          const aWeight = a.kind === "campaign" ? 0.2 : 0.5;
-          const bWeight = b.kind === "campaign" ? 0.2 : 0.5;
-          if (absDx / minDx > absDy / minDy) {
-            a.x = clamp(a.x - pushX * overlapX * aWeight, padX, width - padX);
-            b.x = clamp(b.x + pushX * overlapX * bWeight, padX, width - padX);
-          } else {
-            a.y = clamp(a.y - pushY * overlapY * aWeight, padY, height - padY);
-            b.y = clamp(b.y + pushY * overlapY * bWeight, padY, height - padY);
-          }
-        }
-      }
-    }
-  }
+  // Fast O(N) spatial-grid separation pass
+  const dense = positioned.length > 80;
+  const minDx = dense ? 96 : 114;
+  const minDy = dense ? 56 : 56;
+  const iters = positioned.length > 200 ? 24 : 24;
+  runSpatialRepulsion(positioned, minDx, minDy, padX, padY, width, height, iters);
 
   return positioned.map((n) => ({
     ...n,
