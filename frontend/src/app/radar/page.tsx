@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AnimatedNumber } from "@/components/motion/AnimatedNumber";
 import { ApiPlaygroundCard } from "@/components/radar/ApiPlaygroundCard";
 import { BlockRuleManager } from "@/components/radar/BlockRuleManager";
 import { CampaignDetailDrawer } from "@/components/radar/CampaignDetailDrawer";
@@ -346,7 +347,9 @@ export default function RadarPage() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
               <p className="text-xs font-medium text-ink-muted">Hồ sơ đã phân tích</p>
-              <p className="tabular-num mt-1 font-mono text-2xl font-bold text-ink">{totalCases}</p>
+              <p className="tabular-num mt-1 font-mono text-2xl font-bold text-ink">
+                <AnimatedNumber value={totalCases} />
+              </p>
               <p className="mt-1 text-[11px] text-ink-muted">
                 Từ kiểm tra thực tế (không tính mô phỏng)
               </p>
@@ -355,7 +358,7 @@ export default function RadarPage() {
             <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
               <p className="text-xs font-medium text-ink-muted">Chiến dịch nghi vấn</p>
               <p className="tabular-num mt-1 font-mono text-2xl font-bold text-rose-400">
-                {totalCampaigns}
+                <AnimatedNumber value={totalCampaigns} />
               </p>
               <p className="tabular-num mt-1 text-[11px] text-ink-muted">
                 {demoCampaigns > 0
@@ -367,7 +370,7 @@ export default function RadarPage() {
             <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
               <p className="text-xs font-medium text-ink-muted">Dấu hiệu nghi vấn</p>
               <p className="tabular-num mt-1 font-mono text-2xl font-bold text-sky-300">
-                {totalIocs}
+                <AnimatedNumber value={totalIocs} />
               </p>
               <p className="tabular-num mt-1 text-[11px] text-ink-muted">
                 {demoIocs > 0
@@ -379,7 +382,7 @@ export default function RadarPage() {
             <div className="rounded-xl border border-border-subtle bg-surface p-3.5">
               <p className="text-xs font-medium text-ink-muted">Quy tắc đang áp dụng</p>
               <p className="tabular-num mt-1 font-mono text-2xl font-bold text-amber-300">
-                {activeBlocks}
+                <AnimatedNumber value={activeBlocks} />
               </p>
               <p className="mt-1 text-[11px] text-ink-muted">
                 Đang hiệu lực (tự hết hạn theo TTL)

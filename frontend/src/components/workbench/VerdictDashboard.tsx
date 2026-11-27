@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { buildContextQuickActions } from "@/components/assistant/AssistantQuickActions";
+import { AnimatedNumber } from "@/components/motion/AnimatedNumber";
 import {
   formatClassifierLabel,
   SHARED_DISCLAIMERS,
@@ -207,7 +208,7 @@ export function VerdictDashboard({ report, onOpenAssistant }: VerdictDashboardPr
             <p className="text-[11px] font-medium text-ink-muted">Mức độ rủi ro</p>
             <div className="flex items-baseline gap-1">
               <span className={`tabular-num font-mono text-3xl font-bold ${meta.scoreColor}`}>
-                {report.risk_score}
+                <AnimatedNumber value={report.risk_score} animateOnMount />
               </span>
               <span className="tabular-num font-mono text-xs text-ink-muted">/100</span>
             </div>
