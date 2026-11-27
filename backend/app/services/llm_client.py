@@ -7,7 +7,6 @@ import base64
 import json
 import logging
 import math
-import random
 import re
 import time
 from datetime import UTC, datetime
@@ -18,16 +17,41 @@ from urllib.parse import urlsplit
 import httpx
 from google import genai
 from google.genai import types
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from app.config import Settings
+from app.core.media_security import (
+    InvalidMediaError,
+    detect_audio_format,
+    normalize_image_for_downstream,
+)
+from app.services.llm_resilience import (
+    MAX_INTERACTIVE_RETRY_WAIT_SEC as MAX_INTERACTIVE_RETRY_WAIT_SEC,
+)
+from app.services.llm_resilience import (
+    MAX_JSON_PARSE_RETRIES,
+    acquire_llm_slot,
+    circuit_record_outcome,
+    circuit_release_probe,
+    circuit_try_acquire,
+    compute_overall_deadline,
+    jittered_retry_delay,
+    should_failover_backup_key,
+)
 
 logger = logging.getLogger(__name__)
 
 RETRYABLE_HTTP_STATUSES: frozenset[int] = frozenset({408, 429, 500, 502, 503, 504})
-MAX_INTERACTIVE_RETRY_WAIT_SEC: Final[float] = 8.0
 MAX_LLM_AUDIO_BYTES: Final[int] = 10 * 1024 * 1024
 MAX_LLM_IMAGES: Final[int] = 4
+_AUDIO_AV_TO_OPENAI_FORMAT: Final[dict[str, str]] = {
+    "wav": "wav",
+    "mp3": "mp3",
+    "ogg": "ogg",
+    "flac": "flac",
+    "matroska": "webm",
+    "mp4": "mp4",
+}
 _SAFETY_FINISH_TOKENS: Final[frozenset[str]] = frozenset(
     {"SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "IMAGE_SAFETY"}
 )
@@ -203,17 +227,29 @@ def _parse_retry_after_sec(retry_after_header: str | None) -> float | None:
     return None
 
 
-def _compute_backoff_sec(retry_idx: int, retry_after_header: str | None) -> float | None:
-    """Compute retry delay; return None when Retry-After exceeds interactive request budget."""
+def _compute_backoff_sec(
+    retry_idx: int,
+    retry_after_header: str | None,
+    remaining_sec: float | None = None,
+) -> float | None:
+    """Compute jittered retry delay; return None when Retry-After or deadline budget is exceeded."""
     parsed_sec = _parse_retry_after_sec(retry_after_header)
-    if parsed_sec is not None:
-        if parsed_sec > MAX_INTERACTIVE_RETRY_WAIT_SEC:
-            return None
-        return max(0.02, parsed_sec)
+    return jittered_retry_delay(retry_idx, parsed_sec, remaining_sec)
 
-    base_delay: float = min(5.0, 0.5 * (2**retry_idx))
-    jitter: float = random.uniform(0.01, 0.15)  # noqa: S311
-    return base_delay + jitter
+
+def _remaining_sec(deadline: float | None) -> float | None:
+    if deadline is None:
+        return None
+    return max(0.0, deadline - asyncio.get_running_loop().time())
+
+
+def _slice_attempt_timeout(timeout_sec: float, deadline: float | None) -> float | None:
+    if deadline is None:
+        return max(0.05, timeout_sec)
+    remaining = deadline - asyncio.get_running_loop().time()
+    if remaining <= 0.05:
+        return None
+    return min(timeout_sec, remaining)
 
 
 def _normalize_media_pairs(
@@ -229,6 +265,38 @@ def _normalize_media_pairs(
     return []
 
 
+def _canonicalize_image_pairs(pairs: list[tuple[bytes, str]]) -> list[tuple[bytes, str]]:
+    """Strip EXIF/polyglot tails and derive canonical MIME strictly from decoded image bytes."""
+    normalized: list[tuple[bytes, str]] = []
+    for raw_bytes, _declared_mime in pairs:
+        try:
+            clean_bytes, clean_mime = normalize_image_for_downstream(raw_bytes)
+            normalized.append((clean_bytes, clean_mime))
+        except InvalidMediaError:
+            logger.warning("Dropped invalid or animated image before LLM egress.")
+    return normalized
+
+
+def _canonicalize_audio_pairs(pairs: list[tuple[bytes, str]]) -> list[tuple[bytes, str, str]]:
+    """Derive canonical audio MIME & OpenAI format strictly from magic headers (never octet-stream)."""
+    normalized: list[tuple[bytes, str, str]] = []
+    aud_total = 0
+    for raw_bytes, _declared_mime in pairs:
+        if aud_total + len(raw_bytes) > MAX_LLM_AUDIO_BYTES:
+            continue
+        detected = detect_audio_format(raw_bytes)
+        if detected is None:
+            logger.warning("Dropped unrecognized audio payload before LLM egress.")
+            continue
+        av_fmt, canonical_mime = detected
+        openai_fmt = _AUDIO_AV_TO_OPENAI_FORMAT.get(av_fmt)
+        if not openai_fmt:
+            continue
+        normalized.append((raw_bytes, canonical_mime, openai_fmt))
+        aud_total += len(raw_bytes)
+    return normalized
+
+
 def _build_openai_user_content(
     prompt: str,
     image_bytes: bytes | None,
@@ -238,20 +306,25 @@ def _build_openai_user_content(
     include_audio: bool = True,
     images: list[tuple[bytes, str]] | None = None,
     audios: list[tuple[bytes, str]] | None = None,
+    *,
+    canonical_images: list[tuple[bytes, str]] | None = None,
+    canonical_audios: list[tuple[bytes, str, str]] | None = None,
 ) -> str | list[dict[str, Any]]:
-    img_list = _normalize_media_pairs(image_bytes, image_mime, images, MAX_LLM_IMAGES)
-    aud_list = (
-        _normalize_media_pairs(audio_bytes, audio_mime, audios, 1)
-        if include_audio
-        else []
+    img_list = (
+        canonical_images
+        if canonical_images is not None
+        else _canonicalize_image_pairs(
+            _normalize_media_pairs(image_bytes, image_mime, images, MAX_LLM_IMAGES)
+        )
     )
-    # Enforce audio payload ceiling for OpenAI-compatible gateways (local STT carries full transcripts)
-    bounded_auds: list[tuple[bytes, str]] = []
-    aud_total = 0
-    for ab, am in aud_list:
-        if aud_total + len(ab) <= MAX_LLM_AUDIO_BYTES:
-            bounded_auds.append((ab, am))
-            aud_total += len(ab)
+    if not include_audio:
+        bounded_auds: list[tuple[bytes, str, str]] = []
+    elif canonical_audios is not None:
+        bounded_auds = canonical_audios
+    else:
+        bounded_auds = _canonicalize_audio_pairs(
+            _normalize_media_pairs(audio_bytes, audio_mime, audios, 1)
+        )
 
     if not img_list and not bounded_auds:
         return prompt
@@ -260,11 +333,43 @@ def _build_openai_user_content(
     for ib, im in img_list:
         b64_img = base64.b64encode(ib).decode("ascii")
         parts.append({"type": "image_url", "image_url": {"url": f"data:{im};base64,{b64_img}"}})
-    for ab, am in bounded_auds:
+    for ab, _am, fmt in bounded_auds:
         b64_aud = base64.b64encode(ab).decode("ascii")
-        fmt = am.split("/")[-1].lower().replace("mpeg", "mp3").replace("x-wav", "wav")
         parts.append({"type": "input_audio", "input_audio": {"data": b64_aud, "format": fmt}})
     return parts
+
+
+def _compose_openai_user_content(
+    prompt: str,
+    image_parts: list[dict[str, Any]],
+    audio_parts: list[dict[str, Any]],
+    *,
+    include_audio: bool,
+) -> str | list[dict[str, Any]]:
+    active_audio = audio_parts if include_audio else []
+    if not image_parts and not active_audio:
+        return prompt
+    return [{"type": "text", "text": prompt}, *image_parts, *active_audio]
+
+
+async def _post_openai_bounded(
+    client: httpx.AsyncClient,
+    endpoint: str,
+    api_key: str,
+    payload: dict[str, Any],
+    attempt_timeout: float,
+) -> httpx.Response:
+    req_timeout = httpx.Timeout(attempt_timeout, connect=min(8.0, attempt_timeout))
+    async with asyncio.timeout(attempt_timeout):
+        return await client.post(
+            endpoint,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=req_timeout,
+        )
 
 
 async def _call_openai_key(
@@ -282,26 +387,49 @@ async def _call_openai_key(
     failover_cooldown_out: list[float] | None = None,
     images: list[tuple[bytes, str]] | None = None,
     audios: list[tuple[bytes, str]] | None = None,
+    deadline: float | None = None,
 ) -> tuple[GeminiStructuredSchema | None, str | None, int, str | None]:
     attempts = 0
     use_json_format = True
     include_audio = True
-    has_any_audio = bool(audio_bytes or audios)
+    json_parse_retries = 0
+    canon_images = await asyncio.to_thread(
+        _canonicalize_image_pairs,
+        _normalize_media_pairs(image_bytes, image_mime, images, MAX_LLM_IMAGES),
+    )
+    canon_audios = _canonicalize_audio_pairs(
+        _normalize_media_pairs(audio_bytes, audio_mime, audios, 1)
+    )
+    has_any_audio = bool(canon_audios)
+    encoded_image_parts: list[dict[str, Any]] = [
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:{im};base64,{base64.b64encode(ib).decode('ascii')}"},
+        }
+        for ib, im in canon_images
+    ]
+    encoded_audio_parts: list[dict[str, Any]] = [
+        {
+            "type": "input_audio",
+            "input_audio": {"data": base64.b64encode(ab).decode("ascii"), "format": fmt},
+        }
+        for ab, _am, fmt in canon_audios
+    ]
     last_err = "UNKNOWN_OPENAI_ERROR"
 
-    timeout = httpx.Timeout(timeout_sec, connect=min(8.0, timeout_sec))
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    base_timeout = httpx.Timeout(timeout_sec, connect=min(8.0, timeout_sec))
+    async with httpx.AsyncClient(timeout=base_timeout) as client:
         for retry_idx in range(max_retries + 1):
+            attempt_timeout = _slice_attempt_timeout(timeout_sec, deadline)
+            if attempt_timeout is None:
+                return None, None, attempts, "TIMEOUT"
+
             attempts += 1
-            user_content = _build_openai_user_content(
+            user_content = _compose_openai_user_content(
                 prompt,
-                image_bytes,
-                image_mime,
-                audio_bytes,
-                audio_mime,
+                encoded_image_parts,
+                encoded_audio_parts,
                 include_audio=include_audio,
-                images=images,
-                audios=audios,
             )
             payload: dict[str, Any] = {
                 "model": model_name,
@@ -315,18 +443,13 @@ async def _call_openai_key(
                 payload["response_format"] = {"type": "json_object"}
 
             try:
-                resp = await client.post(
-                    endpoint,
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=payload,
+                resp = await _post_openai_bounded(
+                    client, endpoint, api_key, payload, attempt_timeout
                 )
-            except httpx.TimeoutException:
+            except (TimeoutError, httpx.TimeoutException):
                 last_err = "TIMEOUT"
                 if retry_idx < max_retries:
-                    delay = _compute_backoff_sec(retry_idx, None)
+                    delay = jittered_retry_delay(retry_idx, None, _remaining_sec(deadline))
                     if delay is not None:
                         await asyncio.sleep(delay)
                         continue
@@ -334,7 +457,7 @@ async def _call_openai_key(
             except httpx.HTTPError:
                 last_err = "NETWORK_TRANSPORT_ERROR"
                 if retry_idx < max_retries:
-                    delay = _compute_backoff_sec(retry_idx, None)
+                    delay = jittered_retry_delay(retry_idx, None, _remaining_sec(deadline))
                     if delay is not None:
                         await asyncio.sleep(delay)
                         continue
@@ -343,37 +466,23 @@ async def _call_openai_key(
             # Step 1 compat: drop response_format FIRST while preserving audio attachment
             if resp.status_code in (400, 422) and use_json_format:
                 use_json_format = False
+                compat_timeout = _slice_attempt_timeout(timeout_sec, deadline)
+                if compat_timeout is None:
+                    return None, None, attempts, "TIMEOUT"
                 attempts += 1
                 no_fmt_payload = {
                     "model": model_name,
                     "temperature": 0.1,
                     "messages": [
                         {"role": "system", "content": STRUCTURED_SYSTEM_INSTRUCTION},
-                        {
-                            "role": "user",
-                            "content": _build_openai_user_content(
-                                prompt,
-                                image_bytes,
-                                image_mime,
-                                audio_bytes,
-                                audio_mime,
-                                include_audio=include_audio,
-                                images=images,
-                                audios=audios,
-                            ),
-                        },
+                        {"role": "user", "content": user_content},
                     ],
                 }
                 try:
-                    resp = await client.post(
-                        endpoint,
-                        headers={
-                            "Authorization": f"Bearer {api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json=no_fmt_payload,
+                    resp = await _post_openai_bounded(
+                        client, endpoint, api_key, no_fmt_payload, compat_timeout
                     )
-                except httpx.TimeoutException:
+                except (TimeoutError, httpx.TimeoutException):
                     return None, None, attempts, "TIMEOUT"
                 except httpx.HTTPError:
                     return None, None, attempts, "NETWORK_TRANSPORT_ERROR"
@@ -383,37 +492,29 @@ async def _call_openai_key(
                 if not has_non_audio_evidence:
                     return None, None, attempts, "UNSUPPORTED_AUDIO_INPUT"
                 include_audio = False
+                audio_compat_timeout = _slice_attempt_timeout(timeout_sec, deadline)
+                if audio_compat_timeout is None:
+                    return None, None, attempts, "TIMEOUT"
                 attempts += 1
+                no_audio_content = _compose_openai_user_content(
+                    prompt,
+                    encoded_image_parts,
+                    encoded_audio_parts,
+                    include_audio=False,
+                )
                 no_audio_payload = {
                     "model": model_name,
                     "temperature": 0.1,
                     "messages": [
                         {"role": "system", "content": STRUCTURED_SYSTEM_INSTRUCTION},
-                        {
-                            "role": "user",
-                            "content": _build_openai_user_content(
-                                prompt,
-                                image_bytes,
-                                image_mime,
-                                None,
-                                audio_mime,
-                                include_audio=False,
-                                images=images,
-                                audios=None,
-                            ),
-                        },
+                        {"role": "user", "content": no_audio_content},
                     ],
                 }
                 try:
-                    resp = await client.post(
-                        endpoint,
-                        headers={
-                            "Authorization": f"Bearer {api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json=no_audio_payload,
+                    resp = await _post_openai_bounded(
+                        client, endpoint, api_key, no_audio_payload, audio_compat_timeout
                     )
-                except httpx.TimeoutException:
+                except (TimeoutError, httpx.TimeoutException):
                     return None, None, attempts, "TIMEOUT"
                 except httpx.HTTPError:
                     return None, None, attempts, "NETWORK_TRANSPORT_ERROR"
@@ -427,15 +528,11 @@ async def _call_openai_key(
                 if ra_sec is not None and ra_sec > MAX_INTERACTIVE_RETRY_WAIT_SEC:
                     return None, None, attempts, f"{last_err}_RETRY_AFTER_EXCEEDED"
                 if retry_idx < max_retries:
-                    delay = (
-                        max(0.02, ra_sec)
-                        if ra_sec is not None
-                        else _compute_backoff_sec(retry_idx, None)
-                    )
+                    delay = jittered_retry_delay(retry_idx, ra_sec, _remaining_sec(deadline))
                     if delay is not None:
                         await asyncio.sleep(delay)
                         continue
-                    return None, None, attempts, f"{last_err}_RETRY_AFTER_EXCEEDED"
+                    return None, None, attempts, last_err
                 if ra_sec is not None and ra_sec > 0 and failover_cooldown_out is not None:
                     failover_cooldown_out.append(ra_sec)
                 return None, None, attempts, last_err
@@ -456,7 +553,7 @@ async def _call_openai_key(
                 if raw_content is None:
                     last_err = "EMPTY_COMPLETION_CONTENT"
                     if retry_idx < max_retries:
-                        delay = _compute_backoff_sec(retry_idx, None)
+                        delay = jittered_retry_delay(retry_idx, None, _remaining_sec(deadline))
                         if delay is not None:
                             await asyncio.sleep(delay)
                             continue
@@ -466,8 +563,9 @@ async def _call_openai_key(
             except Exception as exc:
                 logger.warning("Failed to parse structured JSON from CPA (%s).", type(exc).__name__)
                 last_err = "INVALID_STRUCTURED_JSON"
-                if retry_idx < max_retries:
-                    delay = _compute_backoff_sec(retry_idx, None)
+                if retry_idx < max_retries and json_parse_retries < MAX_JSON_PARSE_RETRIES:
+                    json_parse_retries += 1
+                    delay = jittered_retry_delay(retry_idx, None, _remaining_sec(deadline))
                     if delay is not None:
                         await asyncio.sleep(delay)
                         continue
@@ -525,15 +623,20 @@ async def _call_google_genai_key(
     failover_cooldown_out: list[float] | None = None,
     images: list[tuple[bytes, str]] | None = None,
     audios: list[tuple[bytes, str]] | None = None,
+    deadline: float | None = None,
 ) -> tuple[GeminiStructuredSchema | None, str | None, int, str | None]:
-    media_parts: list[types.Part] = []
-    for ib, im in _normalize_media_pairs(image_bytes, image_mime, images, MAX_LLM_IMAGES):
-        media_parts.append(types.Part.from_bytes(data=ib, mime_type=im))
-    aud_total = 0
-    for ab, am in _normalize_media_pairs(audio_bytes, audio_mime, audios, 2):
-        if aud_total + len(ab) <= MAX_LLM_AUDIO_BYTES:
-            media_parts.append(types.Part.from_bytes(data=ab, mime_type=am))
-            aud_total += len(ab)
+    canon_images = await asyncio.to_thread(
+        _canonicalize_image_pairs,
+        _normalize_media_pairs(image_bytes, image_mime, images, MAX_LLM_IMAGES),
+    )
+    canon_audios = _canonicalize_audio_pairs(
+        _normalize_media_pairs(audio_bytes, audio_mime, audios, 2)
+    )
+    media_parts: list[types.Part] = [
+        types.Part.from_bytes(data=ib, mime_type=im) for ib, im in canon_images
+    ]
+    for ab, am, _fmt in canon_audios:
+        media_parts.append(types.Part.from_bytes(data=ab, mime_type=am))
 
     safety = [
         types.SafetySetting(category=cat, threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH)
@@ -554,6 +657,7 @@ async def _call_google_genai_key(
 
     contents: list[Any] = [*media_parts, prompt]
     attempts = 0
+    json_parse_retries = 0
     last_err = "GOOGLE_GENAI_ERROR"
     try:
         client = genai.Client(api_key=api_key)
@@ -562,6 +666,10 @@ async def _call_google_genai_key(
 
     try:
         for retry_idx in range(max_retries + 1):
+            attempt_timeout = _slice_attempt_timeout(timeout_sec, deadline)
+            if attempt_timeout is None:
+                return None, None, attempts, "TIMEOUT"
+
             attempts += 1
             retry_after_hdr: str | None = None
             try:
@@ -571,22 +679,39 @@ async def _call_google_genai_key(
                         contents=contents,
                         config=config,
                     ),
-                    timeout=timeout_sec,
+                    timeout=attempt_timeout,
                 )
                 actual_model = str(getattr(resp, "model_version", None) or model_name)
                 if _is_google_safety_blocked(resp):
                     return None, actual_model, attempts, "SAFETY_BLOCKED"
-                if isinstance(resp.parsed, GeminiStructuredSchema):
-                    return resp.parsed, actual_model, attempts, None
-                if isinstance(resp.parsed, dict):
-                    return GeminiStructuredSchema.model_validate(resp.parsed), actual_model, attempts, None
-                if getattr(resp, "text", None):
-                    return parse_structured_llm_json(resp.text), actual_model, attempts, None
-                last_err = "EMPTY_COMPLETION_CONTENT"
-            except TimeoutError:
+                try:
+                    if isinstance(resp.parsed, GeminiStructuredSchema):
+                        return resp.parsed, actual_model, attempts, None
+                    if isinstance(resp.parsed, dict):
+                        return (
+                            GeminiStructuredSchema.model_validate(resp.parsed),
+                            actual_model,
+                            attempts,
+                            None,
+                        )
+                    if getattr(resp, "text", None):
+                        return parse_structured_llm_json(resp.text), actual_model, attempts, None
+                    last_err = "EMPTY_COMPLETION_CONTENT"
+                except (ValidationError, ValueError, json.JSONDecodeError) as exc:
+                    logger.warning(
+                        "Failed to parse structured JSON from Google GenAI (%s).",
+                        type(exc).__name__,
+                    )
+                    last_err = "INVALID_STRUCTURED_JSON"
+                    if json_parse_retries >= MAX_JSON_PARSE_RETRIES:
+                        return None, actual_model, attempts, last_err
+                    json_parse_retries += 1
+            except (TimeoutError, httpx.TimeoutException):
                 last_err = "TIMEOUT"
             except asyncio.CancelledError:
                 raise
+            except httpx.TransportError:
+                last_err = "NETWORK_TRANSPORT_ERROR"
             except Exception as exc:
                 status_code, retry_after_hdr = _extract_google_api_error_info(exc)
                 if status_code is not None:
@@ -606,11 +731,14 @@ async def _call_google_genai_key(
                 else:
                     last_err = type(exc).__name__.upper()
             if retry_idx < max_retries:
-                delay = _compute_backoff_sec(retry_idx, retry_after_hdr)
+                ra_sec = _parse_retry_after_sec(retry_after_hdr)
+                delay = jittered_retry_delay(retry_idx, ra_sec, _remaining_sec(deadline))
                 if delay is not None:
                     await asyncio.sleep(delay)
                 else:
-                    return None, None, attempts, f"{last_err}_RETRY_AFTER_EXCEEDED"
+                    if ra_sec is not None and ra_sec > MAX_INTERACTIVE_RETRY_WAIT_SEC:
+                        return None, None, attempts, f"{last_err}_RETRY_AFTER_EXCEEDED"
+                    return None, None, attempts, last_err
         return None, None, attempts, last_err
     finally:
         aclose_fn = getattr(client.aio, "aclose", None)
@@ -642,10 +770,7 @@ async def execute_llm_call(
             error_code="NO_API_KEY",
         )
 
-    t_start = time.perf_counter()
-    total_attempts = 0
-    last_error = "LLM_UNAVAILABLE"
-
+    endpoint = ""
     if provider == "openai_compatible":
         try:
             endpoint = normalize_openai_chat_url(settings.gemini_base_url)
@@ -655,36 +780,97 @@ async def execute_llm_call(
                 configured_model=settings.gemini_model,
                 error_code="INVALID_BASE_URL",
             )
+        endpoint_key = endpoint
+    else:
+        endpoint_key = "google_genai"
 
+    allowed, is_half_open_probe = circuit_try_acquire(endpoint_key)
+    if not allowed:
+        return LLMCallOutcome(
+            provider=provider,
+            configured_model=settings.gemini_model,
+            error_code="CIRCUIT_BREAKER_OPEN",
+        )
+
+    try:
+        sem = await acquire_llm_slot()
+    except BaseException:
+        if is_half_open_probe:
+            circuit_release_probe(endpoint_key)
+        raise
+    if sem is None:
+        if is_half_open_probe:
+            circuit_release_probe(endpoint_key)
+        return LLMCallOutcome(
+            provider=provider,
+            configured_model=settings.gemini_model,
+            error_code="LLM_CONCURRENCY_LIMITED",
+        )
+
+    t_start = time.perf_counter()
+    deadline = compute_overall_deadline(settings.llm_timeout_sec)
+    total_attempts = 0
+    last_error = "LLM_UNAVAILABLE"
+    recorded_outcome = False
+
+    try:
         pending_cooldown: list[float] = []
         for key_idx, key in enumerate(keys):
-            if key_idx > 0 and pending_cooldown:
-                wait_sec = pending_cooldown.pop()
-                pending_cooldown.clear()
-                if wait_sec > MAX_INTERACTIVE_RETRY_WAIT_SEC:
+            if key_idx > 0:
+                rem = _remaining_sec(deadline)
+                if rem is not None and rem <= 0.1:
                     break
-                await asyncio.sleep(wait_sec)
-            parsed, actual_model, used_attempts, err = await _call_openai_key(
-                endpoint=endpoint,
-                api_key=key,
-                model_name=settings.gemini_model,
-                prompt=prompt,
-                timeout_sec=settings.llm_timeout_sec,
-                max_retries=settings.llm_max_retries,
-                image_bytes=image_bytes,
-                image_mime=image_mime,
-                audio_bytes=audio_bytes,
-                audio_mime=audio_mime,
-                has_non_audio_evidence=has_non_audio_evidence,
-                failover_cooldown_out=pending_cooldown,
-                images=images,
-                audios=audios,
-            )
+                if pending_cooldown:
+                    wait_sec = pending_cooldown.pop()
+                    pending_cooldown.clear()
+                    delay = jittered_retry_delay(0, wait_sec, rem)
+                    if delay is None:
+                        break
+                    await asyncio.sleep(delay)
+
+            if provider == "openai_compatible":
+                parsed, actual_model, used_attempts, err = await _call_openai_key(
+                    endpoint=endpoint,
+                    api_key=key,
+                    model_name=settings.gemini_model,
+                    prompt=prompt,
+                    timeout_sec=settings.llm_timeout_sec,
+                    max_retries=settings.llm_max_retries,
+                    image_bytes=image_bytes,
+                    image_mime=image_mime,
+                    audio_bytes=audio_bytes,
+                    audio_mime=audio_mime,
+                    has_non_audio_evidence=has_non_audio_evidence,
+                    failover_cooldown_out=pending_cooldown,
+                    images=images,
+                    audios=audios,
+                    deadline=deadline,
+                )
+            else:
+                parsed, actual_model, used_attempts, err = await _call_google_genai_key(
+                    api_key=key,
+                    model_name=settings.gemini_model,
+                    prompt=prompt,
+                    timeout_sec=settings.llm_timeout_sec,
+                    max_retries=settings.llm_max_retries,
+                    image_bytes=image_bytes,
+                    image_mime=image_mime,
+                    audio_bytes=audio_bytes,
+                    audio_mime=audio_mime,
+                    failover_cooldown_out=pending_cooldown,
+                    images=images,
+                    audios=audios,
+                    deadline=deadline,
+                )
             total_attempts += used_attempts
             if parsed is not None:
+                circuit_record_outcome(
+                    endpoint_key, None, is_half_open_probe=is_half_open_probe
+                )
+                recorded_outcome = True
                 return LLMCallOutcome(
                     parsed=parsed,
-                    provider="openai_compatible",
+                    provider=provider,
                     configured_model=settings.gemini_model,
                     actual_model=actual_model or settings.gemini_model,
                     latency_ms=int((time.perf_counter() - t_start) * 1000),
@@ -693,54 +879,22 @@ async def execute_llm_call(
                 )
             if err:
                 last_error = err
-                if err in ("SAFETY_BLOCKED", "UNSUPPORTED_AUDIO_INPUT") or err.endswith(
-                    "_RETRY_AFTER_EXCEEDED"
-                ):
-                    break
-    else:
-        pending_google_cooldown: list[float] = []
-        for key_idx, key in enumerate(keys):
-            if key_idx > 0 and pending_google_cooldown:
-                wait_sec = pending_google_cooldown.pop()
-                pending_google_cooldown.clear()
-                if wait_sec > MAX_INTERACTIVE_RETRY_WAIT_SEC:
-                    break
-                await asyncio.sleep(wait_sec)
-            parsed, actual_model, used_attempts, err = await _call_google_genai_key(
-                api_key=key,
-                model_name=settings.gemini_model,
-                prompt=prompt,
-                timeout_sec=settings.llm_timeout_sec,
-                max_retries=settings.llm_max_retries,
-                image_bytes=image_bytes,
-                image_mime=image_mime,
-                audio_bytes=audio_bytes,
-                audio_mime=audio_mime,
-                failover_cooldown_out=pending_google_cooldown,
-                images=images,
-                audios=audios,
-            )
-            total_attempts += used_attempts
-            if parsed is not None:
-                return LLMCallOutcome(
-                    parsed=parsed,
-                    provider="google_genai",
-                    configured_model=settings.gemini_model,
-                    actual_model=actual_model or settings.gemini_model,
-                    latency_ms=int((time.perf_counter() - t_start) * 1000),
-                    attempts=total_attempts,
-                    used_backup_key=(key_idx > 0),
-                )
-            if err:
-                last_error = err
-                if err == "SAFETY_BLOCKED" or err.endswith("_RETRY_AFTER_EXCEEDED"):
+                if not should_failover_backup_key(err):
                     break
 
-    return LLMCallOutcome(
-        parsed=None,
-        provider=provider,
-        configured_model=settings.gemini_model,
-        latency_ms=int((time.perf_counter() - t_start) * 1000),
-        attempts=total_attempts,
-        error_code=last_error,
-    )
+        circuit_record_outcome(
+            endpoint_key, last_error, is_half_open_probe=is_half_open_probe
+        )
+        recorded_outcome = True
+        return LLMCallOutcome(
+            parsed=None,
+            provider=provider,
+            configured_model=settings.gemini_model,
+            latency_ms=int((time.perf_counter() - t_start) * 1000),
+            attempts=total_attempts,
+            error_code=last_error,
+        )
+    finally:
+        if not recorded_outcome and is_half_open_probe:
+            circuit_release_probe(endpoint_key)
+        sem.release()

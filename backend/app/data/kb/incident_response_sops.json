@@ -1,0 +1,206 @@
+{
+  "version": "1.0.0",
+  "source": "incident_response_sops",
+  "chunks": [
+    {
+      "chunk_id": "sop_transferred_money_60min",
+      "category": "incident_response",
+      "title": "Đã lỡ chuyển tiền cho kẻ lừa đảo: 60 phút vàng cần làm ngay",
+      "content": "Ngừng chuyển thêm bất kỳ khoản tiền nào khác. Gọi ngay tổng đài chính thức in mặt sau thẻ ngân hàng hoặc mục Hỗ trợ trong ứng dụng ngân hàng để báo giao dịch nghi lừa đảo, yêu cầu tra soát và hỗ trợ cảnh báo tài khoản nhận. Chụp lưu biên lai, mã giao dịch, số tài khoản nhận và tin nhắn. Tuyệt đối không tin quảng cáo dịch vụ lấy lại tiền thu phí trước trên mạng.",
+      "tags": ["chuyển tiền nhầm", "lỡ chuyển tiền", "bị lừa chuyển khoản", "60 phút vàng", "tra soát", "khóa giao dịch", "lừa đảo"],
+      "scam_types": ["SCAM_IMPERSONATION", "SCAM_TASK_INVEST_LOAN", "SCAM_URGENT_BORROW", "SCAM_PHISHING_APK_OTP"],
+      "official_domains": ["canhbao.khonggianmang.vn", "congthongtin.bocongan.gov.vn"],
+      "verified_channels": ["Tổng đài in mặt sau thẻ ngân hàng", "Ứng dụng ngân hàng chính thức", "Công an xã/phường gần nhất"]
+    },
+    {
+      "chunk_id": "sop_bank_dispute_freeze",
+      "category": "incident_response",
+      "title": "Quy trình yêu cầu ngân hàng tra soát và hỗ trợ phong tỏa tài khoản nhận",
+      "content": "Chuẩn bị mã giao dịch, ngày giờ chuyển khoản, số tiền, ngân hàng nhận và tên chủ tài khoản nhận. Liên hệ tổng đài in mặt sau thẻ để ghi nhận yêu cầu tra soát khẩn, sau đó mang CCCD cùng giấy xác nhận tiếp nhận tố giác của Công an ra chi nhánh ngân hàng gần nhất để phối hợp tra soát liên ngân hàng. Không giao thông tin thẻ cho bên thứ ba nhận làm hộ.",
+      "tags": ["tra soát ngân hàng", "phong tỏa tài khoản", "khiếu nại chuyển khoản", "hoàn tiền ngân hàng", "chi nhánh ngân hàng"],
+      "scam_types": ["SCAM_IMPERSONATION", "SCAM_TASK_INVEST_LOAN", "SCAM_URGENT_BORROW"],
+      "official_domains": [],
+      "verified_channels": ["Tổng đài in mặt sau thẻ ngân hàng", "Quầy giao dịch chi nhánh ngân hàng"]
+    },
+    {
+      "chunk_id": "sop_leaked_otp_pin_password",
+      "category": "incident_response",
+      "title": "Lỡ đọc mã OTP, SmartOTP, PIN hoặc mật khẩu ngân hàng",
+      "content": "Mở ngay ứng dụng ngân hàng chính thức hoặc gọi tổng đài in mặt sau thẻ để khóa tạm thời tài khoản và thẻ. Dùng một thiết bị khác sạch mã độc để đổi mật khẩu đăng nhập, mã PIN SmartOTP và mật khẩu email liên kết. Kiểm tra danh sách thiết bị đang đăng nhập, đăng xuất tất cả phiên lạ và rà soát lịch sử giao dịch phát sinh để báo tra soát ngay.",
+      "tags": ["lộ otp", "đọc mã otp", "lộ smartotp", "lộ mật khẩu ngân hàng", "lộ mã pin", "khóa tài khoản khẩn cấp"],
+      "scam_types": ["SCAM_PHISHING_APK_OTP", "scam_napas_sms_points", "scam_credit_card_upgrade_cashout", "scam_sms_brandname_bts_spoof"],
+      "official_domains": [],
+      "verified_channels": ["Tổng đài in mặt sau thẻ ngân hàng", "Ứng dụng ngân hàng chính thức"]
+    },
+    {
+      "chunk_id": "sop_leaked_card_cvv",
+      "category": "incident_response",
+      "title": "Lộ số thẻ thanh toán, ngày hết hạn và 3 số CVV/CVC mặt sau thẻ",
+      "content": "Vào ngay ứng dụng ngân hàng chính thức để tắt tính năng thanh toán trực tuyến và thanh toán quốc tế, đồng thời khóa thẻ khẩn cấp. Gọi tổng đài in mặt sau thẻ yêu cầu khóa vĩnh viễn thẻ bị lộ và phát hành thẻ mới với dãy số mới. Theo dõi sao kê thẻ và gửi yêu cầu tra soát ngay nếu phát hiện giao dịch không do bạn thực hiện.",
+      "tags": ["lộ cvv", "lộ cvc", "lộ số thẻ tín dụng", "khóa thẻ tín dụng", "nâng hạn mức thẻ", "rút tiền mặt thẻ"],
+      "scam_types": ["SCAM_PHISHING_APK_OTP", "scam_credit_card_upgrade_cashout", "scam_napas_sms_points"],
+      "official_domains": [],
+      "verified_channels": ["Tổng đài in mặt sau thẻ ngân hàng", "Ứng dụng ngân hàng chính thức"]
+    },
+    {
+      "chunk_id": "sop_installed_fake_apk_disconnect",
+      "category": "incident_response",
+      "title": "Đã cài tệp .apk giả mạo (VNeID, Cục Thuế, EVN): Ngắt mạng khẩn cấp",
+      "content": "Bật ngay Chế độ máy bay, tắt Wi-Fi và dữ liệu di động 4G/5G để cắt đứt kết nối điều khiển từ xa của mã độc. Tuyệt đối không mở ứng dụng ngân hàng, không nhập mật khẩu hay mã PIN trên chiếc điện thoại nghi nhiễm. Nếu màn hình tự nhấp nháy hoặc nóng bất thường, tháo khay SIM ngay và dùng điện thoại khác gọi tổng đài in mặt sau thẻ để khóa tài khoản ngân hàng.",
+      "tags": ["cài file apk", "app vneid giả", "app thuế giả", "app điện lực giả", "điện thoại bị chiếm quyền", "ngắt mạng", "chế độ máy bay"],
+      "scam_types": ["SCAM_PHISHING_APK_OTP", "SCAM_IMPERSONATION", "scam_police_vneid_apk", "scam_evn_tax_apk"],
+      "official_domains": ["vneid.gov.vn", "gdt.gov.vn", "evn.com.vn"],
+      "verified_channels": ["Tổng đài in mặt sau thẻ ngân hàng"]
+    },
+    {
+      "chunk_id": "sop_installed_fake_apk_cleanup",
+      "category": "incident_response",
+      "title": "Gỡ bỏ ứng dụng .apk độc hại và thu hồi quyền Trợ năng (Accessibility)",
+      "content": "Giữ điện thoại ngắt mạng, vào Cài đặt > Trợ năng (Accessibility) và Quản trị thiết bị (Device Admin) để tắt mọi quyền đã cấp cho ứng dụng lạ rồi gỡ cài đặt ứng dụng đó. Nếu không gỡ được hoặc nghi mã độc ẩn sâu, hãy sao lưu ảnh tài liệu quan trọng (không sao lưu ứng dụng) rồi Khôi phục cài đặt gốc (Factory Reset). Sau khi sạch máy, đổi toàn bộ mật khẩu ngân hàng và email.",
+      "tags": ["gỡ app apk", "quyền trợ năng", "accessibility", "factory reset", "khôi phục cài đặt gốc", "mã độc android", "diệt mã độc"],
+      "scam_types": ["SCAM_PHISHING_APK_OTP", "scam_police_vneid_apk", "scam_evn_tax_apk", "scam_biometric_qd2345_support"],
+      "official_domains": [],
+      "verified_channels": ["Trung tâm bảo hành hãng điện thoại chính hãng"]
+    },
+    {
+      "chunk_id": "sop_leaked_cccd_ekyc_selfie",
+      "category": "incident_response",
+      "title": "Lỡ gửi ảnh CCCD hai mặt hoặc quay video khuôn mặt sinh trắc học",
+      "content": "Soạn tin nhắn TTTB gửi 1414 để kiểm tra ngay các số thuê bao di động đứng tên CCCD của bạn và báo nhà mạng hủy số lạ nếu có. Kiểm tra các tài khoản ngân hàng hoặc ví điện tử liên kết và tăng cường xác thực sinh trắc học trên ứng dụng chính thức. Cảnh báo người thân không tin ảnh CCCD bị gửi để vay tiền, đồng thời trình báo Công an phường để ghi nhận thời điểm lộ giấy tờ.",
+      "tags": ["lộ cccd", "lộ căn cước công dân", "gửi ảnh cmnd", "quay video khuôn mặt", "ekyc giả", "sinh trắc học", "1414"],
+      "scam_types": ["SCAM_IMPERSONATION", "SCAM_PHISHING_APK_OTP", "scam_police_vneid_apk", "scam_upfront_loan_fee"],
+      "official_domains": ["vneid.gov.vn", "congthongtin.bocongan.gov.vn"],
+      "verified_channels": ["Cú pháp SMS miễn phí TTTB gửi 1414", "Công an xã/phường nơi cư trú"]
+    },
+    {
+      "chunk_id": "sop_clicked_phishing_link",
+      "category": "incident_response",
+      "title": "Đã bấm vào đường link lừa đảo hoặc đăng nhập trên trang web giả",
+      "content": "Đóng ngay trình duyệt chứa trang giả mạo và không nhập thêm bất kỳ mã xác nhận nào. Nếu chỉ mới bấm xem mà chưa nhập dữ liệu hay tải tệp .apk, xóa bộ nhớ đệm trình duyệt và kiểm tra thư mục Tải xuống. Nếu đã nhập mật khẩu hoặc số thẻ, dùng thiết bị sạch đổi mật khẩu ngay lập tức, đăng xuất toàn bộ phiên đăng nhập cũ và khóa thẻ trên ứng dụng ngân hàng chính thức.",
+      "tags": ["bấm link lạ", "click link lừa đảo", "trang web giả", "đăng nhập link giả", "phishing", "đổi mật khẩu"],
+      "scam_types": ["SCAM_PHISHING_APK_OTP", "scam_sms_brandname_bts_spoof", "scam_fake_shipper_membership", "scam_child_competition_vote_link"],
+      "official_domains": ["canhbao.khonggianmang.vn"],
+      "verified_channels": ["Ứng dụng ngân hàng chính thức", "Cổng canhbao.khonggianmang.vn"]
+    },
+    {
+      "chunk_id": "sop_merchant_fake_receipt_action",
+      "category": "incident_response",
+      "title": "Chủ cửa hàng nghi khách đưa ảnh biên lai chuyển khoản giả hoặc ảnh cũ",
+      "content": "Tuyệt đối không giao hàng và không hoàn trả tiền mặt chỉ dựa vào ảnh chụp màn hình biên lai. Mở trực tiếp ứng dụng ngân hàng chính thức của cửa hàng hoặc kiểm tra loa thông báo Soundbox để đối chiếu biến động số dư thực tế. Nếu tiền chưa về số dư, yêu cầu khách giữ hàng chờ tiền vào hoặc thanh toán phương thức khác; chụp lưu ảnh biên lai, mã giao dịch và camera quầy làm bằng chứng.",
+      "tags": ["biên lai giả", "bill giả", "chủ cửa hàng", "merchant", "chưa nhận được tiền", "soundbox", "số dư thực tế"],
+      "scam_types": ["merchant", "scam_merchant_fake_bill"],
+      "official_domains": [],
+      "verified_channels": ["Ứng dụng ngân hàng của cửa hàng", "Loa thông báo Soundbox chính thức"]
+    },
+    {
+      "chunk_id": "sop_merchant_counter_dispute",
+      "category": "incident_response",
+      "title": "Xử lý khi khách hối thúc giao hàng với lý do ngân hàng bảo trì hoặc nghẽn mạng",
+      "content": "Giữ thái độ lịch sự nhưng kiên quyết giữ hàng theo quy định cửa hàng: chỉ bàn giao khi tiền đã cộng thực tế vào số dư ứng dụng ngân hàng hoặc loa Soundbox báo nhận thành công. Không chuyển khoản hoàn lại tiền mặt nếu khách nói chuyển nhầm dư khi tài khoản chưa ghi có. Ghi nhận thông tin liên hệ và trích xuất camera nếu đối tượng có hành vi gây rối.",
+      "tags": ["nghẽn mạng liên ngân hàng", "ngân hàng bảo trì", "shipper đang đợi", "hối giao hàng", "tranh cãi tại quầy", "merchant"],
+      "scam_types": ["merchant", "scam_merchant_fake_bill"],
+      "official_domains": [],
+      "verified_channels": ["Ứng dụng ngân hàng của cửa hàng", "Công an phường hoặc bảo vệ tòa nhà"]
+    },
+    {
+      "chunk_id": "sop_merchant_qr_sticker_tampered",
+      "category": "incident_response",
+      "title": "Phát hiện bảng mã QR tại quầy thu ngân bị dán đè hoặc tráo tài khoản lạ",
+      "content": "Gỡ bỏ và ngừng sử dụng ngay bảng mã QR nghi bị dán đè, không để khách tiếp tục quét. Chụp ảnh nguyên trạng bảng mã, trích xuất video camera an ninh khu vực quầy và quét giải mã lưu lại số tài khoản kẻ gian đã tráo. Thông báo các khách vừa thanh toán kiểm tra biên lai và mang bằng chứng đến trình báo Công an phường nơi kinh doanh.",
+      "tags": ["dán đè mã qr", "tráo mã qr", "qr giả tại quầy", "quầy thu ngân", "merchant", "vietqr"],
+      "scam_types": ["merchant", "scam_qr_sticker_swap"],
+      "official_domains": [],
+      "verified_channels": ["Công an xã/phường nơi kinh doanh"]
+    },
+    {
+      "chunk_id": "sop_hijacked_zalo_facebook",
+      "category": "incident_response",
+      "title": "Bị chiếm quyền tài khoản Zalo, Facebook hoặc Telegram do bấm link giả",
+      "content": "Gọi điện thoại di động trực tiếp hoặc nhắn SMS báo ngay cho gia đình, bạn bè, đồng nghiệp biết tài khoản đã bị chiếm để tuyệt đối không chuyển tiền mượn gấp. Dùng chức năng khôi phục mật khẩu chính thức của Zalo/Facebook, đăng xuất tất cả thiết bị đang đăng nhập, xóa liên kết ứng dụng lạ, bật xác thực hai lớp 2FA và đổi mật khẩu email đi kèm.",
+      "tags": ["mất nick zalo", "hack facebook", "chiếm quyền zalo", "bình chọn cho bé", "bạn bè vay tiền", "khôi phục tài khoản"],
+      "scam_types": ["SCAM_URGENT_BORROW", "SCAM_PHISHING_APK_OTP", "scam_deepvoice_urgent_borrow", "scam_child_competition_vote_link"],
+      "official_domains": [],
+      "verified_channels": ["Trung tâm hỗ trợ chính thức trong ứng dụng Zalo/Facebook"]
+    },
+    {
+      "chunk_id": "sop_preserve_evidence_checklist",
+      "category": "incident_response",
+      "title": "Danh mục thu thập và bảo quản bằng chứng lừa đảo để trình báo",
+      "content": "Lưu đầy đủ ngay khi còn nguyên vẹn: ảnh chụp màn hình toàn bộ hội thoại (có rõ ngày giờ, tài khoản đối tượng), nhật ký cuộc gọi, số điện thoại liên hệ, số tài khoản ngân hàng nhận tiền, sao kê hoặc biên lai chuyển khoản có mã giao dịch, đường link và tệp nghi ngờ. Tải báo cáo bằng chứng PDF từ VeriShield AI để kẹp cùng đơn tường trình nộp cơ quan Công an.",
+      "tags": ["lưu bằng chứng", "thu thập chứng cứ", "hồ sơ trình báo", "báo cáo pdf", "sao kê giao dịch", "đơn tố giác"],
+      "scam_types": ["SCAM_IMPERSONATION", "SCAM_TASK_INVEST_LOAN", "SCAM_PHISHING_APK_OTP", "SCAM_URGENT_BORROW", "merchant"],
+      "official_domains": ["congthongtin.bocongan.gov.vn"],
+      "verified_channels": ["Báo cáo PDF từ VeriShield AI", "Sao kê có dấu xác nhận của ngân hàng"]
+    },
+    {
+      "chunk_id": "sop_report_police_a05_channels",
+      "category": "incident_response",
+      "title": "Kênh trình báo cơ quan Công an và phản ánh lừa đảo chính thức tại Việt Nam",
+      "content": "Mang CCCD, đơn trình báo sự việc và toàn bộ bằng chứng đã sao lưu đến trực tiếp Công an xã, phường, thị trấn nơi cư trú hoặc nơi phát sinh giao dịch để được tiếp nhận giải quyết theo thẩm quyền. Trường hợp khẩn cấp liên quan đe dọa an toàn cá nhân gọi 113. Có thể gửi phản ánh cảnh báo trang web/số tài khoản lừa đảo tại canhbao.khonggianmang.vn và theo dõi khuyến cáo tại congthongtin.bocongan.gov.vn.",
+      "tags": ["trình báo công an", "tố giác lừa đảo", "cục a05", "công an phường", "113", "canhbao.khonggianmang.vn", "báo cáo lừa đảo"],
+      "scam_types": ["SCAM_IMPERSONATION", "SCAM_TASK_INVEST_LOAN", "SCAM_PHISHING_APK_OTP", "SCAM_URGENT_BORROW", "merchant"],
+      "official_domains": ["canhbao.khonggianmang.vn", "congthongtin.bocongan.gov.vn", "bocongan.gov.vn"],
+      "verified_channels": ["Công an xã/phường/thị trấn trực tiếp", "Số khẩn cấp 113", "Cổng canhbao.khonggianmang.vn", "Cổng congthongtin.bocongan.gov.vn"]
+    },
+    {
+      "chunk_id": "sop_avoid_recovery_scam",
+      "category": "incident_response",
+      "title": "Cảnh giác lừa đảo lần 2: Dịch vụ lấy lại tiền bị lừa đảo trên mạng",
+      "content": "Tuyệt đối không liên hệ hay chuyển phí cho các trang Facebook, Zalo, TikTok mạo danh luật sư, Cục An ninh mạng (A05) hoặc chuyên gia công nghệ quảng cáo 'thu hồi tiền bị lừa 100%'. Cơ quan Công an chỉ tiếp nhận hồ sơ trực tiếp tại trụ sở và không bao giờ thu phí đặt cọc hay phí mở cổng đóng băng qua mạng. Mọi lời mời nạp thêm tiền để kéo tiền cũ về đều là lừa đảo tiếp diễn.",
+      "tags": ["lấy lại tiền lừa đảo", "thu hồi tiền bị lừa", "luật sư giả", "cục a05 giả", "lừa đảo lần 2", "recovery scam", "phí mở cổng"],
+      "scam_types": ["SCAM_IMPERSONATION", "scam_fake_recovery_lawyer"],
+      "official_domains": ["congthongtin.bocongan.gov.vn", "canhbao.khonggianmang.vn"],
+      "verified_channels": ["Trình báo trực tiếp tại trụ sở Công an địa phương"]
+    },
+    {
+      "chunk_id": "sop_emotional_stabilization_stop_loss",
+      "category": "incident_response",
+      "title": "Ổn định tâm lý và nguyên tắc cắt lỗ khi đang bị thao túng",
+      "content": "Nếu bạn đang hoảng loạn hoặc cảm thấy bị ép phải chuyển tiền gấp, hãy dừng thao tác, cúp máy và rời khỏi phòng kín ngay. Không tự trách bản thân - các kịch bản lừa đảo được dàn dựng rất tinh vi để thao túng tâm lý. Gọi ngay cho người thân hoặc bạn bè tin cậy kể lại sự việc để có góc nhìn tỉnh táo; tuyệt đối không chuyển thêm tiền với hy vọng gỡ lại số tiền đã mất.",
+      "tags": ["hoảng loạn", "bị thao túng tâm lý", "sợ hãi", "cắt lỗ", "bị lừa phải làm sao", "bình tĩnh", "cô lập"],
+      "scam_types": ["SCAM_IMPERSONATION", "SCAM_TASK_INVEST_LOAN", "SCAM_URGENT_BORROW"],
+      "official_domains": [],
+      "verified_channels": ["Người thân tin cậy", "Công an xã/phường gần nhất"]
+    },
+    {
+      "chunk_id": "sop_task_investment_stop_deposit",
+      "category": "incident_response",
+      "title": "Ứng phó khi đã nạp tiền vào nhiệm vụ CTV hoặc sàn đầu tư giả mạo",
+      "content": "Dừng nạp thêm tiền ngay lập tức. Dù đối tượng báo 'sai cú pháp', 'đơn liên hoàn chưa xong', hay bắt nộp 'thuế thu nhập cá nhân 10%' để mở khóa rút vốn, mọi khoản nộp thêm đều bị chiếm đoạt tiếp. Chụp lại giao diện ứng dụng/web, danh sách tài khoản nhóm chat và toàn bộ lịch sử chuyển khoản vào các số tài khoản trung gian để mang trình báo Công an.",
+      "tags": ["nạp tiền nhiệm vụ", "ctv chốt đơn", "sàn đầu tư giả", "sai cú pháp", "thuế rút tiền", "rút tiền gốc", "đơn liên hoàn"],
+      "scam_types": ["SCAM_TASK_INVEST_LOAN", "scam_task_ctv_commission", "scam_crypto_vip_investment"],
+      "official_domains": ["canhbao.khonggianmang.vn"],
+      "verified_channels": ["Công an xã/phường gần nhất", "Tổng đài in mặt sau thẻ ngân hàng"]
+    },
+    {
+      "chunk_id": "sop_shared_screen_remote_control",
+      "category": "incident_response",
+      "title": "Đã chia sẻ màn hình hoặc cài phần mềm điều khiển từ xa cho người lạ",
+      "content": "Ngắt ngay cuộc gọi video và tắt chia sẻ màn hình, sau đó bật Chế độ máy bay để cắt kết nối. Gỡ toàn bộ ứng dụng điều khiển từ xa hoặc ứng dụng vừa tải ngoài cửa hàng chính thức. Dùng thiết bị khác kiểm tra số dư, đổi mật khẩu ngân hàng, tắt sinh trắc học/thiết bị lạ và gọi tổng đài in mặt sau thẻ nếu thấy tin nhắn OTP đã hiện trên màn hình trong lúc chia sẻ.",
+      "tags": ["chia sẻ màn hình", "điều khiển từ xa", "hỗ trợ sinh trắc học", "gọi video zalo", "chiếm quyền điện thoại"],
+      "scam_types": ["SCAM_PHISHING_APK_OTP", "SCAM_IMPERSONATION", "scam_biometric_qd2345_support"],
+      "official_domains": [],
+      "verified_channels": ["Tổng đài in mặt sau thẻ ngân hàng", "Ứng dụng ngân hàng chính thức"]
+    },
+    {
+      "chunk_id": "sop_suspected_loan_extortion_harassment",
+      "category": "incident_response",
+      "title": "Bị đe dọa, ghép ảnh hoặc khủng bố danh bạ sau khi cài app vay tiền trái phép",
+      "content": "Tuyệt đối không chuyển thêm tiền 'phí xóa hồ sơ' hay lãi cắt cổ vì càng chuyển càng bị ép tiếp. Chụp lưu toàn bộ tin nhắn đe dọa, ảnh cắt ghép, số điện thoại gọi tới và số tài khoản nhận tiền. Chủ động nhắn tin thông báo sớm cho người thân, bạn bè, đồng nghiệp để họ không hoang mang và không chuyển tiền giúp, đồng thời nộp đơn trình báo tại Công an xã/phường.",
+      "tags": ["app vay tiền", "tín dụng đen", "khủng bố danh bạ", "ghép ảnh đe dọa", "phí giải ngân", "bị tống tiền"],
+      "scam_types": ["SCAM_TASK_INVEST_LOAN", "scam_upfront_loan_fee"],
+      "official_domains": ["congthongtin.bocongan.gov.vn"],
+      "verified_channels": ["Công an xã/phường nơi cư trú", "Số khẩn cấp 113 nếu bị đe dọa trực tiếp"]
+    },
+    {
+      "chunk_id": "sop_child_elderly_family_protection",
+      "category": "incident_response",
+      "title": "Xử lý khẩn khi người thân hoặc sinh viên bị cô lập kiểu giả công an, bắt cóc online",
+      "content": "Nếu nhận tin nhắn hoặc cuộc gọi báo con/người thân bị bắt giữ hay gặp tai nạn yêu cầu chuyển tiền chuộc gấp, tuyệt đối không chuyển tiền ngay. Lập tức gọi trực tiếp cho người thân, liên hệ nhà trường, bạn cùng phòng hoặc nơi làm việc để kiểm chứng an toàn thực tế. Báo ngay Công an xã/phường hoặc gọi 113 để phối hợp xác minh và tìm kiếm hỗ trợ.",
+      "tags": ["bắt cóc online", "sinh viên bị cô lập", "người lớn tuổi", "báo con cấp cứu", "tiền chuộc", "giả nhà trường"],
+      "scam_types": ["SCAM_IMPERSONATION", "SCAM_URGENT_BORROW", "scam_police_vneid_apk", "scam_deepvoice_urgent_borrow"],
+      "official_domains": ["congthongtin.bocongan.gov.vn"],
+      "verified_channels": ["Số khẩn cấp 113", "Công an xã/phường gần nhất", "Nhà trường hoặc người thân trực tiếp"]
+    }
+  ]
+}

@@ -17,6 +17,11 @@ from app.core.security import (
     async_validate_url_target,
     build_ssrf_pinned_http_client,
 )
+from app.core.url_authority import (
+    extract_strict_ascii_host,
+    has_disallowed_url_backslash,
+    strip_single_trailing_dot,
+)
 from app.schemas import UrlFinding
 
 MAX_REDIRECT_HOPS: Final[int] = 5
@@ -83,16 +88,31 @@ def _levenshtein_le_two(a: str, b: str) -> bool:
     return prev[-1] <= 2
 
 
+_BACKSLASH_SPOOF_REASON: Final[str] = (
+    "Đường dẫn chứa ký tự dấu gạch chéo ngược ('\\') bất thường trong phần tên miền, "
+    "có dấu hiệu giả mạo thương hiệu hoặc đánh lừa trình duyệt."
+)
+
+
 def _score_single_url(target_url: str) -> tuple[str, str, str | None, bool, int, list[str]]:
     """Compute static brand-spoof, homoglyph, TLD, and APK risk for a single URL."""
+    raw = target_url.strip()
+    if has_disallowed_url_backslash(raw):
+        return "", "", None, False, 90, [_BACKSLASH_SPOOF_REASON]
+
     try:
-        parsed = urlsplit(target_url)
-        raw_host = (parsed.hostname or "").strip().rstrip(".").lower()
+        parsed = urlsplit(raw)
+        raw_host = strip_single_trailing_dot((parsed.hostname or "").strip().lower())
     except ValueError:
         return "", "", None, False, 90, ["Đường dẫn không đúng định dạng địa chỉ trang web."]
 
+    strict_ascii_host = extract_strict_ascii_host(raw)
     try:
-        ascii_host = raw_host.encode("idna").decode("ascii") if raw_host else ""
+        ascii_host = (
+            strict_ascii_host
+            if strict_ascii_host is not None
+            else (raw_host.encode("idna").decode("ascii").lower() if raw_host else "")
+        )
         unicode_host = ascii_host.encode("ascii").decode("idna") if ascii_host else raw_host
     except UnicodeError:
         ascii_host = raw_host
@@ -103,9 +123,10 @@ def _score_single_url(target_url: str) -> tuple[str, str, str | None, bool, int,
     spoofed_brand: str | None = None
 
     brand_rules = _load_brand_rules()
-    for entry in brand_rules:
-        if _is_official_domain(ascii_host, entry["official_domains"]):
-            return raw_host, ascii_host, None, False, 0, []
+    if strict_ascii_host is not None:
+        for entry in brand_rules:
+            if _is_official_domain(strict_ascii_host, entry["official_domains"]):
+                return raw_host, strict_ascii_host, None, False, 0, []
 
     host_labels = [lbl for lbl in unicode_host.split(".") if lbl]
     core_skeleton = _skeletonize(".".join(host_labels[:-1]) if len(host_labels) > 1 else unicode_host)
@@ -176,17 +197,40 @@ async def inspect_url(
     if not ok_target:
         is_ssrf = block_reason is not None and not block_reason.startswith("DNS resolution failed")
         if is_ssrf:
+            if has_disallowed_url_backslash(cleaned) and all_reasons:
+                blocked_reasons = list(all_reasons)
+            else:
+                generic_msg = (
+                    "Đã chặn truy cập vì đường dẫn trỏ tới địa chỉ mạng nội bộ không an toàn."
+                )
+                blocked_reasons = [*all_reasons, generic_msg] if all_reasons else [generic_msg]
             return UrlFinding(
                 url=cleaned,
                 domain=raw_host,
                 normalized_ascii_domain=ascii_host,
                 is_blocked_ssrf=True,
-                risk_points=90,
-                reasons=["Đã chặn truy cập vì đường dẫn trỏ tới địa chỉ mạng nội bộ không an toàn."],
+                is_idn_homoglyph=is_homoglyph,
+                spoofed_brand=spoofed_brand,
+                risk_points=max(90, max_risk),
+                reasons=blocked_reasons,
             )
 
     final_url: str | None = None
     hops = 0
+    redirect_domains: list[str] = []
+
+    def _record_redirect_domain(target: str) -> None:
+        if len(redirect_domains) >= 8 or has_disallowed_url_backslash(target):
+            return
+        hop_host = extract_strict_ascii_host(target)
+        if not hop_host:
+            try:
+                raw_h = strip_single_trailing_dot((urlsplit(target).hostname or "").strip().lower())
+                hop_host = raw_h.encode("idna").decode("ascii").lower() if raw_h else ""
+            except (ValueError, UnicodeError):
+                hop_host = ""
+        if hop_host and hop_host not in redirect_domains:
+            redirect_domains.append(hop_host)
 
     if enable_network and ok_target:
         current_url = cleaned
@@ -214,6 +258,7 @@ async def inspect_url(
                                 normalized_ascii_domain=ascii_host,
                                 final_url=loc[:160],
                                 redirect_hops=hops + 1,
+                                redirect_domains=redirect_domains,
                                 is_blocked_ssrf=True,
                                 is_idn_homoglyph=is_homoglyph,
                                 spoofed_brand=spoofed_brand,
@@ -232,26 +277,31 @@ async def inspect_url(
                                 "DNS resolution failed"
                             )
                             if is_hop_ssrf:
+                                hop_block_msg = (
+                                    _BACKSLASH_SPOOF_REASON
+                                    if has_disallowed_url_backslash(next_url)
+                                    else "Đã chặn chuyển hướng tới địa chỉ mạng nội bộ không an toàn."
+                                )
                                 return UrlFinding(
                                     url=cleaned,
                                     domain=raw_host,
                                     normalized_ascii_domain=ascii_host,
                                     final_url=next_url,
                                     redirect_hops=hops + 1,
+                                    redirect_domains=redirect_domains,
                                     is_blocked_ssrf=True,
                                     is_idn_homoglyph=is_homoglyph,
                                     spoofed_brand=spoofed_brand,
                                     risk_points=90,
-                                    reasons=[
-                                        *all_reasons,
-                                        "Đã chặn chuyển hướng tới địa chỉ mạng nội bộ không an toàn.",
-                                    ],
+                                    reasons=[*all_reasons, hop_block_msg],
                                 )
+                            _record_redirect_domain(next_url)
                             all_reasons.append("Không tìm thấy địa chỉ máy chủ của đường dẫn chuyển hướng.")
                             final_url = next_url
                             hops += 1
                             break
 
+                        _record_redirect_domain(next_url)
                         _, _, hop_brand, hop_homo, hop_risk, hop_reasons = _score_single_url(
                             next_url
                         )
@@ -276,6 +326,7 @@ async def inspect_url(
                 normalized_ascii_domain=ascii_host,
                 final_url=current_url,
                 redirect_hops=hops,
+                redirect_domains=redirect_domains,
                 is_blocked_ssrf=True,
                 is_idn_homoglyph=is_homoglyph,
                 spoofed_brand=spoofed_brand,
@@ -293,6 +344,7 @@ async def inspect_url(
                     normalized_ascii_domain=ascii_host,
                     final_url=current_url,
                     redirect_hops=hops + 1,
+                    redirect_domains=redirect_domains,
                     is_blocked_ssrf=True,
                     is_idn_homoglyph=is_homoglyph,
                     spoofed_brand=spoofed_brand,
@@ -315,6 +367,7 @@ async def inspect_url(
         normalized_ascii_domain=ascii_host,
         final_url=final_url,
         redirect_hops=hops,
+        redirect_domains=redirect_domains,
         is_blocked_ssrf=False,
         is_idn_homoglyph=is_homoglyph,
         spoofed_brand=spoofed_brand,

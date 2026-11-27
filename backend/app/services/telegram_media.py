@@ -34,6 +34,7 @@ __all__ = [
     "build_verdict_inline_keyboard",
     "download_telegram_file",
     "extract_telegram_attachment",
+    "send_telegram_document",
     "send_telegram_typing_action",
     "telegram_typing_scope",
     "truncate_telegram_text",
@@ -268,12 +269,15 @@ async def answer_telegram_callback_query(
     bot_token: str,
     callback_query_id: str,
     text: str = "",
+    show_alert: bool = False,
 ) -> None:
     """Best-effort acknowledgement to stop the spinner on an inline keyboard button."""
     api_url = f"https://api.telegram.org/bot{bot_token}/answerCallbackQuery"
     body: dict[str, Any] = {"callback_query_id": callback_query_id}
     if text:
         body["text"] = text[:180]
+    if show_alert:
+        body["show_alert"] = True
     client = build_ssrf_pinned_http_client(timeout_sec=3.0)
     try:
         await client.post(api_url, json=body)
@@ -281,6 +285,41 @@ async def answer_telegram_callback_query(
         return
     finally:
         await client.aclose()
+
+
+async def send_telegram_document(
+    bot_token: str,
+    chat_id: int | str,
+    filename: str,
+    pdf_bytes: bytes,
+    caption: str = "",
+) -> bool:
+    """Upload a generated PDF evidence report directly to a Telegram chat via sendDocument."""
+    api_url = f"https://api.telegram.org/bot{bot_token}/sendDocument"
+    safe_name = Path(filename).name or "verishield-report.pdf"
+    form_data: dict[str, str] = {"chat_id": str(chat_id)}
+    if caption.strip():
+        form_data["caption"] = caption.strip()[:1024]
+    files = {"document": (safe_name, pdf_bytes, "application/pdf")}
+
+    client = build_ssrf_pinned_http_client(timeout_sec=15.0)
+    try:
+        try:
+            resp = await client.post(api_url, data=form_data, files=files)
+        except Exception as exc:
+            logger.warning("Telegram sendDocument transport failure (%s).", type(exc).__name__)
+            return False
+    finally:
+        await client.aclose()
+
+    if not resp.is_success:
+        logger.warning("Telegram sendDocument rejected with HTTP %s.", resp.status_code)
+        return False
+    try:
+        payload = resp.json()
+    except ValueError:
+        return False
+    return isinstance(payload, dict) and payload.get("ok") is True
 
 
 @asynccontextmanager

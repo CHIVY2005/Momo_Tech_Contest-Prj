@@ -59,6 +59,8 @@ class TelegramEnvelope:
     raw_text: str
     callback_query_id: str | None = None
     callback_data: str | None = None
+    chat_type: str | None = None
+    sender_user_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +74,32 @@ class ParsedTelegramCommand:
     in_active_call: bool = False
     demo_selector: str | None = None
     attach_demo_keyboard: bool = False
+
+
+def _extract_chat_type(chat: dict[str, Any] | None) -> str | None:
+    if not isinstance(chat, dict):
+        return None
+    raw_type: object = chat.get("type")
+    if raw_type is None:
+        return None
+    if not isinstance(raw_type, str):
+        raise ValueError("Telegram chat.type must be a string.")
+    cleaned = raw_type.strip().lower()
+    return cleaned or None
+
+
+def _extract_sender_user_id(container: dict[str, Any], field_label: str) -> int | None:
+    sender: object = container.get("from")
+    if sender is None:
+        return None
+    if not isinstance(sender, dict):
+        raise ValueError(f"Telegram {field_label}.from must be a JSON object.")
+    raw_uid: object = sender.get("id")
+    if raw_uid is None:
+        return None
+    if isinstance(raw_uid, bool) or not isinstance(raw_uid, int):
+        raise ValueError(f"Telegram {field_label}.from.id must be an integer.")
+    return raw_uid
 
 
 def validate_telegram_update_envelope(update: dict[str, Any]) -> TelegramEnvelope:
@@ -114,6 +142,9 @@ def validate_telegram_update_envelope(update: dict[str, Any]) -> TelegramEnvelop
         chat_id = chat.get("id") if isinstance(chat, dict) else None
         if chat_id is not None and (isinstance(chat_id, bool) or not isinstance(chat_id, (int, str))):
             raise ValueError("Telegram chat.id must be an integer or string.")
+        chat_type = _extract_chat_type(chat)
+        # Always bind callback sender to cb["from"]["id"], NEVER cb["message"]["from"] (the bot).
+        sender_user_id = _extract_sender_user_id(cb, "callback_query")
         return TelegramEnvelope(
             update_id=update_id,
             msg=cb_msg if isinstance(cb_msg, dict) else None,
@@ -121,6 +152,8 @@ def validate_telegram_update_envelope(update: dict[str, Any]) -> TelegramEnvelop
             raw_text="",
             callback_query_id=cb_id,
             callback_data=(cb_data or "").strip(),
+            chat_type=chat_type,
+            sender_user_id=sender_user_id,
         )
 
     msg = update.get("message") or update.get("edited_message")
@@ -133,6 +166,8 @@ def validate_telegram_update_envelope(update: dict[str, Any]) -> TelegramEnvelop
     chat_id = chat.get("id") if isinstance(chat, dict) else None
     if chat_id is not None and (isinstance(chat_id, bool) or not isinstance(chat_id, (int, str))):
         raise ValueError("Telegram chat.id must be an integer or string.")
+    chat_type = _extract_chat_type(chat)
+    sender_user_id = _extract_sender_user_id(msg, "message")
 
     raw_text_field = msg.get("text") if msg.get("text") is not None else msg.get("caption")
     if raw_text_field is not None and not isinstance(raw_text_field, str):
@@ -142,6 +177,8 @@ def validate_telegram_update_envelope(update: dict[str, Any]) -> TelegramEnvelop
         msg=msg,
         chat_id=chat_id,
         raw_text=(raw_text_field or "").strip(),
+        chat_type=chat_type,
+        sender_user_id=sender_user_id,
     )
 
 
@@ -188,25 +225,34 @@ def build_demo_inline_keyboard(demos: list[DemoScenario]) -> dict[str, Any] | No
     return {"inline_keyboard": rows}
 
 
-def build_verdict_inline_keyboard(case_id: str, public_base_url: str) -> dict[str, Any] | None:
-    """Build InlineKeyboardMarkup with PDF evidence download & web links for HTTPS deployments."""
-    base = public_base_url.strip().rstrip("/")
-    if not base.startswith("https://"):
-        return None
-    return {
-        "inline_keyboard": [
+def build_verdict_inline_keyboard(
+    case_id: str,
+    public_base_url: str,
+    *,
+    allow_pdf_callback: bool = True,
+) -> dict[str, Any] | None:
+    """Build InlineKeyboardMarkup with private-only PDF callback & optional HTTPS web links."""
+    rows: list[list[dict[str, str]]] = []
+    cleaned_case_id = case_id.strip()
+    callback_data = f"pdf:{cleaned_case_id}"
+    if allow_pdf_callback and cleaned_case_id and len(callback_data.encode("utf-8")) <= 64:
+        rows.append(
             [
                 {
-                    "text": "📄 Tải báo cáo bằng chứng (PDF)",
-                    "url": f"{base}/api/v1/cases/{case_id}/report.pdf",
+                    "text": "📄 Nhận báo cáo bằng chứng (PDF)",
+                    "callback_data": callback_data,
                 }
-            ],
+            ]
+        )
+    base = public_base_url.strip().rstrip("/")
+    if base.startswith("https://"):
+        rows.append(
             [
                 {"text": "🛡 Mở trang web VeriShield AI", "url": f"{base}/"},
                 {"text": "📡 Trung tâm giám sát gian lận", "url": f"{base}/radar"},
-            ],
-        ]
-    }
+            ]
+        )
+    return {"inline_keyboard": rows} if rows else None
 
 
 def parse_telegram_command(raw_text: str, has_attachment: bool) -> ParsedTelegramCommand:
@@ -275,7 +321,11 @@ def parse_telegram_command(raw_text: str, has_attachment: bool) -> ParsedTelegra
     return ParsedTelegramCommand(None, "personal", None, arg_text or raw_text)
 
 
-def format_telegram_verdict_reply(report: AnalysisReport) -> str:
+def format_telegram_verdict_reply(
+    report: AnalysisReport,
+    *,
+    include_group_pdf_note: bool = False,
+) -> str:
     """Format safe HTML Vietnamese safety verdict, 30s shield & counter-reply for Telegram."""
     badge_map = {
         "SAFE": "🟢 Chưa phát hiện dấu hiệu bất thường",
@@ -320,6 +370,8 @@ def format_telegram_verdict_reply(report: AnalysisReport) -> str:
         lines.append(f'💬 <b>Gợi ý câu trả lời:</b> "{_esc(report.actions.counter_replies[0], 260)}"')
     if report.actions.urgent_steps:
         lines.append(f"✅ <b>Việc cần làm ngay:</b> {_esc(report.actions.urgent_steps[0], 260)}")
+    if include_group_pdf_note:
+        lines.append("🔒 <i>Tải báo cáo PDF chỉ hỗ trợ khi nhắn tin riêng (1-1) với bot.</i>")
     lines.append(
         f"ℹ️ <i>Kết quả chỉ mang tính tham khảo. Mã hồ sơ:</i> "
         f"<code>{_esc(report.case_id, 64)}</code>"

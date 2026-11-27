@@ -4,6 +4,10 @@ services:
     ports: !override []
     expose:
       - "8000"
+    env_file: !override []
+    read_only: true
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,mode=1777,size=256m"
     mem_limit: 2200m
     cpus: 1.5
     pids_limit: 256
@@ -11,20 +15,45 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    networks:
+      - proxy_backend
     environment:
       - APP_ENV=${APP_ENV:-production}
       - ANALYST_PIN=${ANALYST_PIN:?Set ANALYST_PIN explicitly in deploy/.env.prod}
-      - IOC_HMAC_SECRET=${IOC_HMAC_SECRET:-}
+      - IOC_HMAC_SECRET=${IOC_HMAC_SECRET:?Set IOC_HMAC_SECRET explicitly in deploy/.env.prod}
+      - CASE_TOKEN_SECRET=${CASE_TOKEN_SECRET:?Set CASE_TOKEN_SECRET explicitly in deploy/.env.prod}
+      - ONNX_INTRA_THREADS=${ONNX_INTRA_THREADS:-2}
       - UVICORN_WORKERS=${UVICORN_WORKERS:-1}
+      - UVICORN_FORWARDED_ALLOW_IPS=${UVICORN_FORWARDED_ALLOW_IPS:-${PROXY_BACKEND_SUBNET:-172.28.0.0/24}}
       - PLAYWRIGHT_MAX_CONCURRENCY=${PLAYWRIGHT_MAX_CONCURRENCY:-1}
+      # Residual tradeoff: PLAYWRIGHT_CHROMIUM_SANDBOX=false is required under cap_drop: [ALL]
+      # (no CAP_SYS_ADMIN); mitigated by scrubbed Chromium env, read_only rootfs, noexec tmpfs /tmp,
+      # blackhole Chromium proxy, and isolated Docker networks.
       - PLAYWRIGHT_CHROMIUM_SANDBOX=${PLAYWRIGHT_CHROMIUM_SANDBOX:-false}
+      - HOME=/tmp
+      - TMPDIR=/tmp
+      - XDG_CACHE_HOME=/tmp
+      - XDG_CONFIG_HOME=/tmp
       - CORS_ORIGINS=${CORS_ORIGINS:-["https://verishield.joiboi.app"]}
 
   frontend:
     image: verishield-frontend:v2
+    build:
+      args:
+        ENABLE_NEXT_API_PROXY: "false"
+        NEXT_PUBLIC_APP_ENV: ${APP_ENV:-production}
+        BACKEND_INTERNAL_URL: ""
     ports: !override []
     expose:
       - "3000"
+    read_only: true
+    tmpfs:
+      - "/tmp:rw,noexec,nosuid,mode=1777,size=64m"
+      - "/app/.next/cache:rw,noexec,nosuid,nodev,size=32m,uid=1001,gid=1001"
+    environment:
+      - ENABLE_NEXT_API_PROXY=false
+      - BACKEND_INTERNAL_URL=
+      - NEXT_PUBLIC_APP_ENV=${APP_ENV:-production}
     mem_limit: 512m
     cpus: 0.5
     pids_limit: 128
@@ -32,6 +61,8 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    networks:
+      - proxy_frontend
     healthcheck:
       test:
         [
@@ -66,6 +97,9 @@ services:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    networks:
+      - proxy_backend
+      - proxy_frontend
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:2019/config/"]
       interval: 20s
@@ -76,6 +110,14 @@ services:
         condition: service_healthy
       frontend:
         condition: service_healthy
+
+networks:
+  proxy_backend:
+    ipam:
+      config:
+        - subnet: "${PROXY_BACKEND_SUBNET:-172.28.0.0/24}"
+  proxy_frontend:
+    internal: true
 
 volumes:
   caddy_data:

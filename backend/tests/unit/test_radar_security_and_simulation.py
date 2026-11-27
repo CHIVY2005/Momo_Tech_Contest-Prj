@@ -77,6 +77,7 @@ def test_production_env_skips_demo_seed_enforces_hmac_policy_and_protects_banks(
         app_env="production",
         analyst_pin="StrongPin#2026",
         ioc_hmac_secret="prod_dedicated_hmac_secret_2026_v2",
+        case_token_secret="prod_dedicated_case_token_secret_2026_v2",
         rate_limit_per_minute=200,
     )
     client = TestClient(create_app(cfg))

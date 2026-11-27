@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Final
 
 from fpdf import FPDF
 
 from app.db.repository import redact_report_pii
 from app.schemas import AnalysisReport
+
+MAX_PDF_IOCS_PER_TYPE: Final[int] = 8
 
 _VERDICT_VI: dict[str, str] = {
     "SAFE": "Chưa phát hiện dấu hiệu bất thường",
@@ -42,6 +46,7 @@ _SOURCE_VI: dict[str, str] = {
     "fraud_ops_radar": "Danh sách chặn rủi ro hệ thống",
     "guardrails": "Kiểm tra an toàn nội dung",
     "ocr_engine": "Trích xuất văn bản từ hình ảnh (OCR)",
+    "local_stt": "Chuyển đổi giọng nói thành văn bản (STT)",
     "gemini_vision": "Phân tích ngữ cảnh AI",
     "pipeline": "Hệ thống tổng hợp",
 }
@@ -51,9 +56,15 @@ def _font_path() -> Path:
     return Path(__file__).resolve().parent.parent / "data" / "fonts" / "DejaVuSans.ttf"
 
 
-def generate_incident_pdf(report: AnalysisReport) -> bytes:
+def _format_capped_csv(items: Sequence[str], cap: int) -> str:
+    shown = ", ".join(items[:cap])
+    extra = len(items) - cap
+    return f"{shown} (+{extra} mục khác)" if extra > 0 else shown
+
+
+def generate_incident_pdf(report: AnalysisReport, already_redacted: bool = False) -> bytes:
     """Render a PII-redacted Vietnamese cyber-fraud incident report as PDF bytes."""
-    safe = redact_report_pii(report)
+    safe = report if already_redacted else redact_report_pii(report)
 
     pdf = FPDF(orientation="P", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=16)
@@ -105,7 +116,7 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
     pdf.set_font("DejaVu", size=12)
     pdf.cell(w=0, h=8, text="1. Tóm tắt kết quả kiểm tra", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("DejaVu", size=10)
-    pdf.multi_cell(w=0, h=6, text=safe.summary_vi, new_x="LMARGIN", new_y="NEXT")
+    pdf.multi_cell(w=0, h=6, text=safe.summary_vi[:2000], new_x="LMARGIN", new_y="NEXT")
     if safe.actions.merchant_balance_warning:
         pdf.ln(1)
         pdf.multi_cell(
@@ -128,7 +139,7 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
     )
     pdf.set_font("DejaVu", size=10)
     pbs = (
-        ", ".join(safe.matched_playbooks)
+        _format_capped_csv(safe.matched_playbooks, 8)
         if safe.matched_playbooks
         else "Chưa trùng khớp kịch bản cụ thể"
     )
@@ -137,7 +148,7 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
         pdf.multi_cell(
             w=0,
             h=6,
-            text=f"• Số điện thoại nghi vấn: {', '.join(safe.iocs.phones)}",
+            text=f"• Số điện thoại nghi vấn: {_format_capped_csv(safe.iocs.phones, MAX_PDF_IOCS_PER_TYPE)}",
             new_x="LMARGIN",
             new_y="NEXT",
         )
@@ -145,7 +156,10 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
         pdf.multi_cell(
             w=0,
             h=6,
-            text=f"• Số tài khoản nhận nghi vấn: {', '.join(safe.iocs.bank_accounts)}",
+            text=(
+                "• Số tài khoản nhận nghi vấn: "
+                f"{_format_capped_csv(safe.iocs.bank_accounts, MAX_PDF_IOCS_PER_TYPE)}"
+            ),
             new_x="LMARGIN",
             new_y="NEXT",
         )
@@ -153,7 +167,7 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
         pdf.multi_cell(
             w=0,
             h=6,
-            text=f"• Tên miền liên quan: {', '.join(safe.iocs.domains)}",
+            text=f"• Tên miền liên quan: {_format_capped_csv(safe.iocs.domains, MAX_PDF_IOCS_PER_TYPE)}",
             new_x="LMARGIN",
             new_y="NEXT",
         )
@@ -170,7 +184,7 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
             pdf.multi_cell(
                 w=0,
                 h=6,
-                text=f"• [{sev_label} | {src_label}] {ev.title}: {ev.detail}",
+                text=f"• [{sev_label} | {src_label}] {ev.title}: {ev.detail[:300]}",
                 new_x="LMARGIN",
                 new_y="NEXT",
             )
@@ -194,7 +208,7 @@ def generate_incident_pdf(report: AnalysisReport) -> bytes:
         new_y="NEXT",
     )
     pdf.set_font("DejaVu", size=10)
-    for step in safe.actions.urgent_steps:
+    for step in safe.actions.urgent_steps[:12]:
         pdf.multi_cell(w=0, h=6, text=f"• {step}", new_x="LMARGIN", new_y="NEXT")
 
     pdf.ln(4)

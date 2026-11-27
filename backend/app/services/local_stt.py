@@ -2,21 +2,22 @@
 
 from __future__ import annotations
 
-import contextlib
 import os
-import tempfile
 import time
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+from app.core.media_security import decode_audio_to_pcm16k
 
 
 class LocalSttResult(BaseModel):
     """Result from local CPU speech transcription."""
 
     available: bool
+    status: Literal["ok", "empty", "disabled", "unavailable", "error"] = "ok"
     transcript: str = ""
     latency_ms: int = Field(default=0, ge=0)
 
@@ -54,7 +55,7 @@ def _get_whisper_model(model_size: str | None = None) -> Any:
         resolved_size,
         device="cpu",
         compute_type="int8",
-        cpu_threads=4,
+        cpu_threads=2,
         download_root=download_root,
         local_files_only=local_only,
     )
@@ -65,31 +66,42 @@ def run_local_stt(
     filename: str,
     enabled: bool = True,
 ) -> LocalSttResult:
-    """Transcribe Vietnamese call audio locally when model cache is available."""
-    if not enabled or not audio_bytes:
-        return LocalSttResult(available=False)
+    """Transcribe Vietnamese call audio strictly in-memory when model cache is available."""
+    _ = filename
+    if not enabled:
+        return LocalSttResult(available=False, status="disabled")
+    if not audio_bytes:
+        return LocalSttResult(available=False, status="error")
 
     t0 = time.perf_counter()
-    suffix = Path(filename).suffix or ".mp3"
-    tmp_path: str | None = None
     try:
         model = _get_whisper_model()
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            tmp_path = tmp.name
-            tmp.write(audio_bytes)
+    except Exception:
+        return LocalSttResult(
+            available=False,
+            status="unavailable",
+            latency_ms=int((time.perf_counter() - t0) * 1000),
+        )
 
+    try:
+        pcm_f32 = decode_audio_to_pcm16k(audio_bytes)
         segments, _ = model.transcribe(
-            tmp_path,
+            pcm_f32,
             language="vi",
             beam_size=1,
             vad_filter=True,
         )
         text = " ".join(seg.text.strip() for seg in segments if seg.text.strip()).strip()
         latency_ms = int((time.perf_counter() - t0) * 1000)
-        return LocalSttResult(available=True, transcript=text, latency_ms=latency_ms)
+        return LocalSttResult(
+            available=True,
+            status="ok" if text else "empty",
+            transcript=text,
+            latency_ms=latency_ms,
+        )
     except Exception:
-        return LocalSttResult(available=False)
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            with contextlib.suppress(OSError):
-                os.remove(tmp_path)
+        return LocalSttResult(
+            available=False,
+            status="error",
+            latency_ms=int((time.perf_counter() - t0) * 1000),
+        )

@@ -6,10 +6,6 @@ http://{$DOMAIN:verishield.joiboi.app} {
 {$DOMAIN:verishield.joiboi.app} {
     encode zstd gzip
 
-    request_body {
-        max_size 22MB
-    }
-
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
         X-Content-Type-Options "nosniff"
@@ -26,7 +22,15 @@ http://{$DOMAIN:verishield.joiboi.app} {
         Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
     }
 
+    @encoded_path_sep expression `{http.request.orig_uri}.split('?')[0].lowerAscii().contains('%2f') || {http.request.orig_uri}.split('?')[0].lowerAscii().contains('%5c') || {http.request.orig_uri}.split('?')[0].contains('\\')`
+    handle @encoded_path_sep {
+        respond "Bad Request" 400
+    }
+
     handle /api/* {
+        request_body {
+            max_size 22MB
+        }
         reverse_proxy backend:8000 {
             flush_interval -1
             header_up X-Forwarded-For {remote_host}
@@ -34,6 +38,9 @@ http://{$DOMAIN:verishield.joiboi.app} {
     }
 
     handle {
+        request_body {
+            max_size 1MB
+        }
         reverse_proxy frontend:3000
     }
 }

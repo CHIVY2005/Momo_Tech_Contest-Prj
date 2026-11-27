@@ -1,0 +1,206 @@
+{
+  "version": "1.0.0",
+  "source": "verification_guides",
+  "chunks": [
+    {
+      "chunk_id": "ver_official_gov_vn_domains",
+      "category": "verification",
+      "title": "Cách kiểm tra tên miền chính thức của cơ quan nhà nước (.gov.vn)",
+      "content": "Cổng điện tử Bộ Công an, VNeID, Dịch vụ công và Tổng cục Thuế luôn dùng đuôi .gov.vn (vneid.gov.vn, dichvucong.gov.vn, bocongan.gov.vn, gdt.gov.vn). Mọi trang đuôi .com, .top, .vip, .xyz, .site giả danh cơ quan nhà nước đều là lừa đảo. Luôn tự gõ địa chỉ chính thức thay vì bấm link lạ.",
+      "tags": ["tên miền gov.vn", "kiểm tra website nhà nước", "vneid.gov.vn", "dichvucong.gov.vn", "gdt.gov.vn", "bocongan.gov.vn", "web giả mạo"],
+      "scam_types": ["SCAM_IMPERSONATION", "SCAM_PHISHING_APK_OTP", "scam_police_vneid_apk", "scam_evn_tax_apk"],
+      "official_domains": ["vneid.gov.vn", "dichvucong.gov.vn", "bocongan.gov.vn", "gdt.gov.vn"],
+      "verified_channels": ["vneid.gov.vn", "dichvucong.gov.vn", "bocongan.gov.vn", "gdt.gov.vn"]
+    },
+    {
+      "chunk_id": "ver_official_bank_domains_and_sms",
+      "category": "verification",
+      "title": "Cách xác minh tên miền ngân hàng và nhận diện tin nhắn SMS Brandname giả",
+      "content": "Ngân hàng Việt Nam khẳng định KHÔNG gửi tin nhắn SMS kèm đường link yêu cầu đăng nhập, đổi điểm hay cập nhật sinh trắc học (trạm BTS giả có thể chèn SMS vào đúng luồng tên thương hiệu). Hãy luôn đối chiếu tên miền gốc chính thức như vietcombank.com.vn, bidv.com.vn, mbbank.com.vn, techcombank.com.vn, vietinbank.vn, agribank.com.vn và tự mở ứng dụng ngân hàng cài sẵn để kiểm tra.",
+      "tags": ["tên miền ngân hàng", "sms brandname giả", "trạm bts giả", "link trong sms", "kiểm tra web ngân hàng", "đổi điểm thưởng"],
+      "scam_types": ["SCAM_PHISHING_APK_OTP", "scam_sms_brandname_bts_spoof", "scam_napas_sms_points"],
+      "official_domains": ["vietcombank.com.vn", "bidv.com.vn", "mbbank.com.vn", "techcombank.com.vn", "vietinbank.vn", "agribank.com.vn"],
+      "verified_channels": ["Ứng dụng ngân hàng chính thức", "Tổng đài in mặt sau thẻ ngân hàng"]
+    },
+    {
+      "chunk_id": "ver_police_prosecutor_court_summons",
+      "category": "verification",
+      "title": "Cách xác minh cuộc gọi xưng Công an, Viện Kiểm sát hoặc Tòa án",
+      "content": "Cơ quan Công an, Viện Kiểm sát và Tòa án KHÔNG làm việc, không gửi lệnh bắt hay giấy triệu tập qua Zalo/cuộc gọi video, KHÔNG có 'tài khoản tạm giữ chứng minh trong sạch' và không yêu cầu nạn nhân tự cô lập giữ bí mật. Khi nhận cuộc gọi nghi vấn, hãy cúp máy và liên hệ hoặc đến trực tiếp trụ sở Công an xã/phường nơi cư trú để xác minh thông tin.",
+      "tags": ["giả công an", "viện kiểm sát", "tòa án", "giấy triệu tập", "lệnh bắt giả", "tài khoản tạm giữ", "chứng minh trong sạch"],
+      "scam_types": ["SCAM_IMPERSONATION", "scam_police_vneid_apk"],
+      "official_domains": ["bocongan.gov.vn", "congthongtin.bocongan.gov.vn"],
+      "verified_channels": ["Công an xã/phường nơi cư trú", "Cổng congthongtin.bocongan.gov.vn"]
+    },
+    {
+      "chunk_id": "ver_vietqr_napas_bin_check",
+      "category": "verification",
+      "title": "Cách kiểm tra mã VietQR và mã BIN NAPAS trước khi bấm chuyển tiền",
+      "content": "Mã VietQR chỉ dùng để CHUYỂN TIỀN ĐI, tuyệt đối không tồn tại mã VietQR nào quét để nhận tiền hoàn hay hủy gói cước. Trước khi nhập mã PIN hoặc sinh trắc học, hãy đọc kỹ 4 thông tin trên màn hình ngân hàng: tên ngân hàng theo mã BIN NAPAS, số tài khoản người nhận, họ tên người thụ hưởng và đúng số tiền giao dịch. Dùng tính năng kiểm tra VietQR trên VeriShield AI nếu nghi ngờ.",
+      "tags": ["kiểm tra vietqr", "mã bin napas", "quét qr nhận tiền hoàn", "quét mã qr", "xác minh người nhận", "napas"],
+      "scam_types": ["SCAM_PHISHING_APK_OTP", "merchant", "scam_vietqr_receive_refund", "scam_qr_sticker_swap"],
+      "official_domains": ["napas.com.vn"],
+      "verified_channels": ["Màn hình xác nhận của ứng dụng ngân hàng chính thức", "napas.com.vn"]
+    },
+    {
+      "chunk_id": "ver_merchant_balance_and_soundbox",
+      "category": "verification",
+      "title": "Cách chủ cửa hàng xác minh tiền đã về: Kiểm tra số dư thực tế và loa Soundbox",
+      "content": "Ảnh chụp màn hình biên lai chuyển khoản KHÔNG BAO GIỜ là bằng chứng tiền đã vào tài khoản vì ảnh có thể bị chỉnh sửa bằng ứng dụng tạo bill giả hoặc dùng lại ảnh cũ. Chủ cửa hàng chỉ xác nhận đã nhận tiền và giao hàng sau khi tự mở ứng dụng ngân hàng kiểm tra lịch sử biến động số dư thực tế (đúng số tiền, đúng mã giao dịch) hoặc nghe loa Soundbox liên kết báo tiền về.",
+      "tags": ["xác minh biên lai", "kiểm tra tiền về", "số dư tài khoản", "loa soundbox", "giao hàng", "chủ shop", "merchant"],
+      "scam_types": ["merchant", "scam_merchant_fake_bill"],
+      "official_domains": [],
+      "verified_channels": ["Ứng dụng ngân hàng của chủ cửa hàng", "Loa thông báo Soundbox liên kết tài khoản"]
+    },
+    {
+      "chunk_id": "ver_merchant_qr_counter_hygiene",
+      "category": "verification",
+      "title": "Cách chủ cửa hàng kiểm tra định kỳ bảng mã QR tại quầy tránh bị dán đè",
+      "content": "Đặt bảng mã QR thanh toán ở vị trí cố định trong tầm quan sát trực tiếp của thu ngân, tránh khuất tầm nhìn. Đầu mỗi ca làm việc, dùng điện thoại quét thử mã QR tại quầy để kiểm tra số tài khoản, tên ngân hàng và tên chủ tài khoản hiển thị có khớp đúng tài khoản cửa hàng không; kiểm tra mép giấy xem có dấu hiệu dán chồng nhãn mới hay không.",
+      "tags": ["kiểm tra bảng qr", "dán đè qr", "quầy thu ngân", "chủ cửa hàng", "an toàn thanh toán", "merchant"],
+      "scam_types": ["merchant", "scam_qr_sticker_swap"],
+      "official_domains": [],
+      "verified_channels": ["Ứng dụng ngân hàng của chủ cửa hàng"]
+    },
+    {
+      "chunk_id": "ver_vietqr_merchant_mismatch",
+      "category": "verification",
+      "title": "Xác minh khi mã VietQR hiển thị tên hoặc số tài khoản khác thông tin cửa hàng",
+      "content": "Nếu khi quét mã VietQR tại cửa hàng hoặc từ ảnh người bán gửi mà tên người thụ hưởng hoặc số tài khoản hiển thị không trùng khớp với tài khoản đã đăng ký, dừng thao tác chuyển tiền ngay. Hỏi trực tiếp chủ cửa hàng xác nhận lại số tài khoản chính thức và đối chiếu bằng ứng dụng ngân hàng trước khi thực hiện giao dịch.",
+      "tags": ["lệch số tài khoản", "sai tên chủ tài khoản", "vietqr không khớp", "beneficiary mismatch", "kiểm tra tài khoản nhận"],
+      "scam_types": ["merchant", "scam_qr_sticker_swap", "scam_vietqr_receive_refund"],
+      "official_domains": ["napas.com.vn"],
+      "verified_channels": ["Đối chiếu trực tiếp với chủ cửa hàng"]
+    },
+    {
+      "chunk_id": "ver_shipper_cod_delivery",
+      "category": "verification",
+      "title": "Cách xác minh shipper giao hàng và tránh bẫy chuyển nhầm tài khoản hội viên",
+      "content": "Mở trực tiếp ứng dụng sàn thương mại điện tử như Shopee hoặc ứng dụng đơn vị vận chuyển để đối chiếu mã vận đơn, tên sản phẩm và đúng số tiền thu hộ COD trước khi trả tiền. Nhớ rằng chuyển khoản vào một số tài khoản bình thường KHÔNG THỂ tự động đăng ký gói hội viên hay trừ 3,5 triệu đồng mỗi tháng - mọi đường link 'hủy hội viên' shipper gửi đều là lừa đảo.",
+      "tags": ["xác minh shipper", "giao hàng cod", "tài khoản hội viên", "trừ tiền hàng tháng", "link hủy hội viên", "kiểm tra đơn hàng"],
+      "scam_types": ["SCAM_IMPERSONATION", "SCAM_PHISHING_APK_OTP", "scam_fake_shipper_membership"],
+      "official_domains": ["shopee.vn"],
+      "verified_channels": ["Ứng dụng sàn thương mại điện tử chính thức", "Ứng dụng đơn vị vận chuyển chính thức"]
+    },
+    {
+      "chunk_id": "ver_recruitment_online_task_ctv",
+      "category": "verification",
+      "title": "Cách kiểm chứng tin tuyển Cộng tác viên (CTV) và làm nhiệm vụ trực tuyến",
+      "content": "Việc làm hợp pháp tại doanh nghiệp hay sàn thương mại điện tử không bao giờ yêu cầu ứng viên tự nạp tiền mua đơn hàng ảo, thực hiện chuỗi nhiệm vụ nhận hoa hồng 20% hay chuyển tiền sửa 'lỗi cú pháp'. Hãy kiểm tra tin tuyển dụng trực tiếp trên website nghề nghiệp chính thức của công ty và từ chối mọi công việc đòi nộp tiền trước vào tài khoản cá nhân.",
+      "tags": ["cộng tác viên", "làm nhiệm vụ", "việc làm online", "chốt đơn nhận hoa hồng", "kiểm tra tuyển dụng", "ctv shopee"],
+      "scam_types": ["SCAM_TASK_INVEST_LOAN", "scam_task_ctv_commission"],
+      "official_domains": ["shopee.vn"],
+      "verified_channels": ["Trang tuyển dụng chính thức của doanh nghiệp"]
+    },
+    {
+      "chunk_id": "ver_relative_deepfake_video_call",
+      "category": "verification",
+      "title": "Cách xác minh người thân, bạn bè vay tiền gấp và nhận biết Deepfake video call",
+      "content": "Kẻ lừa đảo thường chiếm tài khoản Zalo/Facebook hoặc dùng video Deepfake ngắn 3-5 giây mờ giật, tiếng không khớp khẩu hình rồi cúp vội và giục chuyển tiền vào tài khoản mang tên người lạ. Hãy dừng chuyển khoản, gọi lại trực tiếp bằng số điện thoại di động truyền thống (không qua ứng dụng chat) và hỏi một câu hỏi riêng tư chỉ hai người biết để xác thực.",
+      "tags": ["deepfake", "giả giọng nói", "người thân mượn tiền", "vay tiền gấp", "cuộc gọi video mờ", "kiểm tra người thân"],
+      "scam_types": ["SCAM_URGENT_BORROW", "scam_deepvoice_urgent_borrow"],
+      "official_domains": [],
+      "verified_channels": ["Gọi điện thoại di động truyền thống trực tiếp cho người thân"]
+    },
+    {
+      "chunk_id": "ver_vneid_etax_evn_apps",
+      "category": "verification",
+      "title": "Cách xác minh ứng dụng VNeID, Thuế eTax Mobile và hóa đơn Điện lực EVN",
+      "content": "Chỉ tải VNeID, eTax Mobile và ứng dụng chăm sóc khách hàng Điện lực EVN trực tiếp từ Google Play hoặc App Store với đúng nhà phát triển chính thức; tuyệt đối không cài tệp .apk từ đường link qua Zalo/SMS. Tra cứu thông tin thuế tại gdt.gov.vn, dịch vụ công tại dichvucong.gov.vn, VNeID tại vneid.gov.vn và hóa đơn điện tại evn.com.vn.",
+      "tags": ["xác minh vneid", "etax mobile", "hóa đơn tiền điện evn", "cắt điện", "hoàn thuế", "tải app chính thức", "file apk"],
+      "scam_types": ["SCAM_IMPERSONATION", "SCAM_PHISHING_APK_OTP", "scam_evn_tax_apk", "scam_police_vneid_apk"],
+      "official_domains": ["vneid.gov.vn", "dichvucong.gov.vn", "gdt.gov.vn", "evn.com.vn"],
+      "verified_channels": ["Google Play / App Store chính thức", "vneid.gov.vn", "gdt.gov.vn", "evn.com.vn"]
+    },
+    {
+      "chunk_id": "ver_biometric_qd2345_bank_support",
+      "category": "verification",
+      "title": "Cách xác minh yêu cầu cập nhật sinh trắc học ngân hàng (Quyết định 2345)",
+      "content": "Ngân hàng KHÔNG gọi video Zalo để hỗ trợ cài sinh trắc học từ xa, KHÔNG gửi đường link lạ, KHÔNG yêu cầu chia sẻ màn hình hay đọc mã OTP. Khách hàng chỉ tự thực hiện quét CCCD gắn chip và khuôn mặt ngay bên trong ứng dụng ngân hàng chính thức hoặc đến trực tiếp quầy giao dịch chi nhánh ngân hàng gần nhất.",
+      "tags": ["sinh trắc học", "quyết định 2345", "nhân viên ngân hàng giả", "cập nhật cccd", "chia sẻ màn hình"],
+      "scam_types": ["SCAM_IMPERSONATION", "SCAM_PHISHING_APK_OTP", "scam_biometric_qd2345_support"],
+      "official_domains": [],
+      "verified_channels": ["Ứng dụng ngân hàng chính thức", "Quầy giao dịch chi nhánh ngân hàng"]
+    },
+    {
+      "chunk_id": "ver_telecom_sim_lock_1414",
+      "category": "verification",
+      "title": "Cách xác minh cảnh báo khóa SIM hai chiều và thông tin thuê bao (1414)",
+      "content": "Cục Viễn thông và các nhà mạng không dùng cuộc gọi ghi âm tự động yêu cầu bấm phím số gặp tổng đài viên rồi nối máy sang Công an. Để tự kiểm tra thông tin chính chủ thuê bao di động của mình, soạn tin nhắn miễn phí với cú pháp TTTB gửi 1414 hoặc kiểm tra trực tiếp trên ứng dụng chính thức của nhà mạng đang dùng.",
+      "tags": ["khóa sim", "chuẩn hóa thuê bao", "cục viễn thông", "tttb gửi 1414", "1414", "cuộc gọi tự động"],
+      "scam_types": ["SCAM_IMPERSONATION", "scam_sim_lock_telecom"],
+      "official_domains": [],
+      "verified_channels": ["Tin nhắn miễn phí TTTB gửi 1414", "Ứng dụng chính thức của nhà mạng"]
+    },
+    {
+      "chunk_id": "ver_credit_card_loan_offers",
+      "category": "verification",
+      "title": "Cách xác minh lời mời vay tín chấp online và nâng hạn mức thẻ tín dụng",
+      "content": "Ngân hàng và công ty tài chính được cấp phép KHÔNG yêu cầu khách hàng chuyển trước 'phí bảo hiểm khoản vay', 'tiền đối ứng sửa sai số tài khoản' vào tài khoản cá nhân để giải ngân, và KHÔNG hỏi 3 số CVV cùng mã OTP để nâng hạn mức thẻ. Hãy kiểm tra ưu đãi trực tiếp trong ứng dụng ngân hàng hoặc gọi tổng đài in mặt sau thẻ.",
+      "tags": ["vay tín chấp", "nâng hạn mức thẻ", "phí giải ngân", "phí bảo hiểm khoản vay", "cvv", "vay tiền online"],
+      "scam_types": ["SCAM_TASK_INVEST_LOAN", "SCAM_PHISHING_APK_OTP", "scam_upfront_loan_fee", "scam_credit_card_upgrade_cashout"],
+      "official_domains": [],
+      "verified_channels": ["Ứng dụng ngân hàng chính thức", "Tổng đài in mặt sau thẻ ngân hàng"]
+    },
+    {
+      "chunk_id": "ver_hotel_resort_flight_booking",
+      "category": "verification",
+      "title": "Cách xác minh fanpage đặt phòng khách sạn, resort và vé máy bay",
+      "content": "Fanpage có dấu tích xanh vẫn có thể bị kẻ gian mua lại và đổi tên để mạo danh khu nghỉ dưỡng. Hãy mở mục Tính minh bạch của Trang để xem lịch sử đổi tên, gọi số điện thoại cố định trên website chính thức hoặc Google Maps của khách sạn, và chỉ chuyển cọc vào tài khoản mang tên pháp nhân doanh nghiệp - không chuyển lại lần hai vì lý do 'sai nội dung kế toán'.",
+      "tags": ["đặt phòng resort", "khách sạn tích xanh", "vé máy bay giá rẻ", "sai nội dung chuyển khoản", "chuyển cọc giữ phòng"],
+      "scam_types": ["SCAM_IMPERSONATION", "scam_hotel_resort_fanpage_clone"],
+      "official_domains": [],
+      "verified_channels": ["Website chính thức và số cố định của khách sạn/hãng bay"]
+    },
+    {
+      "chunk_id": "ver_charity_donation_account",
+      "category": "verification",
+      "title": "Cách xác minh tài khoản kêu gọi từ thiện và ủng hộ cộng đồng",
+      "content": "Trước khi chuyển khoản từ thiện, hãy đối chiếu số tài khoản tiếp nhận với thông báo chính thức trên cổng thông tin Mặt trận Tổ quốc Việt Nam, cơ quan nhà nước hoặc các tờ báo chính thống. Cảnh giác các bài đăng chạy quảng cáo kèm ảnh thương tâm yêu cầu chuyển gấp vào số tài khoản cá nhân chưa được kiểm chứng.",
+      "tags": ["từ thiện", "ủng hộ đồng bào", "mặt trận tổ quốc", "quyên góp", "kiểm tra tài khoản từ thiện"],
+      "scam_types": ["SCAM_IMPERSONATION", "scam_charity_mule_impersonation"],
+      "official_domains": ["congthongtin.bocongan.gov.vn"],
+      "verified_channels": ["Cổng thông tin cơ quan nhà nước và báo chí chính thống"]
+    },
+    {
+      "chunk_id": "ver_investment_crypto_stock_platform",
+      "category": "verification",
+      "title": "Cách kiểm tra sàn đầu tư chứng khoán, vàng, tiền số và nhóm đọc lệnh",
+      "content": "Cảnh giác mọi nền tảng cam kết lợi nhuận cố định 1-3% mỗi ngày, 'bao lỗ', có hàng chục tài khoản khoe lãi trong nhóm Telegram/Zalo, và yêu cầu nạp thêm 'thuế/phí giải phóng vốn' vào tài khoản cá nhân mới cho rút tiền. Luôn kiểm tra tính pháp lý của công ty chứng khoán/đầu tư trên cổng thông tin cơ quan quản lý nhà nước trước khi giao dịch.",
+      "tags": ["sàn đầu tư", "chứng khoán quốc tế", "tiền số", "crypto", "chuyên gia đọc lệnh", "cam kết lợi nhuận", "bao lỗ"],
+      "scam_types": ["SCAM_TASK_INVEST_LOAN", "scam_crypto_vip_investment"],
+      "official_domains": ["canhbao.khonggianmang.vn"],
+      "verified_channels": ["Cổng thông tin cơ quan quản lý nhà nước", "canhbao.khonggianmang.vn"]
+    },
+    {
+      "chunk_id": "ver_suspicious_url_and_apk",
+      "category": "verification",
+      "title": "Cách kiểm tra đường link đáng ngờ, tên miền giả và tệp .apk",
+      "content": "Quan sát kỹ phần tên miền gốc ngay trước dấu '/' đầu tiên: kẻ gian thường dùng ký tự nhìn gần giống (số 0 thay chữ O, 'rn' thay 'm'), đuôi tên miền lạ (.top, .vip, .xyz, .click, .site) hoặc chèn tên thương hiệu vào tên miền phụ phía trước một đuôi tên miền lạ. Cảnh giác mọi link rút gọn che đích đến và tuyệt đối không tải tệp .apk ngoài kho ứng dụng chính thức.",
+      "tags": ["kiểm tra link", "tên miền giả", "url lừa đảo", "homoglyph", "punycode", "file apk", "link rút gọn"],
+      "scam_types": ["SCAM_PHISHING_APK_OTP", "scam_sms_brandname_bts_spoof", "scam_napas_sms_points"],
+      "official_domains": ["canhbao.khonggianmang.vn"],
+      "verified_channels": ["Công cụ kiểm tra URL của VeriShield AI", "canhbao.khonggianmang.vn"]
+    },
+    {
+      "chunk_id": "ver_bank_hotline_official_channel",
+      "category": "verification",
+      "title": "Nguyên tắc tra cứu tổng đài ngân hàng chính thức an toàn",
+      "content": "Không bấm gọi các số tổng đài hiển thị trong quảng cáo tìm kiếm tài trợ, bình luận mạng xã hội hoặc tin nhắn do người lạ gửi vì kẻ lừa đảo thường dựng tổng đài giả để dẫn dụ đọc OTP. Nguồn số tổng đài đáng tin cậy nhất là số chăm sóc khách hàng in trực tiếp ở mặt sau thẻ ngân hàng vật lý, mục Hỗ trợ trong ứng dụng ngân hàng chính thức, hoặc website đúng tên miền của ngân hàng.",
+      "tags": ["tổng đài ngân hàng", "hotline chính thức", "tổng đài giả", "mặt sau thẻ", "liên hệ ngân hàng"],
+      "scam_types": ["SCAM_IMPERSONATION", "SCAM_PHISHING_APK_OTP"],
+      "official_domains": [],
+      "verified_channels": ["Số tổng đài in mặt sau thẻ ngân hàng", "Mục Hỗ trợ trong ứng dụng ngân hàng chính thức"]
+    },
+    {
+      "chunk_id": "ver_student_online_kidnapping_scam",
+      "category": "verification",
+      "title": "Cách xác minh kịch bản báo con bị tai nạn, cấp cứu hoặc bắt cóc online",
+      "content": "Kẻ lừa đảo thường gọi điện tự xưng giáo viên, bác sĩ hoặc công an báo con/người thân bị tai nạn nhập viện cần chuyển gấp tiền mổ, hoặc thao túng sinh viên tự cách ly gọi video cầu cứu đòi tiền chuộc. Hãy giữ bình tĩnh, không chuyển tiền ngay mà gọi trực tiếp số điện thoại chính của con, giáo viên chủ nhiệm, phòng công tác sinh viên hoặc bệnh viện theo số công bố chính thức để kiểm chứng.",
+      "tags": ["báo con cấp cứu", "bắt cóc online", "giả giáo viên", "giả bác sĩ", "chuyển tiền mổ gấp", "sinh viên"],
+      "scam_types": ["SCAM_IMPERSONATION", "SCAM_URGENT_BORROW", "scam_deepvoice_urgent_borrow", "scam_police_vneid_apk"],
+      "official_domains": ["congthongtin.bocongan.gov.vn"],
+      "verified_channels": ["Liên hệ trực tiếp nhà trường / người thân", "Số khẩn cấp 113"]
+    }
+  ]
+}

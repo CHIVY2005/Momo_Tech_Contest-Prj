@@ -72,6 +72,8 @@ def calibrate_risk(
     has_visual_bill_anomaly: bool = False,
     ocr_failed: bool = False,
     ocr_unreadable_image_only: bool = False,
+    stt_failed: bool = False,
+    stt_unreadable_audio_only: bool = False,
 ) -> CalibrationResult:
     """Fuse Tier-1, Dual-Head ONNX, and Gemini signals while enforcing hard safety invariants."""
     t1 = max(0, min(100, tier1_score))
@@ -88,6 +90,8 @@ def calibrate_risk(
         confidence = 0.84
     elif llm_avail:
         fused = round(0.45 * t1 + 0.55 * llm_val)
+        if llm_val >= 60 and not guardrails.safety_advisory_detected:
+            fused = max(fused, round(0.85 * llm_val))
         confidence = 0.86
     else:
         fused = t1
@@ -116,10 +120,12 @@ def calibrate_risk(
     )
 
     ocr_incomplete_without_vision = (ocr_failed or ocr_unreadable_image_only) and not llm_avail
+    stt_incomplete_without_llm = (stt_failed or stt_unreadable_audio_only) and not llm_avail
 
     advisory_overridden_by_signals = bool(
         in_active_call
         or ocr_incomplete_without_vision
+        or stt_incomplete_without_llm
         or (onnx_avail and classifier is not None and classifier.scam_probability >= 0.75)
         or (
             onnx_avail
@@ -191,6 +197,13 @@ def calibrate_risk(
             if not hard_threat and fused < 70:
                 confidence = min(confidence, 0.45)
 
+        if stt_incomplete_without_llm:
+            stt_floor_val = 32 if stt_failed else 30
+            if fused < stt_floor_val:
+                fused = stt_floor_val
+            if not hard_threat and fused < 70:
+                confidence = min(confidence, 0.45)
+
     final_score = max(0, min(100, fused))
     verdict = score_to_verdict(final_score)
 
@@ -208,14 +221,14 @@ def calibrate_risk(
     receipt_status: ReceiptVerificationStatus = "NOT_APPLICABLE"
     if receipt_logic and receipt_logic.is_replayed:
         receipt_status = "REPLAYED_RECEIPT"
-    elif (receipt_logic and receipt_logic.beneficiary_mismatch) or (
-        mode == "merchant" and has_qr_beneficiary_mismatch
-    ):
+    elif (receipt_logic and receipt_logic.beneficiary_mismatch) or has_qr_beneficiary_mismatch:
         receipt_status = "BENEFICIARY_MISMATCH"
     elif receipt_logic and receipt_logic.is_receipt_candidate:
         receipt_status = receipt_logic.verification_status
         if receipt_status == "UNVERIFIED_SCREENSHOT" and has_receipt_specific_anomaly:
             receipt_status = "TAMPER_OR_LOGIC_ANOMALY"
+    elif has_visual_bill_anomaly:
+        receipt_status = "TAMPER_OR_LOGIC_ANOMALY"
     elif mode == "merchant" and (image_forensics is not None or bool(vietqr_findings)):
         receipt_status = (
             "TAMPER_OR_LOGIC_ANOMALY" if has_receipt_specific_anomaly else "UNVERIFIED_SCREENSHOT"

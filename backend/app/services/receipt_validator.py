@@ -124,6 +124,14 @@ _STANDALONE_FT_RE: Final[re.Pattern[str]] = re.compile(
     r"(?<![A-Z0-9#])(FT\d{8,18}[A-Z0-9]*(?:[-/_][A-Z0-9#]+)*)(?![A-Z0-9#]|[-/_][A-Z0-9#])"
 )
 
+_RECIPIENT_CURRENCY_TAIL_RE: Final[re.Pattern[str]] = re.compile(
+    r"[ \t]*(?:vn[đd]|[đd]|đồng|dong)(?!\w)"
+    r"(?![ \t]+(?:phạm|pham|bọn|bon|thời|thoi|ý|y|chí|chi|loạt|loat|"
+    r"hành|hanh|tình|tinh|đội|doi|nghiệp|nghiep)\b)",
+    re.IGNORECASE,
+)
+_COMMA_DIGIT_AT_RE: Final[re.Pattern[str]] = re.compile(r",\d")
+
 _DATE_TIME_PATTERNS: Final[tuple[tuple[re.Pattern[str], str], ...]] = (
     (
         re.compile(r"\b(\d{2}/\d{2}/\d{4})\s*(\d{2}:\d{2}(?::\d{2})?)\b"),
@@ -234,7 +242,7 @@ def validate_receipt_logic(
         digits = re.sub(r"\D", "", span_m.group("acct"))
         if (
             len(digits) >= 6
-            and not re.match(r"^,\d", cleaned[e_idx:])
+            and _COMMA_DIGIT_AT_RE.match(cleaned, e_idx) is None
             and is_labeled_account_match(cleaned, span_m)
         ):
             for idx in range(s_idx, e_idx):
@@ -244,8 +252,8 @@ def validate_receipt_logic(
         digits = re.sub(r"\D", "", span_m.group("acct"))
         if (
             len(digits) >= 6
-            and not re.match(r"^,\d", cleaned[e_idx:])
-            and not re.match(r"^[ \t]*(?:vnđ|vnd|đ)(?!\w)", cleaned[e_idx:], re.IGNORECASE)
+            and _COMMA_DIGIT_AT_RE.match(cleaned, e_idx) is None
+            and _RECIPIENT_CURRENCY_TAIL_RE.match(cleaned, e_idx) is None
         ):
             for idx in range(s_idx, e_idx):
                 amount_chars[idx] = " "
@@ -329,24 +337,37 @@ def validate_receipt_logic(
     beneficiary_checked = False
     beneficiary_mismatch = False
     extracted_recipient_account: str | None = None
-    acct_match = EXPLICIT_RECIPIENT_SPAN_RE.search(cleaned)
-    if acct_match:
+    first_mismatched_account: str | None = None
+    mismatch_risk_added = False
+    seen_mismatch_accounts: set[str] = set()
+    exp_digits = re.sub(r"\D", "", expected_merchant_account) if expected_merchant_account else ""
+
+    for acct_match in EXPLICIT_RECIPIENT_SPAN_RE.finditer(cleaned):
+        if _RECIPIENT_CURRENCY_TAIL_RE.match(cleaned, acct_match.end()):
+            continue
         candidate_digits = re.sub(r"\D", "", acct_match.group("acct"))
-        if len(candidate_digits) >= 6:
-            if len(candidate_digits) <= 19:
-                extracted_recipient_account = candidate_digits
-            if expected_merchant_account:
-                exp_digits = re.sub(r"\D", "", expected_merchant_account)
-                if exp_digits:
-                    beneficiary_checked = True
-                    if candidate_digits != exp_digits:
-                        beneficiary_mismatch = True
-                        risk += 75
-                        reasons.append(
-                            f"Số tài khoản nhận trên biên lai "
-                            f"({mask_ioc('bank_account', candidate_digits)}) "
-                            "không khớp với tài khoản của cửa hàng."
-                        )
+        if len(candidate_digits) < 6:
+            continue
+        if extracted_recipient_account is None and len(candidate_digits) <= 19:
+            extracted_recipient_account = candidate_digits
+        if exp_digits:
+            beneficiary_checked = True
+            if candidate_digits != exp_digits:
+                beneficiary_mismatch = True
+                if first_mismatched_account is None and len(candidate_digits) <= 19:
+                    first_mismatched_account = candidate_digits
+                if not mismatch_risk_added:
+                    risk += 75
+                    mismatch_risk_added = True
+                if candidate_digits not in seen_mismatch_accounts:
+                    seen_mismatch_accounts.add(candidate_digits)
+                    reasons.append(
+                        f"Số tài khoản nhận trên biên lai "
+                        f"({mask_ioc('bank_account', candidate_digits)}) "
+                        "không khớp với tài khoản của cửa hàng."
+                    )
+    if first_mismatched_account is not None:
+        extracted_recipient_account = first_mismatched_account
 
     geometry_checked = bool(ocr_boxes and sum(1 for b in ocr_boxes if b.height > 2.0) >= 4)
     geometry_anomaly = _check_box_geometry_anomaly(ocr_boxes)

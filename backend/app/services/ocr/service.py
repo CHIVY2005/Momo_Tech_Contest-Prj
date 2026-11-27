@@ -11,6 +11,11 @@ from pathlib import Path
 from typing import Final
 
 from app.config import Settings
+from app.core.media_executors import (
+    OCR_EXECUTOR,
+    BoundedExecutorPool,
+    MediaExecutorBusyError,
+)
 from app.services.ocr.base import OcrProvider, OcrResult
 from app.services.ocr.gemini_provider import extract_ocr_via_gemini
 from app.services.ocr.mineru_provider import MinerUBasicOnnxProvider
@@ -62,7 +67,11 @@ class OcrOrchestrator:
             else build_primary_ocr_provider(settings)
         )
         self._gemini_fallback_fn: GeminiOcrFn = gemini_fallback_fn or extract_ocr_via_gemini
-        self._semaphore = asyncio.Semaphore(max(1, settings.ocr_max_concurrency))
+        self._max_conc = min(2, max(1, settings.ocr_max_concurrency))
+        self._pool = BoundedExecutorPool(
+            OCR_EXECUTOR,
+            max_concurrency=self._max_conc,
+        )
 
     @property
     def primary_name(self) -> str:
@@ -91,6 +100,8 @@ class OcrOrchestrator:
         )
         if not has_key:
             return False
+        if primary_res.error_code == "OCR_BUSY":
+            return False
         if primary_res.status in ("timeout", "unavailable", "error"):
             return True
         if primary_res.status == "ok" and primary_res.mean_confidence < LOW_CONFIDENCE_FALLBACK_THRESHOLD:
@@ -110,40 +121,56 @@ class OcrOrchestrator:
             return OcrResult(available=False, status="skipped", provider="disabled")
 
         t0 = time.perf_counter()
-        async with self._semaphore:
-            try:
-                primary_res = await asyncio.wait_for(
-                    asyncio.to_thread(self._primary.extract, image_bytes, mime_type=mime_type),
-                    timeout=self._settings.ocr_timeout_sec,
-                )
-            except TimeoutError:
-                logger.warning(
-                    "Local OCR provider '%s' timed out after %.1fs.",
-                    self._primary.name,
-                    self._settings.ocr_timeout_sec,
-                )
-                primary_res = OcrResult(
-                    available=False,
-                    status="timeout",
-                    provider=self._primary.name,
-                    model_id=self._primary.model_id,
-                    latency_ms=int((time.perf_counter() - t0) * 1000),
-                    error_code="OCR_TIMEOUT",
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Local OCR provider '%s' raised %s.",
-                    self._primary.name,
-                    type(exc).__name__,
-                )
-                primary_res = OcrResult(
-                    available=False,
-                    status="error",
-                    provider=self._primary.name,
-                    model_id=self._primary.model_id,
-                    latency_ms=int((time.perf_counter() - t0) * 1000),
-                    error_code=f"OCR_{type(exc).__name__.upper()}",
-                )
+        acquire_timeout_sec = min(2.0, self._settings.ocr_timeout_sec)
+        try:
+            primary_res = await self._pool.run(
+                self._primary.extract,
+                image_bytes,
+                mime_type=mime_type,
+                timeout_sec=self._settings.ocr_timeout_sec,
+                acquire_timeout_sec=acquire_timeout_sec,
+            )
+        except MediaExecutorBusyError:
+            logger.warning(
+                "Local OCR provider '%s' busy; concurrency pool saturated.",
+                self._primary.name,
+            )
+            primary_res = OcrResult(
+                available=False,
+                status="timeout",
+                provider=self._primary.name,
+                model_id=self._primary.model_id,
+                latency_ms=int((time.perf_counter() - t0) * 1000),
+                error_code="OCR_BUSY",
+            )
+        except TimeoutError:
+            logger.warning(
+                "Local OCR provider '%s' timed out after %.1fs.",
+                self._primary.name,
+                self._settings.ocr_timeout_sec,
+            )
+            primary_res = OcrResult(
+                available=False,
+                status="timeout",
+                provider=self._primary.name,
+                model_id=self._primary.model_id,
+                latency_ms=int((time.perf_counter() - t0) * 1000),
+                error_code="OCR_TIMEOUT",
+            )
+        except Exception as exc:
+            logger.warning(
+                "Local OCR provider '%s' raised %s.",
+                self._primary.name,
+                type(exc).__name__,
+            )
+            primary_res = OcrResult(
+                available=False,
+                status="error",
+                provider=self._primary.name,
+                model_id=self._primary.model_id,
+                latency_ms=int((time.perf_counter() - t0) * 1000),
+                error_code=f"OCR_{type(exc).__name__.upper()}",
+            )
 
         if allow_gemini_fallback and self._should_trigger_gemini_fallback(
             primary_res, allow_empty_fallback=allow_empty_fallback
@@ -169,24 +196,31 @@ class OcrOrchestrator:
         self,
         items: list[tuple[bytes, str]],
         *,
+        allow_gemini_fallback: bool = True,
         allow_empty_fallback: bool = False,
         max_gemini_fallbacks: int = DEFAULT_MAX_GEMINI_FALLBACKS_PER_BATCH,
     ) -> list[OcrResult]:
         """Extract OCR across multiple images with concurrency bounds and a fallback budget cap."""
         if not items:
             return []
-        raw_results = await asyncio.gather(
-            *(
-                self.extract(
-                    img_bytes,
-                    mime_type=img_mime,
-                    allow_gemini_fallback=False,
-                    allow_empty_fallback=False,
+        chunk_size = self._max_conc
+        results: list[OcrResult] = []
+        for start in range(0, len(items), chunk_size):
+            chunk = items[start : start + chunk_size]
+            chunk_results = await asyncio.gather(
+                *(
+                    self.extract(
+                        img_bytes,
+                        mime_type=img_mime,
+                        allow_gemini_fallback=False,
+                        allow_empty_fallback=False,
+                    )
+                    for img_bytes, img_mime in chunk
                 )
-                for img_bytes, img_mime in items
             )
-        )
-        results = list(raw_results)
+            results.extend(chunk_results)
+        if not allow_gemini_fallback or max_gemini_fallbacks <= 0:
+            return results
         fallbacks_used = 0
         for idx, ((img_bytes, img_mime), cur_res) in enumerate(zip(items, results, strict=True)):
             if fallbacks_used >= max_gemini_fallbacks:

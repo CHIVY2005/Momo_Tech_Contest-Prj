@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
 from app.core.security import verify_secret
-from app.db.repository import CaseRepository, ProtectedDemoIocError
+from app.db.repository import CaseRepository, ProtectedDemoIocError, sanitize_rule_id
 from app.schemas import (
     BlockRule,
     CreateBlockRuleRequest,
@@ -28,7 +29,7 @@ def _client_ip(request: Request) -> str:
 @router.get("/graph", response_model=RadarGraphResponse)
 async def get_radar_graph(request: Request) -> RadarGraphResponse:
     repo: CaseRepository = request.app.state.repo
-    return repo.get_radar_graph()
+    return await asyncio.to_thread(repo.get_radar_graph)
 
 
 @router.post("/block-rules", response_model=BlockRule)
@@ -76,6 +77,11 @@ async def post_block_rule(body: CreateBlockRuleRequest, request: Request) -> Blo
         )
         logger.warning("radar_audit action=protected_ioc_blocked outcome=denied")
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Giá trị IOC không hợp lệ hoặc không đúng định dạng.",
+        ) from exc
 
     repo.record_audit_log(
         action="create_rule",
@@ -103,11 +109,12 @@ async def post_revoke_block_rule(
     settings = request.app.state.settings
     repo: CaseRepository = request.app.state.repo
     ip = _client_ip(request)
+    safe_rule_id = sanitize_rule_id(rule_id)
     if not verify_secret(body.analyst_pin, settings.analyst_pin):
         repo.record_audit_log(
             action="auth_failed",
             outcome="denied",
-            rule_id=rule_id,
+            rule_id=safe_rule_id,
             detail="Xác thực quản trị viên thất bại khi thu hồi quy tắc chặn.",
             client_ip=ip,
         )
@@ -117,14 +124,14 @@ async def post_revoke_block_rule(
             detail="Mã PIN xác thực không đúng. Vui lòng kiểm tra lại.",
         )
 
-    revoked_rule = repo.get_block_rule(rule_id)
-    revoked = repo.revoke_block_rule(rule_id)
+    revoked_rule = repo.get_block_rule(safe_rule_id) if safe_rule_id is not None else None
+    revoked = repo.revoke_block_rule(safe_rule_id) if safe_rule_id is not None else False
     repo.record_audit_log(
         action="revoke_rule",
         outcome="allowed",
         ioc_type=revoked_rule.ioc_type if revoked_rule else None,
         masked_target=revoked_rule.masked_value if revoked_rule else None,
-        rule_id=rule_id,
+        rule_id=safe_rule_id,
         detail=(
             f"Thu hồi quy tắc chặn đối với {revoked_rule.masked_value}."
             if revoked and revoked_rule
@@ -132,8 +139,12 @@ async def post_revoke_block_rule(
         ),
         client_ip=ip,
     )
-    logger.info("radar_audit action=revoke_rule outcome=allowed rule_id=%s revoked=%s", rule_id, revoked)
-    return {"ok": True, "rule_id": rule_id, "revoked": revoked}
+    logger.info(
+        "radar_audit action=revoke_rule outcome=allowed rule_id=%s revoked=%s",
+        safe_rule_id or "invalid",
+        revoked,
+    )
+    return {"ok": True, "rule_id": safe_rule_id, "revoked": revoked}
 
 
 @router.post("/block-rules/reset")

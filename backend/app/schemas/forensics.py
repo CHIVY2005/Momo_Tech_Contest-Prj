@@ -48,6 +48,7 @@ class UrlFinding(BaseModel):
     normalized_ascii_domain: str
     final_url: str | None = None
     redirect_hops: int = Field(default=0, ge=0)
+    redirect_domains: list[str] = Field(default_factory=list)
     is_blocked_ssrf: bool = False
     is_idn_homoglyph: bool = False
     spoofed_brand: str | None = None

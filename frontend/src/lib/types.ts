@@ -204,6 +204,12 @@ export interface AnalysisReport {
   llm_error?: string | null;
 }
 
+export interface CaseSessionInfo {
+  case_id: string;
+  case_access_token: string;
+  expires_at?: string;
+}
+
 export interface BlockRule {
   rule_id: string;
   ioc_type: IocType;
@@ -300,4 +306,83 @@ export interface SystemHealthResponse {
   telegram_bot_configured?: boolean;
   telegram_bot_url?: string | null;
   playbooks_count: number;
+}
+
+export type AssistantQuickIntent =
+  | "explain_report"
+  | "incident_response"
+  | "verify_info"
+  | "scam_education";
+
+export interface AssistantHistoryTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface AssistantChatPayload {
+  case_id: string | null;
+  message: string;
+  history: AssistantHistoryTurn[];
+  quick_intent?: AssistantQuickIntent | null;
+}
+
+export interface AssistantStatusEvent {
+  phase: "retrieving" | "verifying" | "thinking" | "fallback" | string;
+  label: string;
+}
+
+export interface AssistantToolStatusEvent {
+  tool: string;
+  state: "running" | "done" | "blocked" | string;
+  label: string;
+}
+
+export interface AssistantSafetyNoticeEvent {
+  code: string;
+  message: string;
+}
+
+export interface AssistantCitationItem {
+  id: string;
+  source_type: "kb" | "case" | "tool" | string;
+  title: string;
+}
+
+export interface AssistantEvidenceReportEvent {
+  draft_id: string;
+  can_contribute_radar: boolean;
+  risk_score: number;
+  verdict: string;
+  receipt_verification_status: string;
+  summary_vi: string;
+}
+
+export interface PersistEvidenceResponse {
+  child_case_id: string;
+  child_case_access_token: string;
+  expires_at: string;
+  contributed_to_radar: boolean;
+  parent_case_id: string;
+}
+
+export interface AssistantDoneEvent {
+  degraded_mode: boolean;
+  output_tier: 0 | 1 | 2;
+  suggested_followups: string[];
+}
+
+export interface AssistantErrorEvent {
+  code: string;
+  message: string;
+}
+
+export interface AssistantStreamHandlers {
+  onStatus?: (event: AssistantStatusEvent) => void;
+  onToolStatus?: (event: AssistantToolStatusEvent) => void;
+  onSafetyNotice?: (event: AssistantSafetyNoticeEvent) => void;
+  onDelta?: (text: string) => void;
+  onCitation?: (items: AssistantCitationItem[]) => void;
+  onEvidenceReport?: (event: AssistantEvidenceReportEvent) => void;
+  onDone?: (event: AssistantDoneEvent) => void;
+  onError?: (event: AssistantErrorEvent) => void;
 }

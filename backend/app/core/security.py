@@ -4,50 +4,55 @@ from __future__ import annotations
 
 import asyncio
 import hmac
-import io
 import ipaddress
-import re
 import socket
-import warnings
 from collections.abc import Iterable
-from typing import Any, Final, Literal
+from typing import Any, Final
 from urllib.parse import urlsplit
 
-import av
 import httpcore
 import httpx
-from PIL import Image, UnidentifiedImageError
 
-MAX_DECOMPRESSED_PIXELS: Final[int] = 25_000_000
-MAX_IMAGE_DIMENSION: Final[int] = 10_000
-MAX_DECODED_AUDIO_SAMPLES: Final[int] = 48_000 * 600  # Max 10 minutes at 48kHz
-MAX_AUDIO_CHANNELS: Final[int] = 8
+from app.core.media_security import (
+    MAX_AUDIO_CHANNELS,
+    MAX_DECODED_AUDIO_SAMPLES,
+    MAX_DECOMPRESSED_PIXELS,
+    MAX_IMAGE_DIMENSION,
+    InvalidMediaError,
+    UploadTooLargeError,
+    decode_audio_to_pcm16k,
+    detect_audio_format,
+    detect_canonical_image_mime,
+    normalize_image_for_downstream,
+    validate_upload_bytes,
+)
+from app.core.url_authority import (
+    has_disallowed_url_backslash,
+    has_invisible_url_chars,
+    is_obfuscated_numeric_ip,
+    is_strict_ldh_hostname,
+    strip_single_trailing_dot,
+)
 
-_ALLOWED_IMAGE_MIMES: Final[frozenset[str]] = frozenset(
-    {
-        "image/jpeg",
-        "image/jpg",
-        "image/png",
-        "image/webp",
-        "image/gif",
-        "application/octet-stream",
-    }
-)
-_ALLOWED_AUDIO_MIMES: Final[frozenset[str]] = frozenset(
-    {
-        "audio/wav",
-        "audio/x-wav",
-        "audio/wave",
-        "audio/mpeg",
-        "audio/mp3",
-        "audio/mp4",
-        "audio/x-m4a",
-        "audio/m4a",
-        "audio/ogg",
-        "audio/webm",
-        "application/octet-stream",
-    }
-)
+__all__ = [
+    "MAX_AUDIO_CHANNELS",
+    "MAX_DECODED_AUDIO_SAMPLES",
+    "MAX_DECOMPRESSED_PIXELS",
+    "MAX_IMAGE_DIMENSION",
+    "InvalidMediaError",
+    "SsrfBlockedError",
+    "UploadTooLargeError",
+    "async_validate_url_target",
+    "build_ssrf_pinned_http_client",
+    "decode_audio_to_pcm16k",
+    "detect_audio_format",
+    "detect_canonical_image_mime",
+    "is_public_ip",
+    "normalize_image_for_downstream",
+    "validate_upload_bytes",
+    "validate_url_target",
+    "verify_secret",
+]
 
 _BLOCKED_IPV4_NETS: Final[tuple[ipaddress.IPv4Network, ...]] = (
     ipaddress.IPv4Network("0.0.0.0/8"),
@@ -78,38 +83,6 @@ _BLOCKED_IPV6_NETS: Final[tuple[ipaddress.IPv6Network, ...]] = (
     ipaddress.IPv6Network("fec0::/10"),  # Deprecated IPv6 site-local
     ipaddress.IPv6Network("ff00::/8"),
 )
-
-_NUMERIC_HOST_LABEL_RE: Final[re.Pattern[str]] = re.compile(
-    r"^(?:0x[0-9a-f]+|\d+)$",
-    re.IGNORECASE,
-)
-
-
-def _is_obfuscated_numeric_ip(hostname: str) -> bool:
-    """Return True for shorthand, hex, octal, or integer-encoded IPv4 host literals."""
-    labels = hostname.split(".")
-    if not (1 <= len(labels) <= 4):
-        return False
-    if not all(_NUMERIC_HOST_LABEL_RE.fullmatch(lbl) for lbl in labels):
-        return False
-    if len(labels) != 4:
-        return True
-    for lbl in labels:
-        if lbl.lower().startswith("0x") or (len(lbl) > 1 and lbl.startswith("0")):
-            return True
-    try:
-        ipaddress.IPv4Address(hostname)
-    except ValueError:
-        return True
-    return False
-
-
-class UploadTooLargeError(ValueError):
-    """Raised when uploaded media exceeds configured max_upload_bytes (HTTP 413)."""
-
-
-class InvalidMediaError(ValueError):
-    """Raised when uploaded media is empty, corrupt, or fails container decoding (HTTP 400)."""
 
 
 class SsrfBlockedError(PermissionError):
@@ -164,11 +137,17 @@ def _parse_url_authority(url: str) -> tuple[bool, str | None, str, int, list[str
     raw = url.strip()
     if not raw:
         return False, "Empty URL", "", 0, []
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in raw):
+        return False, "Disallowed control character in URL", "", 0, []
+    if has_invisible_url_chars(raw):
+        return False, "Disallowed invisible character in URL", "", 0, []
+    if has_disallowed_url_backslash(raw):
+        return False, "Disallowed backslash in URL authority", "", 0, []
     try:
         parsed = urlsplit(raw)
         scheme = parsed.scheme.lower()
         port = parsed.port or (443 if scheme == "https" else 80)
-        hostname = (parsed.hostname or "").strip().rstrip(".").lower()
+        raw_host_full = (parsed.hostname or "").lower()
     except ValueError as exc:
         return False, f"Malformed URL authority: {exc}", "", 0, []
 
@@ -176,11 +155,16 @@ def _parse_url_authority(url: str) -> tuple[bool, str | None, str, int, list[str
         return False, f"Disallowed URL scheme: {scheme or 'none'}", "", 0, []
     if parsed.username is not None or parsed.password is not None:
         return False, "Embedded URL credentials are disallowed", "", 0, []
-    if not hostname:
-        return False, "Missing hostname", "", 0, []
+    if any(ch.isspace() for ch in raw_host_full):
+        return False, "Whitespace in hostname is disallowed", "", 0, []
+
+    had_trailing_dot = raw_host_full.endswith(".")
+    hostname = strip_single_trailing_dot(raw_host_full)
+    if not hostname or hostname.endswith("."):
+        return False, "Missing or malformed hostname", "", 0, []
     if hostname == "localhost" or hostname.endswith((".localhost", ".local", ".internal")):
         return False, f"Internal hostname blocked: {hostname}", "", 0, []
-    if _is_obfuscated_numeric_ip(hostname):
+    if is_obfuscated_numeric_ip(hostname):
         return False, f"Obfuscated numeric IP literal blocked: {hostname}", "", 0, []
 
     try:
@@ -194,9 +178,32 @@ def _parse_url_authority(url: str) -> tuple[bool, str | None, str, int, list[str
         return True, None, hostname, port, [str(literal_ip)]
 
     try:
-        ascii_host = hostname.encode("idna").decode("ascii")
+        idna_host = hostname.encode("idna").decode("ascii").lower()
     except UnicodeError:
         return False, "Invalid internationalized domain name", "", 0, []
+    ascii_host = idna_host if had_trailing_dot else strip_single_trailing_dot(idna_host)
+
+    if (
+        not ascii_host
+        or ascii_host == "localhost"
+        or ascii_host.endswith((".localhost", ".local", ".internal"))
+    ):
+        return False, f"Internal hostname blocked: {ascii_host}", "", 0, []
+    if is_obfuscated_numeric_ip(ascii_host):
+        return False, f"Obfuscated numeric IP literal blocked: {ascii_host}", "", 0, []
+
+    try:
+        post_ip = ipaddress.ip_address(ascii_host)
+    except ValueError:
+        post_ip = None
+
+    if post_ip is not None:
+        if not is_public_ip(ascii_host):
+            return False, f"Non-public IP literal blocked: {ascii_host}", "", 0, []
+        return True, None, ascii_host, port, [str(post_ip)]
+
+    if not is_strict_ldh_hostname(ascii_host):
+        return False, f"Invalid LDH hostname: {ascii_host}", "", 0, []
 
     return True, None, ascii_host, port, []
 
@@ -267,7 +274,7 @@ class _PinnedPublicNetworkBackend(httpcore.AsyncNetworkBackend):
         local_address: str | None = None,
         socket_options: Iterable[Any] | None = None,
     ) -> httpcore.AsyncNetworkStream:
-        cleaned_host = host.strip().strip("[]").rstrip(".").lower()
+        cleaned_host = strip_single_trailing_dot(host.strip().strip("[]").lower())
         if is_public_ip(cleaned_host):
             pinned_ip = cleaned_host
         else:
@@ -323,94 +330,6 @@ def build_ssrf_pinned_http_client(timeout_sec: float = 3.5) -> httpx.AsyncClient
         timeout=httpx.Timeout(timeout_sec, connect=2.5),
         follow_redirects=False,
     )
-
-
-def _verify_decodable_audio(data: bytes) -> None:
-    if len(data) < 12:
-        raise InvalidMediaError("Audio payload too short.")
-    try:
-        with av.open(io.BytesIO(data), mode="r") as container:
-            if not container.streams.audio:
-                raise InvalidMediaError("Container has no audio streams.")
-            stream = container.streams.audio[0]
-            channels = int(getattr(stream, "channels", 1) or 1)
-            if channels > MAX_AUDIO_CHANNELS:
-                raise InvalidMediaError(f"Audio channel count {channels} exceeds limit.")
-            total_samples = 0
-            for frame in container.decode(audio=0):
-                total_samples += int(frame.samples)
-                if total_samples > MAX_DECODED_AUDIO_SAMPLES:
-                    raise InvalidMediaError("Audio duration exceeds maximum safe decoding budget.")
-            if total_samples <= 0:
-                raise InvalidMediaError("Audio stream contains zero decodable frames.")
-    except InvalidMediaError:
-        raise
-    except Exception as exc:
-        raise InvalidMediaError(f"Corrupt or undecodable audio payload: {exc}") from exc
-
-
-def validate_upload_bytes(
-    data: bytes,
-    max_bytes: int,
-    kind: Literal["image", "audio"],
-    declared_mime: str | None = None,
-) -> None:
-    """Enforce upload byte ceiling, MIME/magic checks, full pixel/frame decoding, and bomb caps."""
-    if not data:
-        raise InvalidMediaError(f"Empty {kind} payload.")
-    if len(data) > max_bytes:
-        raise UploadTooLargeError(
-            f"Upload size {len(data)} bytes exceeds limit of {max_bytes} bytes."
-        )
-
-    if declared_mime:
-        clean_mime = declared_mime.split(";", 1)[0].strip().lower()
-        if clean_mime:
-            allowed_mimes = _ALLOWED_IMAGE_MIMES if kind == "image" else _ALLOWED_AUDIO_MIMES
-            if clean_mime not in allowed_mimes:
-                raise InvalidMediaError(f"Unsupported declared MIME type for {kind}: {clean_mime}.")
-
-    if kind == "audio":
-        _verify_decodable_audio(data)
-        return
-
-    if not data.startswith(
-        (b"\xff\xd8\xff", b"\x89PNG\r\n\x1a\n", b"GIF87a", b"GIF89a", b"RIFF")
-    ):
-        raise InvalidMediaError("Unsupported image header; expected JPEG, PNG, WEBP, or GIF.")
-    if data.startswith(b"RIFF") and data[8:12] != b"WEBP":
-        raise InvalidMediaError("RIFF container is not a valid WEBP image.")
-
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", Image.DecompressionBombWarning)
-            with Image.open(io.BytesIO(data)) as img:
-                width, height = img.size
-                if (
-                    width <= 0
-                    or height <= 0
-                    or width > MAX_IMAGE_DIMENSION
-                    or height > MAX_IMAGE_DIMENSION
-                    or (width * height) > MAX_DECOMPRESSED_PIXELS
-                ):
-                    raise InvalidMediaError(
-                        "Image dimensions invalid or exceed pixel-bomb threshold."
-                    )
-                img.verify()
-            # Re-open and force full raster pixel decode to catch truncated JPEG scan streams
-            with Image.open(io.BytesIO(data)) as decoded_img:
-                decoded_img.load()
-    except (
-        UnidentifiedImageError,
-        Image.DecompressionBombError,
-        Image.DecompressionBombWarning,
-        OSError,
-        ValueError,
-        SyntaxError,
-    ) as exc:
-        if isinstance(exc, InvalidMediaError):
-            raise
-        raise InvalidMediaError(f"Corrupt or unsafe image file: {exc}") from exc
 
 
 def verify_secret(provided: str | None, expected: str) -> bool:

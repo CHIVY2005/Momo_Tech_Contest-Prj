@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import re
 import time
@@ -21,10 +22,13 @@ from app.schemas import (
     UrlFinding,
     VietQRInfo,
 )
-from app.services.guardrails import GuardrailResult, normalize_guardrail_text
+from app.services.assistant_vault import sanitize_llm_egress_text
+from app.services.guardrails import GuardrailResult, strip_xml_breakout_tags
+from app.services.ioc_extractor import hash_ioc, mask_ioc
 from app.services.llm_client import GeminiStructuredSchema, execute_llm_call
 
 logger = logging.getLogger(__name__)
+_REASON_DOM_RE = re.compile(r"Tên miền '([^']+)'")
 
 __all__ = [
     "GeminiStructuredSchema",
@@ -54,15 +58,39 @@ class LLMReasoningResult(BaseModel):
     llm_error: str | None = None
 
 
+def _mask_dom_str(raw_dom: str) -> str:
+    dom = asc = re.sub(r"[\u3002\uff0e\uff61]", ".", raw_dom.strip()).rstrip(".")
+    with contextlib.suppress(UnicodeError):
+        asc = dom.encode("idna").decode("ascii")
+    return mask_ioc("domain", asc.lower()) if asc.isascii() else f"dom_{hash_ioc('domain', dom)[:4]}***"
+
+
+def _mask_url_findings_domains(raw: str, url_findings: list[UrlFinding]) -> str:
+    out = _REASON_DOM_RE.sub(lambda m: f"Tên miền '{_mask_dom_str(m.group(1))}'", raw)
+    raw_domains = [
+        h
+        for u in url_findings
+        for h in (u.domain, u.normalized_ascii_domain, *u.redirect_domains)
+        if h
+    ]
+    variants_map: dict[str, str] = {}
+    for raw_h in dict.fromkeys(raw_domains):
+        repl = _mask_dom_str(raw_h)
+        variants = [raw_h]
+        for enc, dec in (("ascii", "idna"), ("idna", "ascii")):
+            with contextlib.suppress(UnicodeError):
+                variants.append(raw_h.encode(enc).decode(dec))
+        for var in variants:
+            if var and var not in variants_map:
+                variants_map[var] = repl
+    for var in sorted(variants_map, key=len, reverse=True):
+        out = re.sub(re.escape(var), variants_map[var], out, flags=re.IGNORECASE)
+    return out
+
+
 def _sanitize_untrusted_text(raw: str) -> str:
-    """Neutralize invisible chars and any attempt to break out of <UNTRUSTED_USER_CONTENT>."""
-    cleaned, _ = normalize_guardrail_text(raw)
-    return re.sub(
-        r"</?\s*untrusted_user_content(?:\b[^>]*)?>",
-        "[STRIPPED_TAG]",
-        cleaned,
-        flags=re.IGNORECASE,
-    )
+    """Neutralize invisible chars and any attempt to break out of prompt delimiter tags."""
+    return strip_xml_breakout_tags(raw)
 
 
 def _collect_trusted_signals(
@@ -123,9 +151,9 @@ def build_isolated_prompt(
     trusted_signals: list[str] | None = None,
 ) -> str:
     """Build grounded Vietnamese security-analyst prompt with strict untrusted data isolation."""
-    safe_body = _sanitize_untrusted_text(user_text[:6000])
+    safe_body = _sanitize_untrusted_text(user_text)[:6000]
     sanitized_notes = [
-        _sanitize_untrusted_text(note[:300]) for note in tier1_notes[:8] if note.strip()
+        _sanitize_untrusted_text(note)[:300] for note in tier1_notes[:8] if note.strip()
     ]
     untrusted_payload = safe_body
     if sanitized_notes:
@@ -178,6 +206,7 @@ def _synthesize_fallback_result(
     llm_latency_ms: int | None = None,
     llm_error: str | None = None,
     ocr_incomplete: bool = False,
+    stt_incomplete: bool = False,
 ) -> LLMReasoningResult:
     reasons: list[str] = []
     tactics: list[str] = []
@@ -212,7 +241,7 @@ def _synthesize_fallback_result(
             "biên lai chuyển khoản có dấu hiệu bất thường, bị dùng lại hoặc sai số tài khoản nhận"
         )
 
-    if guardrails.safety_advisory_detected and not reasons and not ocr_incomplete:
+    if guardrails.safety_advisory_detected and not reasons and not ocr_incomplete and not stt_incomplete:
         return LLMReasoningResult(
             degraded_mode=True,
             ai_score=None,
@@ -248,11 +277,23 @@ def _synthesize_fallback_result(
             f"Kết quả phân tích nhanh nội bộ: Nội dung có dấu hiệu tương tự kịch bản "
             f"'{matched_playbooks[0]['name_vi']}'."
         )
+    elif ocr_incomplete and stt_incomplete:
+        summary = (
+            "Kết quả phân tích nhanh nội bộ: Không thể đọc đầy đủ văn bản từ hình ảnh và "
+            "không nhận diện được đầy đủ lời thoại từ tệp ghi âm đính kèm nên chưa thể kết luận "
+            "an toàn. Bạn nên kiểm tra kỹ hoặc tự xác minh qua kênh chính thức trước khi giao dịch."
+        )
     elif ocr_incomplete:
         summary = (
             "Kết quả phân tích nhanh nội bộ: Không thể đọc được đầy đủ văn bản từ hình ảnh "
             "đính kèm nên chưa thể kết luận an toàn. Bạn nên chụp ảnh rõ nét hơn hoặc tự xác minh "
             "qua kênh chính thức trước khi giao dịch."
+        )
+    elif stt_incomplete:
+        summary = (
+            "Kết quả phân tích nhanh nội bộ: Không thể chuyển đổi hoặc nhận diện đầy đủ lời thoại "
+            "từ tệp ghi âm đính kèm nên chưa thể kết luận an toàn. Bạn nên nghe lại kỹ hoặc tự "
+            "xác minh qua kênh chính thức trước khi giao dịch."
         )
     else:
         summary = (
@@ -295,10 +336,31 @@ async def run_gemini_reasoning(
     audios: list[tuple[bytes, str]] | None = None,
     local_transcript: str | None = None,
     ocr_incomplete: bool = False,
+    stt_incomplete: bool = False,
+    sanitize_egress_text: bool = False,
     force_fail_llm: bool = False,
+    local_only: bool = False,
     _generate_override: Callable[[str, str, list[Any]], Awaitable[Any]] | None = None,
 ) -> LLMReasoningResult:
     """Execute Tier-2 reasoning via CPA OpenAI-compatible API or Google GenAI with Tier-1 fallback."""
+    if local_only:
+        return _synthesize_fallback_result(
+            guardrails=guardrails,
+            classifier=classifier,
+            url_findings=url_findings,
+            vietqr_findings=vietqr_findings,
+            sandbox=sandbox,
+            image_forensics=image_forensics,
+            receipt_logic=receipt_logic,
+            matched_playbooks=matched_playbooks,
+            local_transcript=local_transcript,
+            active_block_rule_hit=active_block_rule_hit,
+            llm_provider="none",
+            llm_error="LOCAL_ONLY_PRIVACY_MODE",
+            ocr_incomplete=ocr_incomplete,
+            stt_incomplete=stt_incomplete,
+        )
+
     tier1_notes: list[str] = []
     if iocs.brands:
         tier1_notes.append(f"Thương hiệu nhắc tới: {', '.join(iocs.brands)}")
@@ -310,6 +372,22 @@ async def run_gemini_reasoning(
     if receipt_logic and receipt_logic.reasons:
         tier1_notes.extend(receipt_logic.reasons[:3])
 
+    prompt_user_text = text
+    if sanitize_egress_text:
+        prompt_user_text = sanitize_llm_egress_text(
+            _mask_url_findings_domains(text, url_findings),
+            preserve_official_bare_domains=False,
+            preserve_strict_vault_refs=False,
+        )
+        tier1_notes = [
+            sanitize_llm_egress_text(
+                _mask_url_findings_domains(note, url_findings),
+                preserve_official_bare_domains=False,
+                preserve_strict_vault_refs=False,
+            )
+            for note in tier1_notes
+        ]
+
     trusted_signals = _collect_trusted_signals(
         guardrails=guardrails,
         url_findings=url_findings,
@@ -320,7 +398,7 @@ async def run_gemini_reasoning(
         active_block_rule_hit=active_block_rule_hit,
     )
     prompt = build_isolated_prompt(
-        user_text=text,
+        user_text=prompt_user_text,
         mode=mode,
         tier1_notes=tier1_notes,
         matched_playbooks=matched_playbooks,
@@ -344,8 +422,10 @@ async def run_gemini_reasoning(
             llm_provider=provider,
             llm_error="FORCED_FAIL" if force_fail_llm else "NO_API_KEY",
             ocr_incomplete=ocr_incomplete,
+            stt_incomplete=stt_incomplete,
         )
 
+    has_audio_input = bool(audio_bytes or audios)
     if _generate_override is not None:
         t0 = time.perf_counter()
         for key in keys:
@@ -365,7 +445,11 @@ async def run_gemini_reasoning(
                         degraded_mode=False,
                         ai_score=parsed.ai_risk_score,
                         summary_vi=parsed.summary_vi.strip(),
-                        transcript=(parsed.transcript or local_transcript),
+                        transcript=(
+                            (parsed.transcript or local_transcript)
+                            if has_audio_input
+                            else local_transcript
+                        ),
                         manipulation_tactics=parsed.manipulation_tactics,
                         highlighted_phrases=parsed.highlighted_phrases,
                         counter_replies=parsed.counter_replies,
@@ -392,6 +476,7 @@ async def run_gemini_reasoning(
             llm_latency_ms=int((time.perf_counter() - t0) * 1000),
             llm_error="SAFETY_OR_OVERRIDE_NULL",
             ocr_incomplete=ocr_incomplete,
+            stt_incomplete=stt_incomplete,
         )
 
     has_non_audio = bool(text.strip() or image_bytes is not None or images or local_transcript)
@@ -423,6 +508,7 @@ async def run_gemini_reasoning(
             llm_provider=provider,
             llm_error=f"ADAPTER_{type(exc).__name__.upper()}",
             ocr_incomplete=ocr_incomplete,
+            stt_incomplete=stt_incomplete,
         )
     if outcome.parsed is not None:
         p = outcome.parsed
@@ -430,7 +516,7 @@ async def run_gemini_reasoning(
             degraded_mode=False,
             ai_score=p.ai_risk_score,
             summary_vi=p.summary_vi.strip(),
-            transcript=(p.transcript or local_transcript),
+            transcript=(p.transcript or local_transcript) if has_audio_input else local_transcript,
             manipulation_tactics=p.manipulation_tactics,
             highlighted_phrases=p.highlighted_phrases,
             counter_replies=p.counter_replies,
@@ -458,6 +544,7 @@ async def run_gemini_reasoning(
         llm_latency_ms=outcome.latency_ms,
         llm_error=outcome.error_code,
         ocr_incomplete=ocr_incomplete,
+        stt_incomplete=stt_incomplete,
     )
     return fb.model_copy(
         update={

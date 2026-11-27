@@ -126,6 +126,7 @@ class AnalysisReport(BaseModel):
 
         is_merchant_receipt = self.mode == "merchant" and (
             self.image_forensics is not None
+            or bool(self.vietqr_findings)
             or (self.receipt_logic is not None and self.receipt_logic.is_receipt_candidate)
         )
         if is_merchant_receipt:
@@ -137,6 +138,7 @@ class AnalysisReport(BaseModel):
                 raise ValueError(
                     "Merchant receipt report cannot use receipt_verification_status='NOT_APPLICABLE'"
                 )
+        if is_merchant_receipt or self.receipt_verification_status != "NOT_APPLICABLE":
             warning = self.actions.merchant_balance_warning
             if not (warning and warning.strip()):
                 raise ValueError(
@@ -151,8 +153,8 @@ class AnalysisReport(BaseModel):
                 "do not check",
             )
             negated_check_re = (
-                r"(?:không|khỏi|miễn|chưa|đừng)\s+(?:cần\s+|phải\s+|nên\s+)?"
-                r"(?:kiểm\s*tra|đối\s*chiếu|xác\s*nhận|xem\s*lại|chờ)"
+                r"(?:không|khỏi|miễn|chưa|đừng|tránh|cấm)\s+(?:cần\s+|phải\s+|nên\s+)?"
+                r"(?:kiểm\s*tra|đối\s*chiếu|xác\s*nhận|xác\s*minh|xem\s*lại|chờ)"
             )
             if re.search(negated_check_re, w_low) or any(neg in w_low for neg in negated_phrases):
                 raise ValueError(

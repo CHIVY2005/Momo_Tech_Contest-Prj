@@ -38,5 +38,6 @@ COPY --chown=verishield:verishield app /app/app
 USER verishield
 EXPOSE 8000
 
-ENV UVICORN_WORKERS=1
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-1} --proxy-headers --forwarded-allow-ips=127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"]
+ENV UVICORN_WORKERS=1 \
+    UVICORN_FORWARDED_ALLOW_IPS=""
+CMD ["sh", "-c", "if [ -n \"${UVICORN_FORWARDED_ALLOW_IPS:-}\" ]; then exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers \"${UVICORN_WORKERS:-1}\" --proxy-headers \"--forwarded-allow-ips=${UVICORN_FORWARDED_ALLOW_IPS}\"; else exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers \"${UVICORN_WORKERS:-1}\" --no-proxy-headers; fi"]

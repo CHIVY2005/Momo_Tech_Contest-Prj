@@ -13,12 +13,15 @@ import numpy as np
 from app.schemas import AnalyzeMode
 
 
-def _normalize_vi_search(text: str) -> str:
+def normalize_vi_search(text: str) -> str:
     """Lowercase and strip Vietnamese diacritics (including đ -> d) for robust lexical recall."""
     mapped = text.lower().replace("đ", "d")
     decomposed = unicodedata.normalize("NFD", mapped)
     stripped = "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
     return re.sub(r"\s+", " ", stripped).strip()
+
+
+_normalize_vi_search = normalize_vi_search
 
 
 class KnowledgeBaseRetriever:

@@ -1,9 +1,10 @@
 "use client";
 
-import { AlertCircle, Radar, Send } from "lucide-react";
+import { AlertCircle, Radar, Send, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AssistantDrawer } from "@/components/assistant/AssistantDrawer";
 import { ActionCopilotPanel } from "@/components/copilot/ActionCopilotPanel";
 import { EvidenceTabs } from "@/components/evidence/EvidenceTabs";
 import { WalletPreTransferSim } from "@/components/wallet/WalletPreTransferSim";
@@ -14,7 +15,13 @@ import { VerdictDashboard } from "@/components/workbench/VerdictDashboard";
 import { analyzeStream, fetchDemos, fetchHealth } from "@/lib/api";
 import { inferAnalyzeMode } from "@/lib/composerUtils";
 import { BRAND_COPY } from "@/lib/copy";
-import type { AnalysisReport, DemoScenario, SystemHealthResponse, TraceStep } from "@/lib/types";
+import type {
+  AnalysisReport,
+  AssistantQuickIntent,
+  DemoScenario,
+  SystemHealthResponse,
+  TraceStep,
+} from "@/lib/types";
 
 const INITIAL_FORM: WorkbenchFormState = {
   text: "",
@@ -27,6 +34,7 @@ const INITIAL_FORM: WorkbenchFormState = {
 
 interface SubmittedSnapshot {
   report: AnalysisReport;
+  caseAccessToken: string | null;
   imageFiles: File[];
   transferAmount: string;
 }
@@ -42,6 +50,13 @@ export default function HomePage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isFormCollapsed, setIsFormCollapsed] = useState(false);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [assistantInitialPrompt, setAssistantInitialPrompt] = useState<string | undefined>(
+    undefined,
+  );
+  const [assistantInitialIntent, setAssistantInitialIntent] =
+    useState<AssistantQuickIntent | null>(null);
+  const [assistantPromptNonce, setAssistantPromptNonce] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -56,8 +71,10 @@ export default function HomePage() {
     };
   }, []);
 
+  const submittedImageFiles = submittedSnapshot?.imageFiles;
+
   useEffect(() => {
-    const files = submittedSnapshot?.imageFiles ?? [];
+    const files = submittedImageFiles ?? [];
     if (files.length === 0) {
       setSubmittedPreviewUrls([]);
       return;
@@ -69,7 +86,7 @@ export default function HomePage() {
         URL.revokeObjectURL(u);
       }
     };
-  }, [submittedSnapshot]);
+  }, [submittedImageFiles]);
 
   async function executeAnalysis(overrideDemo?: DemoScenario) {
     abortRef.current?.abort();
@@ -79,6 +96,9 @@ export default function HomePage() {
     setErrorMsg(null);
     setTraceSteps([]);
     setSubmittedSnapshot(null);
+    setIsAssistantOpen(false);
+    setAssistantInitialPrompt(undefined);
+    setAssistantInitialIntent(null);
     setIsAnalyzing(true);
     setIsFormCollapsed(true);
 
@@ -119,6 +139,8 @@ export default function HomePage() {
       }
     }
 
+    let capturedToken: string | null = null;
+    let capturedTokenCaseId: string | null = null;
     try {
       const finalReport = await analyzeStream(
         fd,
@@ -134,9 +156,20 @@ export default function HomePage() {
             if (abortRef.current !== controller) return;
             setSubmittedSnapshot({
               report: res,
+              caseAccessToken: capturedTokenCaseId === res.case_id ? capturedToken : null,
               imageFiles: capturedImageFiles,
               transferAmount: capturedAmount,
             });
+          },
+          onSession: (session) => {
+            if (abortRef.current !== controller) return;
+            capturedToken = session.case_access_token;
+            capturedTokenCaseId = session.case_id;
+            setSubmittedSnapshot((prev) =>
+              prev && prev.report.case_id === session.case_id
+                ? { ...prev, caseAccessToken: session.case_access_token }
+                : prev,
+            );
           },
         },
         controller.signal,
@@ -144,6 +177,7 @@ export default function HomePage() {
       if (abortRef.current === controller) {
         setSubmittedSnapshot({
           report: finalReport,
+          caseAccessToken: capturedTokenCaseId === finalReport.case_id ? capturedToken : null,
           imageFiles: capturedImageFiles,
           transferAmount: capturedAmount,
         });
@@ -187,12 +221,40 @@ export default function HomePage() {
     setIsAnalyzing(false);
     setActiveDemo(null);
     setSubmittedSnapshot(null);
+    setIsAssistantOpen(false);
+    setAssistantInitialPrompt(undefined);
+    setAssistantInitialIntent(null);
     setTraceSteps([]);
     setErrorMsg(null);
     setForm(next);
   }
 
+  const handleOpenAssistant = useCallback(
+    (initialPrompt?: string, initialIntent?: AssistantQuickIntent) => {
+      if (initialPrompt) {
+        setAssistantInitialPrompt(initialPrompt);
+        setAssistantInitialIntent(initialIntent ?? null);
+        setAssistantPromptNonce((prev) => prev + 1);
+      } else {
+        setAssistantInitialPrompt(undefined);
+        setAssistantInitialIntent(null);
+      }
+      setIsAssistantOpen(true);
+    },
+    [],
+  );
+
+  const handleCloseAssistant = useCallback(() => {
+    setIsAssistantOpen(false);
+  }, []);
+
+  const handleClearInitialPrompt = useCallback(() => {
+    setAssistantInitialPrompt(undefined);
+    setAssistantInitialIntent(null);
+  }, []);
+
   const report = submittedSnapshot?.report ?? null;
+  const caseAccessToken = submittedSnapshot?.caseAccessToken ?? null;
   const canCollapseForm = isAnalyzing || Boolean(report) || traceSteps.length > 0;
 
   return (
@@ -279,6 +341,9 @@ export default function HomePage() {
           setIsFormCollapsed(false);
           setActiveDemo(null);
           setSubmittedSnapshot(null);
+          setIsAssistantOpen(false);
+          setAssistantInitialPrompt(undefined);
+          setAssistantInitialIntent(null);
           setTraceSteps([]);
           setErrorMsg(null);
           setForm(INITIAL_FORM);
@@ -299,7 +364,7 @@ export default function HomePage() {
 
       {report && (
         <div className="space-y-5">
-          <VerdictDashboard report={report} />
+          <VerdictDashboard report={report} onOpenAssistant={handleOpenAssistant} />
 
           <WalletPreTransferSim
             report={report}
@@ -315,7 +380,7 @@ export default function HomePage() {
               />
             </div>
             <div className="xl:col-span-5">
-              <ActionCopilotPanel report={report} />
+              <ActionCopilotPanel report={report} caseAccessToken={caseAccessToken} />
 
               {(report.iocs.bank_accounts.length > 0 ||
                 report.iocs.domains.length > 0 ||
@@ -343,6 +408,32 @@ export default function HomePage() {
               )}
             </div>
           </div>
+
+          <button
+            type="button"
+            hidden={isAssistantOpen}
+            aria-hidden={isAssistantOpen}
+            tabIndex={isAssistantOpen ? -1 : 0}
+            onClick={() => handleOpenAssistant()}
+            aria-label="Mở Trợ lý VeriShield"
+            className={`fixed bottom-5 right-5 z-40 min-h-[44px] cursor-pointer items-center gap-2 rounded-full border border-amber-400/75 bg-surface-elevated/95 px-4 py-2.5 text-xs font-bold text-amber-100 shadow-2xl backdrop-blur-xs transition-colors hover:border-amber-300 hover:bg-amber-500/20 ${
+              isAssistantOpen ? "hidden" : "inline-flex"
+            }`}
+          >
+            <Sparkles className="h-4 w-4 text-amber-300" aria-hidden="true" />
+            <span>Hỏi Trợ lý VeriShield</span>
+          </button>
+
+          <AssistantDrawer
+            report={report}
+            caseAccessToken={caseAccessToken}
+            isOpen={isAssistantOpen}
+            onClose={handleCloseAssistant}
+            initialPrompt={assistantInitialPrompt}
+            initialIntent={assistantInitialIntent}
+            initialPromptNonce={assistantPromptNonce}
+            onClearInitialPrompt={handleClearInitialPrompt}
+          />
         </div>
       )}
     </div>

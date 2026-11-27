@@ -8,19 +8,22 @@ import {
   Layers,
   ShieldAlert,
   ShieldCheck,
+  Sparkles,
   Users,
   Volume2,
 } from "lucide-react";
 
+import { buildContextQuickActions } from "@/components/assistant/AssistantQuickActions";
 import {
   formatClassifierLabel,
   SHARED_DISCLAIMERS,
   VERDICT_COPY,
 } from "@/lib/copy";
-import type { AnalysisReport, VerdictLevel } from "@/lib/types";
+import type { AnalysisReport, AssistantQuickIntent, VerdictLevel } from "@/lib/types";
 
-interface VerdictDashboardProps {
+export interface VerdictDashboardProps {
   report: AnalysisReport;
+  onOpenAssistant?: (initialPrompt?: string, initialIntent?: AssistantQuickIntent) => void;
 }
 
 const VERDICT_META: Record<
@@ -126,13 +129,16 @@ function summarizeLayerConsensus(report: AnalysisReport): { activeCount: number;
   return { activeCount: Math.max(1, activeCount), flaggedCount };
 }
 
-export function VerdictDashboard({ report }: VerdictDashboardProps) {
+export function VerdictDashboard({ report, onOpenAssistant }: VerdictDashboardProps) {
   const meta = VERDICT_META[report.verdict];
   const VerdictIcon = meta.Icon;
   const showMerchantHonestyBanner =
     report.receipt_verification_status === "UNVERIFIED_SCREENSHOT" ||
     Boolean(report.actions.merchant_balance_warning);
   const consensus = summarizeLayerConsensus(report);
+  const quickAssistantActions = onOpenAssistant
+    ? buildContextQuickActions(report).slice(0, 3)
+    : [];
 
   return (
     <section
@@ -241,6 +247,35 @@ export function VerdictDashboard({ report }: VerdictDashboardProps) {
           <span>75–100 · Rất cao</span>
         </div>
       </div>
+
+      {onOpenAssistant && (
+        <div className="mt-4 flex flex-col gap-2.5 rounded-xl border border-amber-500/30 bg-surface-subtle/90 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-[11px] font-semibold text-ink-secondary">
+              Hỏi nhanh Trợ lý VeriShield:
+            </span>
+            {quickAssistantActions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                onClick={() => onOpenAssistant(action.prompt, action.intent)}
+                className="min-h-[34px] cursor-pointer rounded-lg border border-border-strong bg-surface px-2.5 py-1 text-[11px] font-medium text-ink-secondary transition-colors hover:border-amber-400/65 hover:text-ink"
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onOpenAssistant()}
+            className="inline-flex min-h-[38px] shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-amber-400/65 bg-amber-500/18 px-3.5 py-1.5 text-xs font-bold text-amber-100 transition-colors hover:border-amber-300 hover:bg-amber-500/28"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-amber-300" aria-hidden="true" />
+            <span>Hỏi Trợ lý VeriShield</span>
+          </button>
+        </div>
+      )}
 
       {(report.matched_playbooks.length > 0 || report.manipulation_tactics.length > 0) && (
         <div className="mt-4 grid grid-cols-1 gap-3 border-t border-border-subtle/80 pt-4 sm:grid-cols-2">

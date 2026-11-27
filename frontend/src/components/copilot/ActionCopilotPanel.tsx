@@ -1,18 +1,51 @@
 "use client";
 
-import { Check, Copy, FileDown, HeartHandshake, MessageSquareReply, Shield } from "lucide-react";
-import { useState } from "react";
+import {
+  AlertCircle,
+  Check,
+  Copy,
+  FileDown,
+  HeartHandshake,
+  Loader2,
+  MessageSquareReply,
+  Shield,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 
-import { getReportPdfUrl } from "@/lib/api";
+import { downloadReportPdf } from "@/lib/api";
 import type { AnalysisReport } from "@/lib/types";
 
-interface ActionCopilotPanelProps {
+export interface ActionCopilotPanelProps {
   report: AnalysisReport;
+  caseAccessToken: string | null;
 }
 
-export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
+export function ActionCopilotPanel({ report, caseAccessToken }: ActionCopilotPanelProps) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const { actions } = report;
+
+  useEffect(() => {
+    setPdfError(null);
+  }, [report.case_id, caseAccessToken]);
+
+  async function handleDownloadPdf() {
+    if (isDownloadingPdf) return;
+    setPdfError(null);
+    setIsDownloadingPdf(true);
+    try {
+      await downloadReportPdf(report.case_id, caseAccessToken);
+    } catch (err) {
+      setPdfError(
+        err instanceof Error
+          ? err.message
+          : "Không thể tải báo cáo bằng chứng PDF lúc này. Vui lòng thử lại sau.",
+      );
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  }
 
   async function copyText(key: string, content: string) {
     try {
@@ -39,16 +72,36 @@ export function ActionCopilotPanel({ report }: ActionCopilotPanelProps) {
           </h3>
         </div>
 
-        <a
-          href={getReportPdfUrl(report.case_id)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-amber-500/45 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 transition-colors hover:bg-amber-500/25"
+        <button
+          type="button"
+          onClick={() => void handleDownloadPdf()}
+          disabled={isDownloadingPdf}
+          aria-busy={isDownloadingPdf}
+          className="inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-lg border border-amber-500/45 bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-200 transition-colors hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <FileDown className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>Tải báo cáo bằng chứng (PDF)</span>
-        </a>
+          {isDownloadingPdf ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              <span>Đang tải báo cáo PDF...</span>
+            </>
+          ) : (
+            <>
+              <FileDown className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Tải báo cáo bằng chứng (PDF)</span>
+            </>
+          )}
+        </button>
       </div>
+
+      {pdfError && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-xl border border-rose-500/45 bg-rose-500/15 p-3 text-xs leading-relaxed text-rose-100"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" aria-hidden="true" />
+          <span>{pdfError}</span>
+        </div>
+      )}
 
       {actions.urgent_steps.length > 0 && (
         <div className="rounded-xl border border-border-subtle bg-surface-subtle p-3.5">

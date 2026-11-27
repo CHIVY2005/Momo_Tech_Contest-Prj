@@ -11,22 +11,23 @@ import {
 import type { TocItem } from "@/components/docs/DocsToc";
 
 export const metadata: Metadata = {
-  title: "Chính sách quyền riêng tư — VeriShield AI",
-  description: "Tìm hiểu cách VeriShield thu thập, xử lý và bảo vệ thông tin của bạn.",
+  title: "Chính sách quyền riêng tư (Bản dự thảo) — VeriShield AI",
+  description:
+    "Tìm hiểu cách VeriShield AI thu thập, xử lý, che giấu, lưu trữ và bảo vệ thông tin khi bạn kiểm tra dấu hiệu lừa đảo.",
 };
 
 const PRIVACY_TOC: readonly TocItem[] = [
   { id: "tong-quan", number: "01", label: "Tổng quan và phạm vi áp dụng" },
-  { id: "loai-du-lieu", number: "02", label: "Các loại dữ liệu được thu thập" },
+  { id: "du-lieu-thu-thap", number: "02", label: "Dữ liệu được thu thập" },
   { id: "muc-dich-xu-ly", number: "03", label: "Mục đích xử lý dữ liệu" },
-  { id: "quy-trinh-xu-ly", number: "04", label: "Quy trình tiếp nhận và xử lý" },
-  { id: "bao-ve-pii", number: "05", label: "Biện pháp bảo vệ thông tin cá nhân" },
-  { id: "ben-thu-ba", number: "06", label: "Dịch vụ bên thứ ba và chuyển dữ liệu" },
-  { id: "luu-tru-xoa", number: "07", label: "Chính sách lưu trữ và xóa dữ liệu" },
-  { id: "cookies-truy-cap", number: "08", label: "Cookies và dữ liệu truy cập" },
+  { id: "quy-trinh-xu-ly", number: "04", label: "Quy trình xử lý dữ liệu" },
+  { id: "bao-ve-thong-tin", number: "05", label: "Bảo vệ thông tin cá nhân" },
+  { id: "dich-vu-ben-thu-ba", number: "06", label: "Dịch vụ bên thứ ba" },
+  { id: "luu-tru-xoa-du-lieu", number: "07", label: "Lưu trữ và xóa dữ liệu" },
+  { id: "cookie-truy-cap", number: "08", label: "Cookie và dữ liệu truy cập" },
   { id: "quyen-nguoi-dung", number: "09", label: "Quyền của người dùng" },
-  { id: "lien-he", number: "10", label: "Thông tin liên hệ" },
-  { id: "thay-doi", number: "11", label: "Thay đổi chính sách" },
+  { id: "thong-tin-lien-he", number: "10", label: "Thông tin liên hệ" },
+  { id: "cap-nhat-chinh-sach", number: "11", label: "Cập nhật chính sách" },
 ];
 
 export default function PrivacyPage() {
@@ -34,84 +35,106 @@ export default function PrivacyPage() {
     <DocsShell
       breadcrumbLabel="Quyền riêng tư"
       title="Chính sách quyền riêng tư"
-      description="Tìm hiểu cách VeriShield thu thập, xử lý và bảo vệ thông tin của bạn."
+      description="Tìm hiểu cách VeriShield AI thu thập, xử lý, che giấu và bảo vệ thông tin khi bạn sử dụng dịch vụ."
       metaItems={[
-        { label: "Phạm vi", value: "Ứng dụng Web, API phân tích, Telegram Bot và trang Giám sát gian lận" },
-        { label: "Cơ sở tài liệu", value: "Đối chiếu trực tiếp từ mã nguồn hệ thống" },
-        { label: "Trạng thái công bố", value: "Tài liệu kỹ thuật minh bạch — một số mục quản trị cần chủ dự án hoàn thiện" },
+        { label: "Trạng thái tài liệu", value: "Bản dự thảo (chờ hoàn thiện thông tin quản trị và liên hệ)" },
+        {
+          label: "Phạm vi áp dụng",
+          value: "Trang web kiểm tra, Trợ lý VeriShield, Trung tâm giám sát, API và Telegram Bot",
+        },
       ]}
       tocItems={PRIVACY_TOC}
     >
-      <DocCallout tone="warning" title="Lưu ý về phạm vi tài liệu và các mục đang chờ xác nhận quản trị">
+      <DocCallout tone="warning" title="Bản dự thảo — Thông tin minh bạch về trạng thái chính sách">
         <p>
-          Tài liệu này mô tả chính xác cách mã nguồn VeriShield AI hiện tại tiếp nhận, xử lý, che
-          giấu và lưu trữ dữ liệu. Tài liệu không khẳng định hệ thống đã hoàn tất quy trình chứng
-          nhận bảo mật hoặc tuân thủ pháp lý chính thức.
+          Tài liệu này là <strong>bản dự thảo chính sách quyền riêng tư</strong>, mô tả trung thực
+          cách hệ thống VeriShield AI hiện đang xử lý dữ liệu. Tài liệu không phải là tuyên bố chứng
+          nhận bảo mật hay xác nhận tuân thủ pháp lý chính thức.
         </p>
         <p>
-          Các mục về <strong>đơn vị chịu trách nhiệm dữ liệu</strong>,{" "}
-          <strong>thời hạn lưu trữ cố định cho hồ sơ kiểm tra</strong>,{" "}
+          Một số nội dung quản trị — bao gồm <strong>đơn vị vận hành chịu trách nhiệm dữ liệu</strong>,{" "}
+          <strong>thời hạn lưu trữ cố định cho hồ sơ đã lưu</strong>,{" "}
           <strong>quy trình tiếp nhận yêu cầu xóa dữ liệu</strong> và{" "}
-          <strong>địa chỉ liên hệ chính thức</strong> hiện chưa được ấn định trong mã nguồn và cần
-          chủ dự án xác nhận trước khi phát hành chính sách pháp lý chính thức.
+          <strong>kênh liên hệ chính thức</strong> — hiện chưa được ấn định và cần chủ dự án bổ sung
+          trước khi phát hành chính thức.
         </p>
       </DocCallout>
 
       {/* 1. Tổng quan và phạm vi áp dụng */}
       <DocSection id="tong-quan" number="01" title="Tổng quan và phạm vi áp dụng">
         <p>
-          Chính sách này áp dụng khi bạn sử dụng các kênh tương tác của{" "}
-          <strong className="font-semibold text-ink">VeriShield AI</strong>, bao gồm: giao diện web
-          kiểm tra dấu hiệu lừa đảo tại <code className="font-mono text-ink">/</code>, không gian
-          giám sát và mô phỏng quy tắc tại <code className="font-mono text-ink">/radar</code>, các
-          điểm cuối API phục vụ phân tích/báo cáo PDF và kênh Telegram Bot (nếu được cấu hình trong
-          môi trường triển khai).
+          Chính sách này áp dụng khi bạn sử dụng{" "}
+          <strong className="font-semibold text-ink">VeriShield AI</strong> trên trang web kiểm tra
+          dấu hiệu lừa đảo, khung hỏi đáp{" "}
+          <strong className="font-semibold text-ink">Trợ lý VeriShield</strong>, trang{" "}
+          <Link
+            href="/radar"
+            className="text-sky-300 underline decoration-sky-500/40 underline-offset-2 hover:text-sky-200"
+          >
+            Giám sát gian lận
+          </Link>
+          , tính năng tải báo cáo PDF hoặc kênh Telegram Bot (khi được bật).
         </p>
         <p>
-          VeriShield AI là công cụ hỗ trợ đánh giá rủi ro dấu hiệu lừa đảo tài chính trực tuyến; hệ
-          thống không yêu cầu tạo tài khoản người dùng phổ thông và không kết nối trực tiếp vào tài
-          khoản ngân hàng hay ví điện tử của bạn. Tuy nhiên, nội dung bạn chủ động gửi lên để kiểm
-          tra có thể chứa thông tin định danh cá nhân (như số điện thoại, số tài khoản, họ tên hoặc
-          ảnh chụp màn hình giao dịch), vì vậy bạn nên cân nhắc che bớt các dữ liệu nhạy cảm không
-          cần thiết trước khi tải lên.
+          VeriShield AI là công cụ hỗ trợ kiểm tra rủi ro trước khi chuyển tiền. Hệ thống không yêu
+          cầu bạn đăng ký tài khoản cá nhân và không kết nối trực tiếp vào tài khoản ngân hàng hay
+          ví điện tử của bạn. Đặc biệt, ảnh chụp biên lai chuyển khoản không bao giờ được xem là
+          bằng chứng tiền đã về tài khoản; cả hệ thống và Trợ lý VeriShield luôn yêu cầu người bán
+          kiểm tra số dư thực tế trên ứng dụng ngân hàng hoặc loa thông báo biến động số dư
+          (Soundbox) trước khi giao hàng.
+        </p>
+        <p>
+          Tuy nhiên, tin nhắn, ảnh chụp màn hình hoặc tệp ghi âm bạn gửi lên có thể chứa thông tin
+          cá nhân (như họ tên, số điện thoại, số tài khoản, địa chỉ hoặc email). Bạn nên che bớt các
+          thông tin riêng tư không cần thiết trước khi tải lên.
         </p>
       </DocSection>
 
-      {/* 2. Các loại dữ liệu được thu thập */}
-      <DocSection id="loai-du-lieu" number="02" title="Các loại dữ liệu được thu thập">
+      {/* 2. Dữ liệu được thu thập */}
+      <DocSection id="du-lieu-thu-thap" number="02" title="Dữ liệu được thu thập">
         <p>
-          Hệ thống chỉ xử lý dữ liệu do bạn chủ động cung cấp cho phiên kiểm tra và dữ liệu kỹ
-          thuật tối thiểu để bảo vệ dịch vụ khỏi lạm dụng:
+          Hệ thống chỉ tiếp nhận nội dung bạn chủ động gửi để kiểm tra và một phần dữ liệu kỹ thuật
+          tối thiểu nhằm chống lạm dụng dịch vụ:
         </p>
 
         <DocTable
-          caption="Phân loại dữ liệu đầu vào và dữ liệu kỹ thuật trong VeriShield AI"
-          headers={["Nhóm dữ liệu", "Thành phần cụ thể", "Trạng thái lưu vào cơ sở dữ liệu"]}
+          caption="Các nhóm dữ liệu được tiếp nhận và trạng thái lưu trữ tại VeriShield AI"
+          headers={["Loại dữ liệu", "Nội dung bạn gửi hoặc phát sinh", "Cách hệ thống lưu trữ hiện tại"]}
           rows={[
             [
-              "Nội dung văn bản và đường dẫn",
-              "Tin nhắn, mô tả tình huống, đường dẫn trang web, ngữ cảnh tùy chọn (số tiền dự kiến chuyển, số tài khoản đối chiếu của cửa hàng, trạng thái đang nghe điện thoại).",
-              "Không lưu nguyên bản đầu vào thô thành bảng riêng; kết quả phân tích (tóm tắt, bằng chứng, trích đoạn, đường dẫn) được lưu trong bảng cases sau khi chạy bộ che giấu SĐT/STK.",
+              "Văn bản và đường dẫn",
+              "Nội dung tin nhắn, mô tả tình huống, đường dẫn trang web và thông tin tùy chọn bạn điền thêm (số tiền dự kiến chuyển, số tài khoản đối chiếu, trạng thái đang nghe điện thoại).",
+              "Không lưu bản gốc thành kho dữ liệu riêng. Báo cáo phân tích kết quả được lưu trong cơ sở dữ liệu ứng dụng sau khi chạy bước che giấu số điện thoại và số tài khoản.",
             ],
             [
               "Hình ảnh tải lên",
-              "Tối đa 4 ảnh mỗi lượt (JPG, PNG, WebP, GIF; ≤ 10 MB/tệp, tổng tệp đính kèm ≤ 20 MB), bao gồm ảnh chụp tin nhắn, biên lai chuyển khoản hoặc mã VietQR.",
-              "Không lưu tệp ảnh gốc, bản đồ nhiệt ELA hay ảnh chụp sandbox trong cơ sở dữ liệu. Tên tệp gốc được đổi thành tên chung (evidence.<định dạng>). Văn bản OCR đã che SĐT/STK và mã băm ảnh dHash (nếu là biên lai) được lưu.",
+              "Tối đa 4 ảnh mỗi lượt (JPG, PNG, WebP, GIF; tối đa 10 MB mỗi ảnh, tổng đính kèm không quá 20 MB) như ảnh tin nhắn, biên lai chuyển khoản hoặc mã VietQR.",
+              "Ảnh gốc không được lưu trong cơ sở dữ liệu ứng dụng. Tên tệp gốc bị loại bỏ. Chỉ văn bản đọc từ ảnh (sau khi che số điện thoại/số tài khoản) và mã đặc trưng hình ảnh của biên lai được lưu.",
             ],
             [
               "Tệp ghi âm cuộc gọi",
-              "Tối đa 2 tệp âm thanh mỗi lượt (WAV, MP3, M4A, OGG, WebM; ≤ 10 MB/tệp).",
-              "Không lưu tệp âm thanh gốc trong cơ sở dữ liệu. Tệp tạm cục bộ dùng cho bước gỡ băng tiếng Việt được xóa ngay sau khi xử lý. Lời thoại trích xuất được che SĐT/STK trước khi lưu trong hồ sơ.",
+              "Tối đa 2 tệp âm thanh mỗi lượt (WAV, MP3, M4A, OGG, WebM; tối đa 10 MB mỗi tệp).",
+              "Âm thanh gốc không được lưu trong cơ sở dữ liệu ứng dụng. Tệp tạm dùng để chuyển giọng nói thành văn bản được xóa ngay sau khi xử lý. Nội dung lời thoại đã che số điện thoại/số tài khoản được lưu trong báo cáo.",
             ],
             [
-              "Dữ liệu qua Telegram Bot (nếu bật)",
-              "Nội dung tin nhắn văn bản, ảnh, tệp ghi âm chuyển tiếp tới bot và mã cập nhật webhook (update_id).",
-              "Lưu mã update_id, mã hồ sơ liên kết và nội dung phản hồi đã che giấu trong bảng telegram_updates nhằm tránh xử lý trùng lặp khi Telegram gửi lại webhook.",
+              "Hội thoại với Trợ lý VeriShield",
+              "Câu hỏi bạn nhập trong khung Trợ lý, lịch sử hội thoại ngắn trong phiên đang mở (tối đa 6 lượt gần nhất) và ngữ cảnh hồ sơ bạn đang xem.",
+              "Không lưu nội dung hội thoại vào cơ sở dữ liệu máy chủ. Lịch sử trò chuyện chỉ nằm tạm trong bộ nhớ phiên trình duyệt hiện tại và bạn có thể bấm nút \"Xóa hội thoại\" bất cứ lúc nào.",
             ],
             [
-              "Dữ liệu vận hành & bảo mật",
-              "Địa chỉ IP kết nối (dùng cho giới hạn tần suất trên RAM), lịch sử thao tác quản trị trên /radar (tạo/thu hồi/đặt lại quy tắc chặn hoặc xác thực thất bại).",
-              "Bộ giới hạn tần suất lưu tạm trên RAM (tối đa 4.096 địa chỉ IP gần nhất, tự hết hạn theo cửa sổ 60 giây). Nhật ký kiểm toán radar_audit_logs chỉ lưu mã băm rút gọn 16 ký tự của IP, không lưu IP thô.",
+              "Bằng chứng bổ sung trong Trợ lý VeriShield",
+              "Tối đa 1 hình ảnh hoặc 1 tệp ghi âm (≤ 10 MB) bạn chủ động đính kèm trong khung Trợ lý để kiểm tra thêm.",
+              "Mặc định xử lý hoàn toàn cục bộ trên máy chủ VeriShield: không gửi tệp media tới AI bên ngoài, không phát yêu cầu mạng ra bên ngoài từ mã QR hay bản ghi âm, không ghi vào cơ sở dữ liệu hay Radar cộng đồng, và chỉ giữ kết quả đã ẩn danh tạm thời trong bộ nhớ tối đa 15 phút. Chỉ lưu thành hồ sơ bổ sung hoặc đóng góp vào Radar khi bạn chủ động xác nhận.",
+            ],
+            [
+              "Nội dung qua Telegram Bot",
+              "Tin nhắn văn bản, ảnh hoặc tệp ghi âm bạn chuyển tiếp cho bot (nếu bot được triển khai).",
+              "Lưu mã nhận diện tin nhắn của Telegram, mã hồ sơ liên quan và nội dung phản hồi đã che giấu để tránh gửi kết quả trùng lặp. Báo cáo PDF chỉ được gửi trực tiếp trong khung trò chuyện riêng 1-1 với đúng người gửi yêu cầu (không cấp đường dẫn PDF công khai và không phát hành PDF trong nhóm chat).",
+            ],
+            [
+              "Dữ liệu kỹ thuật và vận hành",
+              "Địa chỉ IP kết nối (để giới hạn tần suất gửi yêu cầu) và nhật ký các thao tác quản trị quy tắc chặn trên trang Giám sát gian lận.",
+              "Thông tin giới hạn tần suất chỉ giữ tạm trong bộ nhớ máy chủ và tự xóa sau thời gian ngắn. Nhật ký quản trị chỉ lưu mã băm rút gọn của địa chỉ IP, không lưu địa chỉ IP nguyên bản.",
             ],
           ]}
         />
@@ -119,302 +142,373 @@ export default function PrivacyPage() {
 
       {/* 3. Mục đích xử lý dữ liệu */}
       <DocSection id="muc-dich-xu-ly" number="03" title="Mục đích xử lý dữ liệu">
+        <p>Dữ liệu bạn cung cấp chỉ được sử dụng cho các mục đích trực tiếp sau:</p>
         <ul className="list-disc space-y-2 pl-5">
           <li>
             <strong className="font-semibold text-ink">Đánh giá rủi ro lừa đảo theo yêu cầu:</strong>{" "}
-            Trích xuất văn bản từ hình ảnh (OCR), gỡ băng cuộc gọi (STT), giải mã mã VietQR, kiểm
-            tra dấu hiệu chỉnh sửa biên lai, đánh giá đường dẫn đáng ngờ và tổng hợp mức rủi ro kèm
-            khuyến nghị ứng phó.
+            Đọc chữ từ hình ảnh, chuyển giọng nói thành văn bản, kiểm tra mã VietQR, phát hiện dấu
+            hiệu chỉnh sửa biên lai, kiểm tra đường dẫn đáng ngờ và đưa ra khuyến nghị xử lý.
           </li>
           <li>
             <strong className="font-semibold text-ink">
-              Phát hiện biên lai dùng lại và chuỗi chiến dịch gian lận:
+              Phát hiện biên lai gửi lặp lại và chuỗi dấu hiệu lừa đảo:
             </strong>{" "}
-            Đối chiếu mã băm cảm nhận (<code className="font-mono text-ink">dHash</code>) và mã tham
-            chiếu giao dịch trên biên lai; tổng hợp tần suất xuất hiện và liên kết giữa các dấu hiệu
-            rủi ro cao (điểm rủi ro ≥ 45) dưới dạng mã băm một chiều và nhãn đã che giấu trên{" "}
-            <Link href="/radar" className="text-sky-300 underline decoration-sky-500/40 underline-offset-2 hover:text-sky-200">
-              trang Giám sát gian lận
-            </Link>
-            .
+            Đối chiếu dấu hiệu lặp lại của ảnh biên lai hoặc mã giao dịch; tổng hợp các dấu hiệu rủi
+            ro cao dưới dạng đã băm và che giấu trên trang Giám sát gian lận.
           </li>
           <li>
-            <strong className="font-semibold text-ink">Hỗ trợ tải báo cáo bằng chứng PDF:</strong>{" "}
-            Truy xuất lại hồ sơ đã che giấu SĐT/STK theo mã hồ sơ (<code className="font-mono text-ink">case_id</code>)
-            để tạo báo cáo PDF tiếng Việt phục vụ người dùng lưu trữ hoặc trình báo cơ quan chức năng.
+            <strong className="font-semibold text-ink">Hỗ trợ xem lại và tải báo cáo PDF:</strong>{" "}
+            Giúp bạn xem lại kết quả phân tích hoặc tải tệp PDF tiếng Việt trong phiên truy cập của
+            riêng hồ sơ đó (hoặc trực tiếp trong khung trò chuyện riêng 1-1 trên Telegram) để lưu trữ
+            và đối chiếu khi cần thiết.
           </li>
           <li>
-            <strong className="font-semibold text-ink">Bảo vệ an toàn hạ tầng và kiểm toán quản trị:</strong>{" "}
-            Chống gửi yêu cầu quá tải (rate limiting), phát hiện tấn công tiêm lệnh AI (prompt
-            injection), chặn truy cập trái phép vào mạng nội bộ (SSRF) và ghi nhật ký kiểm toán các
-            thao tác quản lý quy tắc chặn.
+            <strong className="font-semibold text-ink">
+              Hỏi đáp phòng chống lừa đảo cùng Trợ lý VeriShield:
+            </strong>{" "}
+            Giải thích dễ hiểu các dấu hiệu cảnh báo trong hồ sơ đang xem, hướng dẫn xử lý khẩn cấp
+            khi lỡ chuyển tiền hoặc lộ thông tin, kiểm tra an toàn đường dẫn/mã VietQR/dấu hiệu nghi
+            vấn theo yêu cầu và phân tích bằng chứng bổ sung ở chế độ cục bộ mặc định.
+          </li>
+          <li>
+            <strong className="font-semibold text-ink">Bảo vệ an toàn hệ thống:</strong> Ngăn chặn
+            gửi yêu cầu quá tải, phát hiện hành vi chèn chỉ thị độc hại vào AI, chặn truy cập vào
+            mạng nội bộ và ghi nhận thao tác quản trị.
           </li>
         </ul>
       </DocSection>
 
-      {/* 4. Quy trình tiếp nhận và xử lý */}
-      <DocSection id="quy-trinh-xu-ly" number="04" title="Quy trình tiếp nhận và xử lý">
+      {/* 4. Quy trình xử lý dữ liệu */}
+      <DocSection id="quy-trinh-xu-ly" number="04" title="Quy trình xử lý dữ liệu">
         <p>
-          Khi bạn gửi nội dung kiểm tra, dữ liệu đi qua chuỗi xử lý phân tầng theo thời gian thực.
-          Sơ đồ dưới đây phản ánh đúng luồng xử lý, điểm chạm ngoài biên và điểm che giấu dữ liệu
-          trong mã nguồn hiện hành:
+          Mỗi lượt kiểm tra đi qua 4 bước chính: tiếp nhận dữ liệu, phân tích tạm thời (kèm tùy chọn
+          chuyển dữ liệu ra bên ngoài khi cần), lọc che giấu thông tin và lưu báo cáo kết quả. Riêng
+          nhánh <strong className="font-semibold text-ink">Trợ lý VeriShield</strong> lọc và ẩn danh
+          thông tin nhạy cảm trước khi gọi mô hình AI bên ngoài, đồng thời xử lý bằng chứng bổ sung
+          theo mặc định hoàn toàn cục bộ trên máy chủ.
         </p>
 
         <DataLifecycleSvg />
 
-        <div className="space-y-2.5 pt-1">
-          <h3 className="text-sm font-semibold text-ink">Chi tiết các điểm xử lý quan trọng</h3>
-          <ul className="list-disc space-y-2 pl-5">
-            <li>
-              <strong className="font-semibold text-ink">Xử lý hình ảnh trên bộ nhớ (RAM):</strong>{" "}
-              Bước xác thực kích thước/định dạng, phân tích ELA/EXIF/dHash, giải mã QR và OCR cục bộ
-              (<code className="font-mono text-ink">RapidOCR</code>) đều giải mã trực tiếp từ bộ đệm
-              byte trong RAM và không ghi ảnh người dùng xuống đĩa.
-            </li>
-            <li>
-              <strong className="font-semibold text-ink">Tệp tạm cho tệp ghi âm:</strong> Khi bước
-              gỡ băng nội bộ (<code className="font-mono text-ink">faster-whisper</code>) hoạt động,
-              dữ liệu âm thanh được ghi ra một tệp tạm của hệ điều hành để bộ giải mã đọc, sau đó
-              được xóa ngay trong khối <code className="font-mono text-ink">finally</code> bất kể
-              quá trình gỡ băng thành công hay lỗi.
-            </li>
-            <li>
-              <strong className="font-semibold text-ink">Chế độ mô phỏng không ghi dữ liệu:</strong>{" "}
-              Các phiên chạy từ tính năng <em>Mô phỏng giao dịch</em> trên{" "}
-              <code className="font-mono text-ink">/radar</code> gắn cờ{" "}
-              <code className="font-mono text-ink">is_simulation=true</code>; hệ thống vẫn đối chiếu
-              quy tắc chặn đang hiệu lực nhưng bỏ qua hoàn toàn bước ghi vào bảng hồ sơ, đồ thị dấu
-              hiệu và dấu vân tay biên lai.
-            </li>
-          </ul>
-        </div>
+        <ul className="list-disc space-y-2 pl-5 pt-1">
+          <li>
+            <strong className="font-semibold text-ink">Hình ảnh được xử lý trên bộ nhớ tạm:</strong>{" "}
+            Ảnh tải lên được đọc chữ, giải mã mã QR và kiểm tra dấu hiệu chỉnh sửa trực tiếp trong
+            bộ nhớ máy chủ, không ghi tệp ảnh gốc xuống ổ đĩa lưu trữ.
+          </li>
+          <li>
+            <strong className="font-semibold text-ink">Tệp âm thanh tạm được xóa ngay:</strong>{" "}
+            Khi chuyển giọng nói thành văn bản, hệ thống chỉ tạo tệp tạm trong lúc xử lý và xóa ngay
+            lập tức khi hoàn tất hoặc khi có lỗi xảy ra.
+          </li>
+          <li>
+            <strong className="font-semibold text-ink">
+              Trợ lý VeriShield lọc dữ liệu nhạy cảm trước khi gọi AI:
+            </strong>{" "}
+            Trợ lý chỉ hoạt động trong ngữ cảnh hồ sơ đang xem (được bảo vệ bằng khóa phiên riêng)
+            hoặc các câu hỏi phòng chống lừa đảo. Mọi số điện thoại, số tài khoản, CCCD, mã OTP,
+            mật khẩu, email, đường dẫn web và chuỗi VietQR đều được lọc và ẩn danh trước khi gửi tới
+            mô hình AI bên ngoài; khi cần kiểm tra đường dẫn hoặc mã VietQR, máy chủ xử lý nội bộ
+            qua mã tham chiếu tạm thời.
+          </li>
+          <li>
+            <strong className="font-semibold text-ink">
+              Bằng chứng bổ sung trong Trợ lý mặc định xử lý hoàn toàn cục bộ:
+            </strong>{" "}
+            Khi bạn đính kèm ảnh hoặc ghi âm trong khung Trợ lý, mặc định máy chủ VeriShield phân
+            tích hoàn toàn nội bộ — không gửi tệp media tới AI bên ngoài, không phát yêu cầu mạng ra
+            bên ngoài từ mã QR hay bản ghi âm, không ghi vào cơ sở dữ liệu hay Radar cộng đồng, và
+            chỉ giữ kết quả đã ẩn danh tạm thời trong bộ nhớ tối đa 15 phút. Việc gửi tệp media tới
+            AI bên ngoài hoặc lưu thành hồ sơ bổ sung / đóng góp ẩn danh vào Radar cộng đồng chỉ xảy
+            ra khi bạn chủ động đánh dấu đồng ý hoặc bấm nút{" "}
+            <em>&ldquo;Lưu hồ sơ bổ sung &amp; tải PDF&rdquo;</em>.
+          </li>
+          <li>
+            <strong className="font-semibold text-ink">Chế độ mô phỏng không lưu hồ sơ:</strong>{" "}
+            Các lượt kiểm thử trong khu vực <em>Mô phỏng giao dịch</em> trên trang Giám sát gian lận
+            không ghi hồ sơ vào cơ sở dữ liệu và không làm thay đổi thống kê hệ thống.
+          </li>
+        </ul>
       </DocSection>
 
-      {/* 5. Biện pháp bảo vệ thông tin cá nhân */}
-      <DocSection id="bao-ve-pii" number="05" title="Biện pháp bảo vệ thông tin cá nhân">
+      {/* 5. Bảo vệ thông tin cá nhân */}
+      <DocSection id="bao-ve-thong-tin" number="05" title="Bảo vệ thông tin cá nhân">
         <p>
-          VeriShield AI áp dụng nhiều lớp giảm thiểu và che giấu dữ liệu ngay trong tầng ứng dụng
-          và tầng lưu trữ:
+          Để bạn hiểu rõ mức độ bảo vệ thực tế, dưới đây là cách VeriShield AI áp dụng từng biện
+          pháp kỹ thuật và sự khác biệt giữa chúng:
         </p>
 
         <ul className="list-disc space-y-2 pl-5">
           <li>
-            <strong className="font-semibold text-ink">Che giấu tự động số điện thoại và số tài khoản:</strong>{" "}
-            Hàm <code className="font-mono text-ink">redact_report_pii</code> và{" "}
-            <code className="font-mono text-ink">scrub_free_text_pii</code> che các chữ số ở giữa
-            của số điện thoại Việt Nam (ví dụ <code className="font-mono text-ink">091****678</code>)
-            và số tài khoản ngân hàng (ví dụ <code className="font-mono text-ink">19****01</code>),
-            bao gồm cả các dạng viết có dấu cách, dấu chấm hoặc gạch ngang, trên toàn bộ trường tóm
-            tắt, văn bản OCR, lời thoại, bằng chứng, đường dẫn và báo cáo PDF.
+            <strong className="font-semibold text-ink">
+              Kiểm soát truy cập hồ sơ thống nhất:
+            </strong>{" "}
+            Mỗi hồ sơ phân tích trên trang web được cấp một khóa phiên truy cập riêng (tự động hết
+            hạn sau 2 giờ), áp dụng thống nhất khi xem lại hồ sơ, tải báo cáo PDF hoặc trò chuyện
+            với Trợ lý VeriShield theo hồ sơ đó; mọi phản hồi chứa thông tin hồ sơ đều tắt lưu bộ
+            nhớ đệm. Trên Telegram, báo cáo PDF chỉ được gửi trực tiếp trong khung trò chuyện riêng
+            1-1 với đúng người gửi yêu cầu (không cung cấp đường link PDF công khai và không phát
+            hành PDF trong nhóm chat). Các hồ sơ cũ tạo trước khi có cơ chế khóa phiên được mặc định
+            khóa truy cập.
           </li>
           <li>
-            <strong className="font-semibold text-ink">Ẩn dữ liệu thanh toán VietQR và tệp nhị phân:</strong>{" "}
-            Chuỗi VietQR thô được thay bằng nhãn ẩn định danh, tải trọng QR bị ẩn trên hồ sơ lưu
-            trữ, tên tệp gốc bị loại bỏ và toàn bộ ảnh gốc, bản đồ nhiệt ELA, ảnh chụp trang web
-            cách ly cùng thẻ phần mềm EXIF bị xóa trước khi ghi vào bảng{" "}
-            <code className="font-mono text-ink">cases</code>.
+            <strong className="font-semibold text-ink">
+              Che giấu thông tin (Masking / Redaction):
+            </strong>{" "}
+            Hệ thống tự động che phần chữ số ở giữa của số điện thoại Việt Nam (ví dụ{" "}
+            <code className="font-mono text-ink">091****678</code>) và số tài khoản ngân hàng (ví dụ{" "}
+            <code className="font-mono text-ink">19****01</code>) trước khi lưu báo cáo hoặc xuất
+            tệp PDF. Tên tệp gốc, dữ liệu gốc của mã VietQR và hình ảnh gốc cũng bị loại bỏ khỏi bản
+            lưu trữ. Riêng trong Trợ lý VeriShield, toàn bộ dữ liệu trước khi gửi tới mô hình AI bên
+            ngoài (câu hỏi hiện tại, lịch sử trò chuyện, trích đoạn hồ sơ và kết quả tra cứu) đều
+            được lọc và ẩn danh thêm CCCD, số thẻ, mã OTP, mật khẩu, email, đường dẫn web và chuỗi
+            VietQR.
           </li>
           <li>
-            <strong className="font-semibold text-ink">Băm một chiều cho đồ thị và danh sách chặn:</strong>{" "}
-            Các bảng công khai trên <code className="font-mono text-ink">/radar</code> không lưu số
-            điện thoại, số tài khoản hay tên miền đầy đủ ở dạng rõ. Hệ thống lưu mã băm một chiều (
-            <code className="font-mono text-ink">HMAC-SHA256</code> có khóa bí mật trong môi trường
-            production hoặc khi cấu hình <code className="font-mono text-ink">IOC_HMAC_SECRET</code>
-            ; dự phòng <code className="font-mono text-ink">SHA-256</code> ở môi trường demo/phát
-            triển chưa cấu hình khóa riêng) kèm nhãn hiển thị đã che giấu.
+            <strong className="font-semibold text-ink">
+              Giả danh hóa (Pseudonymization) và băm một chiều (Hashing):
+            </strong>{" "}
+            Trên trang Giám sát gian lận và danh sách chặn, số điện thoại, số tài khoản hoặc tên
+            miền nghi vấn được chuyển thành mã băm một chiều (có khóa bí mật trên môi trường vận
+            hành chính thức) kết hợp nhãn hiển thị đã che giấu. Cách làm này không hiển thị trực
+            tiếp dữ liệu gốc nhưng vẫn cho phép hệ thống nhận biết khi cùng một dấu hiệu xuất hiện
+            nhiều lần.
           </li>
           <li>
-            <strong className="font-semibold text-ink">Truyền tải mã hóa và tiêu đề bảo mật:</strong>{" "}
-            Môi trường triển khai dùng <code className="font-mono text-ink">HTTPS/TLS</code> tự động
-            qua Caddy, chuyển hướng cưỡng bức HTTP sang HTTPS và gắn các tiêu đề bảo mật tiêu chuẩn
-            (HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy).
+            <strong className="font-semibold text-ink">Mã hóa đường truyền (Encryption):</strong>{" "}
+            Dữ liệu trao đổi giữa thiết bị của bạn và máy chủ VeriShield AI được mã hóa qua giao
+            thức HTTPS/TLS cùng các tiêu đề bảo mật tiêu chuẩn trên trình duyệt.
+          </li>
+          <li>
+            <strong className="font-semibold text-ink">
+              Không khẳng định &ldquo;ẩn danh hoàn toàn&rdquo; (Anonymization):
+            </strong>{" "}
+            Ẩn danh hóa hoàn toàn đòi hỏi không thể nhận diện lại cá nhân từ dữ liệu đã lưu dưới mọi
+            hình thức. VeriShield AI không đưa ra cam kết này vì dữ liệu văn bản tự do trong báo cáo
+            vẫn có thể chứa thông tin định danh cá nhân.
           </li>
         </ul>
 
-        <DocCallout tone="caution" title="Minh bạch về giới hạn của cơ chế che giấu tự động">
-          <p>
-            Hệ thống <strong>không tuyên bố &ldquo;không lưu bất kỳ dữ liệu cá nhân nào&rdquo;</strong>.
-            Cụ thể:
-          </p>
-          <ul className="list-disc space-y-1 pl-4">
+        <DocCallout tone="caution" title="Những giới hạn quan trọng cần lưu ý">
+          <ul className="list-disc space-y-1.5 pl-4">
             <li>
-              Bảng <code className="font-mono text-ink">cases</code> lưu báo cáo JSON đã che SĐT và
-              STK, nhưng các đoạn văn bản tự do trong <code className="font-mono text-ink">ocr_text</code>,{" "}
-              <code className="font-mono text-ink">transcript</code>,{" "}
-              <code className="font-mono text-ink">summary_vi</code> hoặc{" "}
-              <code className="font-mono text-ink">evidence</code> vẫn có thể chứa thông tin định
-              danh phi số học (như họ tên cá nhân, địa chỉ, email, nội dung chuyển khoản hoặc mã
-              tham chiếu giao dịch) nếu xuất hiện trong dữ liệu bạn gửi.
+              <strong>Báo cáo phân tích vẫn có thể chứa thông tin cá nhân chưa được che giấu:</strong>{" "}
+              Bước che giấu tự động khi lưu báo cáo chính hiện tập trung vào số điện thoại và số tài
+              khoản. Các thông tin cá nhân như họ tên, địa chỉ, email, nội dung chuyển khoản hoặc mã
+              tham chiếu giao dịch vẫn có thể còn xuất hiện trong phần tóm tắt, bằng chứng, chữ đọc
+              từ ảnh hoặc lời thoại được lưu trong báo cáo.
             </li>
             <li>
-              Hồ sơ đã lưu hiện có thể được truy xuất qua mã hồ sơ ngẫu nhiên 12 ký tự hex (
-              <code className="font-mono text-ink">case_id</code>) để phục vụ xem lại và tải báo cáo
-              PDF; hiện chưa có cơ chế xác thực phiên người dùng riêng cho từng hồ sơ.
+              <strong>Giới hạn của khóa phiên truy cập không cần đăng nhập:</strong> Mỗi hồ sơ trên
+              web được bảo vệ bằng khóa phiên truy cập riêng (tự động hết hạn sau 2 giờ và chỉ giữ
+              tạm trong tab trình duyệt hiện tại). Nếu đóng tab, tải lại trang hoặc quá 2 giờ, bạn
+              cần phân tích lại để đối chiếu hồ sơ (hoặc dùng Trợ lý ở chế độ hỏi đáp chung). Hệ
+              thống không có tài khoản đăng nhập dài hạn, vì vậy bất kỳ ai sử dụng chung thiết bị
+              trong khi tab đang mở vẫn có thể xem hồ sơ đó.
+            </li>
+            <li>
+              <strong>Minh bạch biên lai người bán:</strong> Ảnh chụp biên lai không bao giờ được
+              xem là bằng chứng tiền đã về tài khoản; ngay cả khi không phát hiện dấu hiệu chỉnh
+              sửa, Trợ lý và hệ thống luôn yêu cầu kiểm tra số dư thực tế trên ứng dụng ngân hàng
+              hoặc loa thông báo biến động số dư (Soundbox) trước khi giao hàng.
             </li>
           </ul>
         </DocCallout>
       </DocSection>
 
-      {/* 6. Dịch vụ bên thứ ba và việc chuyển dữ liệu */}
-      <DocSection id="ben-thu-ba" number="06" title="Dịch vụ bên thứ ba và việc chuyển dữ liệu">
+      {/* 6. Dịch vụ bên thứ ba */}
+      <DocSection id="dich-vu-ben-thu-ba" number="06" title="Dịch vụ bên thứ ba">
         <p>
-          Tùy theo cấu hình của môi trường triển khai và thao tác của người dùng, dữ liệu có thể
-          được chuyển tới các bên thứ ba sau đây:
+          Tùy theo cấu hình máy chủ và nội dung bạn gửi, một phần dữ liệu có thể được chuyển ra bên
+          ngoài hệ thống tới các dịch vụ sau:
         </p>
 
         <DocTable
-          caption="Các dịch vụ bên thứ ba có thể nhận dữ liệu trong quá trình xử lý"
-          headers={["Dịch vụ / Bên tiếp nhận", "Điều kiện kích hoạt", "Dữ liệu được gửi đi", "Ghi chú kiểm soát"]}
+          caption="Các bên thứ ba có thể tiếp nhận dữ liệu trong quá trình phân tích"
+          headers={["Bên tiếp nhận", "Khi nào dữ liệu được gửi", "Dữ liệu nào được chuyển đi", "Lưu ý kiểm soát"]}
           rows={[
             [
-              "Nhà cung cấp AI đa phương thức (Google Gemini API hoặc cổng API tương thích OpenAI do người vận hành cấu hình)",
-              "Khi khóa API AI được cấu hình cho Tầng 2 suy luận, hoặc khi kích hoạt OCR dự phòng (OCR cục bộ lỗi/quá giờ, độ tin cậy < 0,45 hoặc ảnh không kèm chữ).",
-              "Văn bản người dùng gửi, văn bản OCR (bọc trong thẻ cách ly), tối đa 4 ảnh gốc và tệp âm thanh (≤ 10 MB) — gửi ở dạng nguyên bản trước bước che giấu lưu trữ.",
-              "Hệ thống hỗ trợ chạy hoàn toàn nội bộ ở chế độ dự phòng Tầng 1 nếu không cấu hình khóa API. Việc lưu giữ/xử lý tại nhà cung cấp AI tuân theo chính sách của nhà cung cấp tương ứng.",
+              "Nhà cung cấp AI đa phương thức (Google Gemini hoặc cổng API AI do đơn vị vận hành cấu hình)",
+              "Khi dịch vụ AI được bật cho lượt phân tích chính ban đầu, đọc chữ dự phòng khi công cụ nội bộ gặp lỗi, hoặc khi bạn trò chuyện với Trợ lý VeriShield.",
+              <ul key="ai-egress-list" className="list-disc space-y-1 pl-4">
+                <li>
+                  <strong className="font-semibold text-ink">Lượt phân tích chính:</strong> văn bản,
+                  văn bản trích từ ảnh, ảnh gốc và tệp ghi âm (có thể gửi dạng nguyên bản trước bước
+                  che giấu để lưu trữ).
+                </li>
+                <li>
+                  <strong className="font-semibold text-ink">Trợ lý VeriShield (hỏi đáp):</strong>{" "}
+                  chỉ gửi nội dung đã lọc và ẩn danh SĐT, STK, CCCD, số thẻ, OTP, mật khẩu, email,
+                  đường dẫn web và chuỗi VietQR.
+                </li>
+                <li>
+                  <strong className="font-semibold text-ink">Bằng chứng bổ sung trong Trợ lý:</strong>{" "}
+                  mặc định <strong>không gửi</strong> ảnh hay ghi âm tới AI bên ngoài (xử lý 100%
+                  cục bộ).
+                </li>
+              </ul>,
+              "Tệp ảnh/ghi âm bổ sung trong Trợ lý chỉ được gửi tới AI bên ngoài khi bạn chủ động đánh dấu ô đồng ý trước khi gửi. Nếu máy chủ không kết nối AI bên ngoài, hệ thống vẫn hoạt động cục bộ. Dữ liệu gửi đi tuân theo chính sách quyền riêng tư của nhà cung cấp AI.",
             ],
             [
-              "Máy chủ web đích của đường dẫn công khai",
-              "Khi người dùng trực tiếp nhập URL hoặc gửi mã QR chứa URL và tính năng kiểm tra mạng/sandbox đang bật.",
-              "Yêu cầu HTTP GET từ máy chủ VeriShield (tối đa 5 bước chuyển hướng) và tải trang trong trình duyệt Chromium cách ly nếu điểm rủi ro tĩnh ≥ 40.",
-              "Tuyệt đối không gửi truy vấn mạng tới URL chỉ xuất hiện trong văn bản OCR từ ảnh; chặn toàn bộ địa chỉ IP nội bộ/riêng tư.",
+              "Trang web đích của đường dẫn công khai",
+              "Khi bạn trực tiếp nhập đường dẫn trang web, gửi ảnh mã QR ở lượt phân tích chính hoặc yêu cầu Trợ lý VeriShield kiểm tra một đường dẫn công khai.",
+              "Yêu cầu truy cập từ máy chủ VeriShield để kiểm tra chuyển hướng (hoặc mở xem trước cách ly ở lượt phân tích chính; Trợ lý chỉ kiểm tra an toàn mà không mở trình duyệt).",
+              "Hệ thống chặn truy cập mọi địa chỉ mạng nội bộ, không tự mở đường dẫn chỉ có trong chữ ảnh chụp, và không phát yêu cầu mạng ra ngoài từ mã QR hay bản ghi âm khi phân tích bằng chứng bổ sung ở chế độ cục bộ mặc định.",
             ],
             [
-              "Telegram (api.telegram.org)",
-              "Chỉ khi người dùng chủ động gửi hoặc chuyển tiếp nội dung qua Telegram Bot (nếu bot được bật).",
-              "Tin nhắn, tệp đính kèm gửi tới bot và thông điệp kết quả do hệ thống trả về.",
-              "Dữ liệu trao đổi trên ứng dụng Telegram chịu sự điều chỉnh của chính sách quyền riêng tư của Telegram.",
+              "Telegram",
+              "Chỉ khi bạn chủ động nhắn tin hoặc chuyển tiếp nội dung cho Telegram Bot.",
+              "Nội dung tin nhắn, tệp đính kèm bạn gửi cho bot, kết quả phân tích và tệp báo cáo PDF (chỉ gửi trực tiếp trong khung chat riêng 1-1 với đúng người gửi, không cấp link công khai và không phát PDF trong nhóm chat).",
+              "Dữ liệu trao đổi trên ứng dụng Telegram tuân theo chính sách quyền riêng tư của Telegram.",
             ],
           ]}
         />
       </DocSection>
 
-      {/* 7. Chính sách lưu trữ và xóa dữ liệu */}
-      <DocSection id="luu-tru-xoa" number="07" title="Chính sách lưu trữ và xóa dữ liệu">
+      {/* 7. Lưu trữ và xóa dữ liệu */}
+      <DocSection id="luu-tru-xoa-du-lieu" number="07" title="Lưu trữ và xóa dữ liệu">
         <p>
-          Trạng thái lưu giữ dữ liệu thực tế trong cơ sở dữ liệu SQLite WAL và bộ nhớ hiện tại như
+          Trạng thái lưu giữ và xóa dữ liệu thực tế trong hệ thống hiện tại được phân biệt rõ như
           sau:
         </p>
 
         <DocTable
-          caption="Cơ chế lưu giữ và hết hạn dữ liệu theo từng bảng lưu trữ thực tế"
-          headers={["Kho lưu trữ / Bảng dữ liệu", "Cơ chế hết hạn hoặc xóa tự động hiện có", "Ghi chú thực tế"]}
+          caption="Tình trạng lưu giữ và xóa dữ liệu theo từng loại thông tin"
+          headers={["Loại dữ liệu", "Cơ chế xóa hoặc hết hạn hiện có", "Ghi chú thực tế"]}
           rows={[
             [
-              "Quy tắc chặn tạm thời (block_rules)",
-              "Có TTL tự động (mặc định 30 phút, cấu hình từ 1 đến 1.440 phút) và hỗ trợ thu hồi thủ công có xác thực quản trị.",
-              "Hết hiệu lực ngay khi quá mốc expires_at.",
+              "Ảnh gốc và tệp ghi âm gốc",
+              "Không lưu trong cơ sở dữ liệu ứng dụng.",
+              "Ảnh xử lý trên bộ nhớ tạm; tệp âm thanh tạm được xóa ngay sau khi chuyển thành văn bản.",
             ],
             [
-              "Nhật ký kiểm toán quản trị (radar_audit_logs)",
-              "Tự động giới hạn và xóa bản ghi cũ, chỉ giữ tối đa 200 sự kiện gần nhất.",
-              "Chỉ chứa nhãn đã che giấu và mã băm IP rút gọn.",
+              "Lịch sử hội thoại Trợ lý VeriShield",
+              "Không lưu trong cơ sở dữ liệu máy chủ; chỉ giữ tạm trong phiên trình duyệt hiện tại và xóa ngay khi bấm \"Xóa hội thoại\", đổi hồ sơ hoặc đóng tab.",
+              "Lưu ý trung thực: nút \"Xóa hội thoại\" chỉ xóa hội thoại trong trình duyệt hiện tại, không xóa các hồ sơ phân tích bạn đã lưu trên máy chủ và không thu hồi được nội dung (đã lọc/ẩn danh) từng gửi tới nhà cung cấp AI bên ngoài ở các lượt trước.",
             ],
             [
-              "Bộ đếm giới hạn tần suất (RAM)",
-              "Lưu trong bộ nhớ tạm theo cửa sổ trượt 60 giây, giới hạn tối đa 4.096 IP gần nhất.",
-              "Mất hoàn toàn khi tiến trình khởi động lại.",
+              "Bằng chứng bổ sung tạm thời trong Trợ lý & khóa phiên truy cập hồ sơ",
+              "Kết quả bằng chứng bổ sung đã ẩn danh chỉ giữ tạm trong bộ nhớ máy chủ tối đa 15 phút; khóa phiên truy cập hồ sơ tự động hết hạn sau 2 giờ.",
+              "Chỉ ghi thành hồ sơ bổ sung vào cơ sở dữ liệu (và chỉ đóng góp dấu hiệu ẩn danh vào Radar cộng đồng) khi bạn chủ động bấm \"Lưu hồ sơ bổ sung & tải PDF\" và tự chọn đóng góp.",
             ],
             [
-              "Tệp âm thanh tạm cục bộ (OS temp)",
-              "Xóa ngay lập tức sau khi kết thúc phiên gỡ băng trong cùng yêu cầu xử lý.",
-              "Không giữ lại tệp âm thanh gốc.",
+              "Bộ đếm giới hạn tần suất truy cập",
+              "Chỉ lưu tạm trong bộ nhớ máy chủ và tự động hết hạn sau thời gian ngắn.",
+              "Bị xóa hoàn toàn khi máy chủ khởi động lại.",
             ],
             [
-              "Hồ sơ kiểm tra (cases), đồ thị IOC (ioc_sightings, campaigns), dấu vân tay biên lai (receipt_hashes), cache webhook (telegram_updates)",
-              "Chưa có tác vụ dọn dẹp tự động theo thời hạn (TTL) và chưa có chức năng tự xóa cho người dùng cuối.",
-              "Cần chủ dự án xác định thời hạn lưu trữ chính thức và bổ sung cơ chế tự động xóa định kỳ trước khi vận hành chính thức diện rộng.",
+              "Nhật ký thao tác quản trị",
+              "Tự động xóa các bản ghi cũ để chỉ giữ lại một số lượng giới hạn sự kiện gần nhất.",
+              "Chỉ chứa nhãn đã che giấu và mã băm rút gọn của địa chỉ IP.",
+            ],
+            [
+              "Quy tắc chặn tạm thời trên trang Giám sát gian lận",
+              "Có thời hạn hiệu lực tự động (mặc định 30 phút) và có thể bị quản trị viên thu hồi thủ công.",
+              "Cần phân biệt: khi quá thời hạn, quy tắc lập tức hết hiệu lực áp dụng nhưng bản ghi quy tắc vẫn chưa tự động bị xóa khỏi cơ sở dữ liệu cho đến khi được thu hồi, ghi đè hoặc đặt lại.",
+            ],
+            [
+              "Hồ sơ báo cáo đã lưu, dấu hiệu tổng hợp trên mạng lưới, mã đặc trưng biên lai và lịch sử phản hồi Telegram",
+              "Hiện chưa có cơ chế tự động xóa định kỳ theo thời hạn và chưa có chức năng để người dùng tự xóa.",
+              "Chủ dự án cần xác định thời hạn lưu trữ chính thức và bổ sung cơ chế xóa định kỳ trước khi vận hành rộng rãi.",
             ],
           ]}
         />
 
         <p className="text-xs text-ink-muted">
-          Ngoài cơ sở dữ liệu ứng dụng, thư mục bộ nhớ đệm mô hình cục bộ (
-          <code className="font-mono text-ink-secondary">/app/ocr_cache</code>,{" "}
-          <code className="font-mono text-ink-secondary">/app/whisper_cache</code>) chỉ chứa tệp
-          trọng số mô hình tĩnh phục vụ suy luận và không lưu dữ liệu người dùng.
+          Các tệp mô hình AI chạy cục bộ trên máy chủ chỉ chứa dữ liệu mô hình tĩnh phục vụ phân
+          tích, không lưu thông tin người dùng.
         </p>
       </DocSection>
 
-      {/* 8. Cookies và dữ liệu truy cập */}
-      <DocSection id="cookies-truy-cap" number="08" title="Cookies và dữ liệu truy cập">
+      {/* 8. Cookie và dữ liệu truy cập */}
+      <DocSection id="cookie-truy-cap" number="08" title="Cookie và dữ liệu truy cập">
         <ul className="list-disc space-y-2 pl-5">
           <li>
-            <strong className="font-semibold text-ink">Không dùng cookies theo dõi hay quảng cáo:</strong>{" "}
-            Mã nguồn giao diện web VeriShield AI hiện không thiết lập cookie theo dõi hành vi, không
-            nhúng mã phân tích của bên thứ ba (như Google Analytics hay pixel quảng cáo) và không
-            lưu nội dung người dùng vào <code className="font-mono text-ink">localStorage</code> hay{" "}
-            <code className="font-mono text-ink">sessionStorage</code>.
+            <strong className="font-semibold text-ink">Không dùng cookie theo dõi hay quảng cáo:</strong>{" "}
+            Giao diện web VeriShield AI hiện không đặt cookie theo dõi hành vi, không cài công cụ
+            phân tích quảng cáo của bên thứ ba và không lưu nội dung bạn nhập vào bộ nhớ lưu trữ lâu
+            dài của trình duyệt. Khóa phiên truy cập hồ sơ (hết hạn sau 2 giờ) và lịch sử trò chuyện
+            với Trợ lý VeriShield chỉ tồn tại tạm thời trong bộ nhớ phiên đang mở của tab trình
+            duyệt và tự xóa khi bạn bấm <em>&ldquo;Xóa hội thoại&rdquo;</em>, tải lại trang hoặc
+            đóng tab.
           </li>
           <li>
-            <strong className="font-semibold text-ink">Phông chữ tự lưu cục bộ:</strong> Phông chữ{" "}
-            <code className="font-mono text-ink">Inter</code> và{" "}
-            <code className="font-mono text-ink">JetBrains Mono</code> được đóng gói sẵn cùng ứng
-            dụng lúc xây dựng (<code className="font-mono text-ink">next/font</code>), trình duyệt
-            không gửi yêu cầu tải phông chữ tới máy chủ ngoài trong lúc bạn truy cập.
+            <strong className="font-semibold text-ink">Phông chữ đóng gói sẵn:</strong> Phông chữ
+            hiển thị được đóng gói cùng ứng dụng nên trình duyệt không cần gửi yêu cầu tải phông chữ
+            từ máy chủ bên ngoài khi bạn truy cập.
           </li>
           <li>
-            <strong className="font-semibold text-ink">Dữ liệu truy cập tầng máy chủ:</strong> Khi
-            truy cập website hoặc gọi API, máy chủ biên (Caddy) và ứng dụng backend tiếp nhận siêu
-            dữ liệu kết nối HTTP chuẩn (địa chỉ IP, thời điểm truy cập, đường dẫn yêu cầu, mã phản
-            hồi) để định tuyến HTTPS, chống lạm dụng và chẩn đoán sự cố vận hành theo cấu hình nhật
-            ký của hạ tầng máy chủ.
+            <strong className="font-semibold text-ink">Nhật ký kết nối tầng máy chủ:</strong> Khi
+            truy cập trang web, máy chủ web trung gian (reverse proxy) và máy chủ ứng dụng vẫn tiếp
+            nhận thông tin kết nối chuẩn (địa chỉ IP, thời điểm truy cập, đường dẫn yêu cầu, trạng
+            thái phản hồi) để duy trì kết nối HTTPS, chống quá tải và xử lý sự cố vận hành.
           </li>
         </ul>
       </DocSection>
 
       {/* 9. Quyền của người dùng */}
       <DocSection id="quyen-nguoi-dung" number="09" title="Quyền của người dùng">
-        <p>Khi sử dụng VeriShield AI, bạn có thể chủ động kiểm soát thông tin của mình theo các cách sau:</p>
+        <p>Khi sử dụng VeriShield AI, bạn có thể chủ động hạn chế rủi ro lộ thông tin bằng cách:</p>
         <ul className="list-disc space-y-2 pl-5">
           <li>
-            <strong className="font-semibold text-ink">Quyền tối thiểu hóa dữ liệu trước khi gửi:</strong>{" "}
-            Bạn có thể xóa họ tên, địa chỉ, hình ảnh giấy tờ tùy thân hoặc thông tin riêng tư không
-            liên quan khỏi tin nhắn/ảnh chụp trước khi tải lên kiểm tra.
-          </li>
-          <li>
-            <strong className="font-semibold text-ink">Quyền trải nghiệm không dùng dữ liệu thật:</strong>{" "}
-            Bạn có thể dùng các tình huống mẫu tổng hợp trên trang chủ hoặc tính năng{" "}
-            <em>Mô phỏng giao dịch</em> trên <code className="font-mono text-ink">/radar</code>{" "}
-            (không ghi vào cơ sở dữ liệu).
+            <strong className="font-semibold text-ink">Chủ động lược bỏ thông tin nhạy cảm:</strong>{" "}
+            Xóa họ tên, địa chỉ, ảnh giấy tờ tùy thân hoặc chi tiết cá nhân không cần thiết khỏi tin
+            nhắn và ảnh chụp trước khi gửi kiểm tra.
           </li>
           <li>
             <strong className="font-semibold text-ink">
-              Yêu cầu tra cứu, chỉnh sửa hoặc xóa hồ sơ đã lưu:
+              Kiểm soát hội thoại và bằng chứng bổ sung trong Trợ lý VeriShield:
             </strong>{" "}
-            Hiện hệ thống chưa tích hợp cổng tự phục vụ để người dùng trực tiếp xóa bản ghi{" "}
-            <code className="font-mono text-ink">case_id</code> trong cơ sở dữ liệu. Quy trình tiếp
-            nhận, xác minh chủ thể và thực thi yêu cầu xóa dữ liệu cần được chủ dự án thiết lập và
-            công bố kênh tiếp nhận chính thức trước khi vận hành chính thức.
+            Bạn có thể bấm nút <em>&ldquo;Xóa hội thoại&rdquo;</em> bất cứ lúc nào để dọn nội dung
+            trò chuyện trên trình duyệt, giữ nguyên mặc định xử lý cục bộ khi đính kèm ảnh hoặc ghi
+            âm bổ sung (không gửi tới AI bên ngoài và không ghi cơ sở dữ liệu), đồng thời tự quyết
+            định có bấm <em>&ldquo;Lưu hồ sơ bổ sung &amp; tải PDF&rdquo;</em> hay đóng góp ẩn danh
+            vào Radar cộng đồng hay không.
+          </li>
+          <li>
+            <strong className="font-semibold text-ink">Dùng thử bằng dữ liệu mẫu:</strong> Sử dụng
+            các tình huống mẫu có sẵn trên trang chủ hoặc khu vực <em>Mô phỏng giao dịch</em> trên
+            trang Giám sát gian lận mà không cần gửi dữ liệu cá nhân thật.
+          </li>
+          <li>
+            <strong className="font-semibold text-ink">
+              Giới hạn hiện tại đối với yêu cầu chỉnh sửa hoặc xóa hồ sơ:
+            </strong>{" "}
+            Hệ thống hiện chưa có chức năng quản lý dữ liệu dành cho người dùng để tự tra cứu danh
+            sách hoặc tự xóa hồ sơ đã lưu. Quy trình tiếp nhận, xác minh và xử lý yêu cầu xóa dữ
+            liệu cần được chủ dự án hoàn thiện và công bố kèm kênh liên hệ chính thức.
           </li>
         </ul>
       </DocSection>
 
       {/* 10. Thông tin liên hệ */}
-      <DocSection id="lien-he" number="10" title="Thông tin liên hệ">
-        <DocCallout tone="info" title="Mục cần chủ dự án bổ sung trước khi công bố chính thức">
+      <DocSection id="thong-tin-lien-he" number="10" title="Thông tin liên hệ">
+        <DocCallout tone="info" title="Thông tin đang chờ chủ dự án xác nhận và bổ sung">
           <p>
-            Trong mã nguồn hiện tại chưa khai báo pháp nhân/đơn vị vận hành chính thức, địa chỉ
-            email phụ trách quyền riêng tư (Privacy/DPO) hay kênh tiếp nhận yêu cầu xóa dữ liệu.
+            Bản dự thảo này chưa công bố tên đơn vị vận hành, địa chỉ email phụ trách quyền riêng tư
+            hay quy trình tiếp nhận yêu cầu xóa dữ liệu vì các thông tin này chưa được chủ dự án ấn
+            định chính thức.
           </p>
           <p>
-            Trước khi công bố chính sách quyền riêng tư cho người dùng đại chúng, chủ dự án cần điền
-            đầy đủ: (1) Tên đơn vị hoặc cá nhân chịu trách nhiệm vận hành, (2) Địa chỉ email liên hệ
-            về quyền riêng tư và báo cáo sự cố bảo mật, (3) Thời gian phản hồi dự kiến đối với yêu
-            cầu xóa dữ liệu.
+            Trước khi công bố chính sách chính thức cho người dùng rộng rãi, chủ dự án cần bổ sung:
+            (1) Đơn vị hoặc cá nhân chịu trách nhiệm vận hành và bảo vệ dữ liệu, (2) Kênh liên hệ
+            chính thức tiếp nhận thắc mắc về quyền riêng tư và yêu cầu xóa hồ sơ, (3) Thời hạn lưu
+            trữ và quy trình phản hồi cụ thể.
           </p>
         </DocCallout>
       </DocSection>
 
-      {/* 11. Thay đổi chính sách */}
-      <DocSection id="thay-doi" number="11" title="Thay đổi chính sách">
+      {/* 11. Cập nhật chính sách */}
+      <DocSection id="cap-nhat-chinh-sach" number="11" title="Cập nhật chính sách">
         <p>
-          Chính sách này sẽ được cập nhật khi VeriShield AI thay đổi luồng xử lý dữ liệu, tích hợp
-          nhà cung cấp AI mới, bổ sung chính sách lưu giữ/xóa tự động hoặc hoàn thiện các thông tin
-          quản trị và liên hệ. Mọi phiên bản cập nhật sẽ được công bố trực tiếp tại trang{" "}
-          <code className="font-mono text-ink">/privacy</code> cùng ghi nhận phạm vi thay đổi.
+          Nội dung trang này sẽ được cập nhật khi VeriShield AI hoàn thiện thông tin đơn vị vận
+          hành, bổ sung cơ chế xóa dữ liệu định kỳ, thêm chức năng quản lý dữ liệu cho người dùng
+          hoặc thay đổi cách tích hợp dịch vụ bên thứ ba. Phiên bản mới nhất sẽ luôn được hiển thị
+          công khai tại trang này.
         </p>
         <p className="pt-2 text-xs text-ink-muted">
-          Xem thêm chi tiết về kiến trúc xử lý, kiểm soát bảo mật và giới hạn kỹ thuật tại trang{" "}
+          Để tìm hiểu sâu hơn về kiến trúc hệ thống, mô hình AI và các biện pháp bảo mật, vui lòng
+          xem trang{" "}
           <Link
             href="/technical"
             className="font-medium text-sky-300 underline decoration-sky-500/40 underline-offset-2 hover:text-sky-200"

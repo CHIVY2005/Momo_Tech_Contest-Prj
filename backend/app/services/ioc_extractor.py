@@ -6,17 +6,22 @@ import hashlib
 import hmac
 import re
 import unicodedata
+from functools import lru_cache
 from typing import Final
 from urllib.parse import urlsplit
 
 from app.schemas import ExtractedIOCs, IocType
 
+_INVIS_RE: Final[re.Pattern[str]] = re.compile(
+    r"[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]"
+)
+_UNICODE_DOT_RE: Final[re.Pattern[str]] = re.compile(r"[\u3002\uff0e\uff61]")
 _URL_RE: Final[re.Pattern[str]] = re.compile(
     r"https?://[^\s<>'\"()\[\]{}]+",
     re.IGNORECASE,
 )
 _SCHEMELESS_TOKEN_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?<![/@\w])(?:www\.|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
+    r"(?<![/@\w.])(?:www\.|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
     r"(?:[a-z]{2,24}|xn--[a-z0-9-]{2,59})"
     r"(?::\d{1,5})?(?:[/?#][^\s<>'\"()\[\]{}]*)?",
     re.IGNORECASE,
@@ -149,14 +154,22 @@ RECOGNIZED_DISPLAY_PUBLIC_SUFFIXES: Final[frozenset[str]] = frozenset(
     }
 )
 _TRAILING_PUNCT: Final[str] = ".,!?;:)'\"»]"
+MAX_EXTRACTED_URLS: Final[int] = 8
+MAX_EXTRACTED_DOMAINS: Final[int] = 8
+MAX_EXTRACTED_PHONES: Final[int] = 8
+MAX_EXTRACTED_ACCOUNTS: Final[int] = 8
 
 _VN_PHONE_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?<!\d)(?:\+?84[\s.\-]?|0)(?P<body_head>[35789])(?P<body_rest>(?:[\s.\-]?\d){8})(?!\d)"
+    r"(?<!\d)(?!\d{2}[/.\-]\d{2}[/.\-](?:19|20)\d{2}\b)"
+    r"(?:(?:\(\+?84\)|\+?84)(?:[ \t.\-/_]{0,3}(?:\(0\)|0))?[ \t.\-/_]{0,3}|0)"
+    r"(?!\d[/.\-]\d{2}[/.\-](?:19|20)\d{2}\b)"
+    r"(?P<body_head>[35789])(?P<body_rest>(?:[ \t.\-/_]?\d){8})(?!\d)"
 )
-_ALT_VN_PHONE_SCRUB_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?<!\d)(?:\(\+?84\)[\s.\-/_]*|(?:\+?84)[\s.\-/_]*\(0\)[\s.\-/_]*|(?:\+?84)[\s.\-/_]?|0)"
-    r"(?P<body_head>[35789])(?P<body_rest>(?:[\s.\-/_]?\d){8})(?!\d)"
+_ALT_VN_PHONE_SCRUB_RE: Final[re.Pattern[str]] = _VN_PHONE_RE
+_DATE_PREFIX_RE: Final[re.Pattern[str]] = re.compile(
+    r"^\d{2}[/.\-]\d{2}[/.\-](?:19|20)\d{2}\b"
 )
+_MAX_SCRUB_KNOWN_ENTITIES: Final[int] = 32
 
 # Only match grouped currency numbers starting with 1-9 (never touches 0-prefixed or +84 phones)
 _CURRENCY_AMOUNT_RE: Final[re.Pattern[str]] = re.compile(
@@ -164,11 +177,14 @@ _CURRENCY_AMOUNT_RE: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 _STRICT_CURRENCY_SYMBOL_AFTER_RE: Final[re.Pattern[str]] = re.compile(
-    r"^[ \t]*(?:vn[đd]|[đd])(?!\w)",
+    r"(?:[ \t]*(?:vn[đd]|[đd](?!\w)|(?:đồng|dong)(?!\w)"
+    r"(?![ \t]+(?:phạm|pham|bọn|bon|thời|thoi|ý|y|chí|chi|loạt|loat|"
+    r"hành|hanh|tình|tinh|đội|doi|nghiệp|nghiep)\b)|tri[ệe]u(?!\w))"
+    r"|(?:k|tr)(?!\w))",
     re.IGNORECASE,
 )
 _BANK_CURRENCY_WORD_AFTER_RE: Final[re.Pattern[str]] = re.compile(
-    r"^[ \t]*(?:vn[đd]|[đd](?!\w)|(?:đồng|dong)(?!\w)"
+    r"[ \t]*(?:vn[đd]|[đd](?!\w)|(?:đồng|dong)(?!\w)"
     r"(?![ \t]+(?:phạm|pham|bọn|bon|thời|thoi|ý|y|chí|chi|loạt|loat|"
     r"hành|hanh|tình|tinh|đội|doi|nghiệp|nghiep)\b))",
     re.IGNORECASE,
@@ -216,7 +232,7 @@ _BANK_NAME_LABEL_PAT: Final[str] = (
 
 def fold_vi_ascii(text: str) -> str:
     """Fold Vietnamese diacritics 1-to-1 per NFC character for OCR-tolerant matching."""
-    nfc = unicodedata.normalize("NFC", text)
+    nfc = unicodedata.normalize("NFC", _INVIS_RE.sub("", text))
     out: list[str] = []
     for ch in nfc:
         if ch == "đ":
@@ -231,6 +247,7 @@ def fold_vi_ascii(text: str) -> str:
             out.append(base if ord(base) < 128 else ch)
     return "".join(out)
 
+
 EXPLICIT_RECIPIENT_SPAN_RE: Final[re.Pattern[str]] = re.compile(
     rf"(?P<prefix>(?:{_EXPLICIT_RECIPIENT_LABEL_PAT}){_LABEL_SEP_PAT}){_ACCT_SPAN_PAT}",
     re.IGNORECASE,
@@ -242,17 +259,61 @@ LABELED_ACCOUNT_SPAN_RE: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 
+_NAME_SEP_STOP_WORDS: Final[frozenset[str]] = frozenset(
+    {
+        "goi",
+        "sdt",
+        "hotline",
+        "zalo",
+        "lien",
+        "tien",
+        "vnd",
+        "dong",
+        "ngay",
+        "luc",
+        "ma",
+        "gd",
+        "otp",
+        "cccd",
+        "cmnd",
+        "the",
+    }
+)
+_NAME_SEPARATED_ACCOUNT_RE: Final[re.Pattern[str]] = re.compile(
+    rf"(?:{_EXPLICIT_ACCOUNT_LABEL_PAT})"
+    r"[ \t:.\-\u2013\u2014()]{1,8}"
+    r"(?P<words>[A-Za-z]{1,20}(?:[ \t]+[A-Za-z]{1,20}){0,4})"
+    r"[ \t:.\-\u2013\u2014()]{1,8}"
+    rf"{_ACCT_SPAN_PAT}",
+    re.IGNORECASE,
+)
+_ALNUM_ALIAS_CURRENCY_RE: Final[re.Pattern[str]] = re.compile(
+    r"^\d+(?:vn?d|d|dong|k|tr|trieu)$",
+    re.IGNORECASE,
+)
+_ALNUM_ALIAS_ACCOUNT_RE: Final[re.Pattern[str]] = re.compile(
+    rf"(?:{_EXPLICIT_ACCOUNT_LABEL_PAT}){_LABEL_SEP_PAT}"
+    r"(?P<alias>[A-Za-z0-9][A-Za-z0-9\-_]{5,24})(?![A-Za-z0-9\-_])",
+    re.IGNORECASE,
+)
+_TRANSFER_VERB_ACCOUNT_RE: Final[re.Pattern[str]] = re.compile(
+    r"\b(?:chuyen|nop|gui)(?:[ \t]+(?:tien|khoan|ngay|gap)){0,2}"
+    r"[ \t]+(?:vao|den|toi)[ \t]+(?:so[ \t]+)?"
+    r"(?P<acct>\d(?:[ \t.\-]?\d){7,18})(?!\d)",
+    re.IGNORECASE,
+)
+
 
 def is_labeled_account_match(text: str, match: re.Match[str]) -> bool:
     raw_tok = match.group("acct")
-    tail = text[match.end("acct") :]
+    end_pos = match.end("acct")
     if match.group("explicit_label") is not None:
-        return not _STRICT_CURRENCY_SYMBOL_AFTER_RE.match(tail)
-    if _BANK_CURRENCY_WORD_AFTER_RE.match(tail):
+        return _STRICT_CURRENCY_SYMBOL_AFTER_RE.match(text, end_pos) is None
+    if _BANK_CURRENCY_WORD_AFTER_RE.match(text, end_pos) is not None:
         return False
     if _DATE_LIKE_SPAN_RE.fullmatch(raw_tok):
         return False
-    return not _CURRENCY_AMOUNT_RE.fullmatch(raw_tok)
+    return _CURRENCY_AMOUNT_RE.fullmatch(raw_tok) is None
 
 
 _is_labeled_account_match = is_labeled_account_match
@@ -295,29 +356,51 @@ def _dedupe_preserve_order(items: list[str]) -> list[str]:
 
 
 def _safe_extract_host(url_or_host: str) -> str:
-    candidate = url_or_host if "://" in url_or_host else f"https://{url_or_host}"
+    cleaned = _INVIS_RE.sub("", url_or_host).strip()
+    if not cleaned:
+        return ""
+    cleaned = _UNICODE_DOT_RE.sub(".", cleaned)
+    candidate = cleaned if "://" in cleaned else f"https://{cleaned}"
     try:
-        return (urlsplit(candidate).hostname or "").lower().rstrip(".")
+        raw_host = urlsplit(candidate).hostname or ""
     except ValueError:
         return ""
+    if not raw_host or ".." in raw_host or raw_host.startswith("."):
+        return ""
+    host = raw_host[:-1] if raw_host.endswith(".") else raw_host
+    if not host or "\\" in host or any(ch.isspace() or ord(ch) < 32 or ord(ch) == 127 for ch in host):
+        return ""
+    if not host.isascii():
+        try:
+            host = host.encode("idna").decode("ascii")
+        except UnicodeError:
+            return ""
+        host = host[:-1] if host.endswith(".") else host
+    host = host.lower()
+    if not host or len(host) > 253 or ".." in host:
+        return ""
+    labels = host.split(".")
+    if len(labels) > 127 or any(not (1 <= len(lbl) <= 63) for lbl in labels):
+        return ""
+    return host
 
 
 def normalize_ioc_value(ioc_type: str, value: str) -> str:
     """Canonicalize raw IOC value prior to hashing or masking."""
-    cleaned = value.strip()
+    cleaned = _INVIS_RE.sub("", value).strip()
     if ioc_type == "phone":
         digits = re.sub(r"\D", "", cleaned)
-        if digits.startswith("84") and len(digits) == 11:
+        if len(digits) == 11 and digits.startswith("84") and digits[2] in "35789":
             return "0" + digits[2:]
+        if len(digits) == 12 and digits.startswith("840") and digits[3] in "35789":
+            return "0" + digits[3:]
         return digits
     if ioc_type == "bank_account":
         if re.fullmatch(r"[A-Za-z0-9\-_]+", cleaned) and any(ch.isalpha() for ch in cleaned):
             return re.sub(r"[^A-Za-z0-9]", "", cleaned).upper()
         return re.sub(r"\D", "", cleaned)
     if ioc_type == "domain":
-        host = cleaned.lower().rstrip(".")
-        extracted = _safe_extract_host(host)
-        return extracted or host
+        return _safe_extract_host(cleaned)
     return cleaned.lower()
 
 
@@ -366,6 +449,7 @@ def mask_ioc(ioc_type: IocType, value: str) -> str:
     return f"dom_{hash_ioc('domain', value)[:6]}****"
 
 
+@lru_cache(maxsize=256)
 def _build_spaced_digits_pattern(digits: str) -> re.Pattern[str] | None:
     only_digits = re.sub(r"\D", "", digits)
     if len(only_digits) < 6:
@@ -385,7 +469,7 @@ def scrub_free_text_pii(
         return text
     out = text
 
-    for ph in known_phones or []:
+    for ph in _dedupe_preserve_order(list(known_phones or []))[:_MAX_SCRUB_KNOWN_ENTITIES]:
         raw_digits = normalize_ioc_value("phone", ph)
         if raw_digits and "****" not in ph:
             masked_ph = mask_ioc("phone", raw_digits)
@@ -394,17 +478,20 @@ def scrub_free_text_pii(
             if pat is not None:
                 out = pat.sub(masked_ph, out)
 
-    for acct in known_accounts or []:
+    for acct in _dedupe_preserve_order(list(known_accounts or []))[:_MAX_SCRUB_KNOWN_ENTITIES]:
         raw_digits = normalize_ioc_value("bank_account", acct)
         if raw_digits and "****" not in acct:
             masked_acct = mask_ioc("bank_account", raw_digits)
             out = out.replace(acct, masked_acct)
-            pat = _build_spaced_digits_pattern(raw_digits)
-            if pat is not None:
-                out = pat.sub(masked_acct, out)
+            if not any(ch.isalpha() for ch in raw_digits):
+                pat = _build_spaced_digits_pattern(raw_digits)
+                if pat is not None:
+                    out = pat.sub(masked_acct, out)
 
     # Catch any remaining formatted Vietnamese phones or grouped/contiguous account numbers
     def _replace_phone(m: re.Match[str]) -> str:
+        if _DATE_PREFIX_RE.match(m.group(0)):
+            return m.group(0)
         rest = re.sub(r"\D", "", m.group("body_rest"))
         return mask_ioc("phone", f"0{m.group('body_head')}{rest}")
 
@@ -441,7 +528,10 @@ def scrub_free_text_pii(
 def extract_candidate_urls(text: str) -> list[str]:
     """Extract both explicit http(s) URLs and scheme-less web links (normalized to https://)."""
     found = [m.group(0).rstrip(_TRAILING_PUNCT) for m in _URL_RE.finditer(text)]
-    without_http = _URL_RE.sub(" ", text)
+    without_raw_http = _INVIS_RE.sub("", _URL_RE.sub(" ", text))
+    for m in _URL_RE.finditer(without_raw_http):
+        found.append(m.group(0).rstrip(_TRAILING_PUNCT))
+    without_http = _URL_RE.sub(" ", without_raw_http)
     for sm in _SCHEMELESS_TOKEN_RE.finditer(without_http):
         token = sm.group(0).rstrip(_TRAILING_PUNCT)
         if not token:
@@ -453,7 +543,12 @@ def extract_candidate_urls(text: str) -> list[str]:
             continue
         host = (parts.hostname or "").lower().rstrip(".")
         labels = [lbl for lbl in host.split(".") if lbl]
-        if len(labels) < 2 or not all(_DNS_LABEL_RE.match(lbl) for lbl in labels):
+        if (
+            len(host) > 253
+            or len(labels) < 2
+            or len(labels) > 127
+            or not all(_DNS_LABEL_RE.match(lbl) for lbl in labels)
+        ):
             continue
         tld = labels[-1]
         if not (tld.isalpha() or tld.startswith("xn--")):
@@ -472,22 +567,53 @@ def extract_candidate_urls(text: str) -> list[str]:
     return _dedupe_preserve_order(found)
 
 
+def _blank_span(chars: list[str], start: int, end: int) -> None:
+    for idx in range(start, end):
+        chars[idx] = " "
+
+
+def _is_currency_or_date_acct(text: str, raw_tok: str, end_pos: int) -> bool:
+    return bool(
+        _STRICT_CURRENCY_SYMBOL_AFTER_RE.match(text, end_pos) is not None
+        or _BANK_CURRENCY_WORD_AFTER_RE.match(text, end_pos) is not None
+        or _DATE_LIKE_SPAN_RE.fullmatch(raw_tok) is not None
+        or _CURRENCY_AMOUNT_RE.fullmatch(raw_tok) is not None
+    )
+
+
 def extract_iocs(text: str, extra_urls: list[str] | None = None) -> ExtractedIOCs:
     """Extract Vietnamese phones, bank accounts, URLs, domains, and targeted brands."""
-    raw_urls = extract_candidate_urls(text)
+    extra_normalized: list[str] = []
     if extra_urls:
         for candidate in extra_urls:
             stripped = candidate.strip().rstrip(_TRAILING_PUNCT)
             if stripped:
-                raw_urls.append(stripped if "://" in stripped else f"https://{stripped}")
-    urls = _dedupe_preserve_order(raw_urls)
+                extra_normalized.append(stripped if "://" in stripped else f"https://{stripped}")
+    extra_normalized = _dedupe_preserve_order(extra_normalized)
+
+    seen_urls: set[str] = set(extra_normalized)
+    seen_hosts: set[str] = {h for u in extra_normalized if (h := _safe_extract_host(u))}
+    primary_text_urls: list[str] = []
+    secondary_text_urls: list[str] = []
+    for u in extract_candidate_urls(text):
+        if u in seen_urls:
+            continue
+        seen_urls.add(u)
+        host = _safe_extract_host(u)
+        if not host or host not in seen_hosts:
+            if host:
+                seen_hosts.add(host)
+            primary_text_urls.append(u)
+        else:
+            secondary_text_urls.append(u)
+    urls = (extra_normalized + primary_text_urls + secondary_text_urls)[:MAX_EXTRACTED_URLS]
 
     domains: list[str] = []
     for u in urls:
         host = _safe_extract_host(u)
         if host:
             domains.append(host)
-    domains = _dedupe_preserve_order(domains)
+    domains = _dedupe_preserve_order(domains)[:MAX_EXTRACTED_DOMAINS]
 
     folded_text = fold_vi_ascii(text)
     scrubbed = _URL_RE.sub(" ", folded_text)
@@ -495,23 +621,56 @@ def extract_iocs(text: str, extra_urls: list[str] | None = None) -> ExtractedIOC
 
     raw_accounts: list[str] = []
     chars = list(scrubbed)
-    for match in LABELED_ACCOUNT_SPAN_RE.finditer(scrubbed):
-        if not _is_labeled_account_match(scrubbed, match):
+    for match in _ALNUM_ALIAS_ACCOUNT_RE.finditer(scrubbed):
+        norm_alias = re.sub(r"[^A-Za-z0-9]", "", match.group("alias")).upper()
+        if (
+            6 <= len(norm_alias) <= 19
+            and any(ch.isalpha() for ch in norm_alias)
+            and sum(ch.isdigit() for ch in norm_alias) >= 4
+            and _ALNUM_ALIAS_CURRENCY_RE.fullmatch(norm_alias) is None
+        ):
+            raw_accounts.append(norm_alias)
+            _blank_span(chars, *match.span(0))
+    after_alnum = "".join(chars)
+
+    for match in LABELED_ACCOUNT_SPAN_RE.finditer(after_alnum):
+        if not _is_labeled_account_match(after_alnum, match):
             continue
         digits = re.sub(r"\D", "", match.group("acct"))
         if 6 <= len(digits) <= 19:
             raw_accounts.append(digits)
-            start, end = match.span("acct")
-            for idx in range(start, end):
-                chars[idx] = " "
+            _blank_span(chars, *match.span(0))
+    after_labeled = "".join(chars)
+
+    for match in _NAME_SEPARATED_ACCOUNT_RE.finditer(after_labeled):
+        words = match.group("words").lower().split()
+        if any(w in _NAME_SEP_STOP_WORDS for w in words):
+            continue
+        raw_tok = match.group("acct")
+        if _is_currency_or_date_acct(after_labeled, raw_tok, match.end("acct")):
+            continue
+        digits = re.sub(r"\D", "", raw_tok)
+        if 6 <= len(digits) <= 19:
+            raw_accounts.append(digits)
+            _blank_span(chars, *match.span(0))
+    after_name = "".join(chars)
+
+    for match in _TRANSFER_VERB_ACCOUNT_RE.finditer(after_name):
+        raw_tok = match.group("acct")
+        if _is_currency_or_date_acct(after_name, raw_tok, match.end("acct")):
+            continue
+        digits = re.sub(r"\D", "", raw_tok)
+        if 8 <= len(digits) <= 19:
+            raw_accounts.append(digits)
+            _blank_span(chars, *match.span("acct"))
     without_accounts = "".join(chars)
 
     phones: list[str] = []
     for match in _VN_PHONE_RE.finditer(without_accounts):
+        if _DATE_PREFIX_RE.match(match.group(0)):
+            continue
         rest_digits = re.sub(r"\D", "", match.group("body_rest"))
         phones.append(f"0{match.group('body_head')}{rest_digits}")
-
-    _ = _CURRENCY_AMOUNT_RE
 
     brands: list[str] = []
     for brand_name, pattern in _BRAND_PATTERNS:
@@ -519,8 +678,8 @@ def extract_iocs(text: str, extra_urls: list[str] | None = None) -> ExtractedIOC
             brands.append(brand_name)
 
     return ExtractedIOCs(
-        phones=_dedupe_preserve_order(phones),
-        bank_accounts=_dedupe_preserve_order(raw_accounts),
+        phones=_dedupe_preserve_order(phones)[:MAX_EXTRACTED_PHONES],
+        bank_accounts=_dedupe_preserve_order(raw_accounts)[:MAX_EXTRACTED_ACCOUNTS],
         urls=urls,
         domains=domains,
         brands=brands,

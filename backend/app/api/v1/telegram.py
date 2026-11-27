@@ -10,6 +10,7 @@ from app.core.security import verify_secret
 from app.services.telegram_bot import (
     InvalidTelegramPayloadError,
     TelegramDeliveryError,
+    TelegramPermanentDeliveryError,
     handle_telegram_update,
 )
 
@@ -27,9 +28,17 @@ async def post_telegram_webhook(
         raise HTTPException(status_code=403, detail="Invalid Telegram webhook secret token.")
 
     pipeline = request.app.state.pipeline
+    case_token_secret: str = request.app.state.case_token_secret
     try:
-        return await handle_telegram_update(update=update, pipeline=pipeline, settings=settings)
+        return await handle_telegram_update(
+            update=update,
+            pipeline=pipeline,
+            settings=settings,
+            case_token_secret=case_token_secret,
+        )
     except InvalidTelegramPayloadError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except TelegramPermanentDeliveryError:
+        return {"ok": True, "delivered": False, "permanent_error": True}
     except TelegramDeliveryError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import threading
@@ -12,6 +13,7 @@ from typing import Any, Final
 import cv2
 import numpy as np
 
+from app.core.media_security import InvalidMediaError, decode_image_to_rgb_array
 from app.services.ocr.base import OcrBox, OcrResult, build_box_from_quad, compute_height_cv
 
 logger = logging.getLogger(__name__)
@@ -20,6 +22,7 @@ PPOCRV5_DET_FILENAME: Final[str] = "ch_PP-OCRv5_det_mobile.onnx"
 PPOCRV5_LATIN_REC_FILENAME: Final[str] = "latin_PP-OCRv5_rec_mobile.onnx"
 PPOCRV4_DET_FILENAME: Final[str] = "ch_PP-OCRv4_det_mobile.onnx"
 PPOCRV4_CH_REC_FILENAME: Final[str] = "ch_PP-OCRv4_rec_mobile.onnx"
+MAX_OCR_DIMENSION: Final[int] = 2048
 
 _PATCH_LOCK = threading.Lock()
 
@@ -179,10 +182,7 @@ class RapidOcrOnnxProvider:
         _ = mime_type
         if not image_bytes:
             return OcrResult(
-                available=False,
-                status="error",
-                provider=self.name,
-                model_id=self.model_id,
+                available=False, status="error", provider=self.name, model_id=self.model_id,
                 error_code="EMPTY_IMAGE_BYTES",
             )
 
@@ -191,31 +191,31 @@ class RapidOcrOnnxProvider:
             arr = np.frombuffer(image_bytes, dtype=np.uint8)
             bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR)
             if bgr is None:
+                with contextlib.suppress(InvalidMediaError):
+                    bgr = cv2.cvtColor(decode_image_to_rgb_array(image_bytes), cv2.COLOR_RGB2BGR)
+            if bgr is None:
                 return OcrResult(
-                    available=False,
-                    status="error",
-                    provider=self.name,
-                    model_id=self.model_id,
+                    available=False, status="error", provider=self.name, model_id=self.model_id,
                     error_code="IMAGE_DECODE_FAILED",
                 )
+            h, w = bgr.shape[:2]
+            if max(h, w) > MAX_OCR_DIMENSION:
+                scale = MAX_OCR_DIMENSION / float(max(h, w))
+                new_w = min(MAX_OCR_DIMENSION, max(1, round(w * scale)))
+                new_h = min(MAX_OCR_DIMENSION, max(1, round(h * scale)))
+                bgr = cv2.resize(bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
             engine = self._get_engine()
             raw_out = engine(bgr)
         except FileNotFoundError:
             return OcrResult(
-                available=False,
-                status="unavailable",
-                provider=self.name,
-                model_id=self.model_id,
+                available=False, status="unavailable", provider=self.name, model_id=self.model_id,
                 latency_ms=int((time.perf_counter() - t0) * 1000),
                 error_code="OCR_MODEL_CACHE_MISSING",
             )
         except Exception as exc:
             logger.warning("RapidOCR extraction failed (%s).", type(exc).__name__)
             return OcrResult(
-                available=False,
-                status="error",
-                provider=self.name,
-                model_id=self.model_id,
+                available=False, status="error", provider=self.name, model_id=self.model_id,
                 latency_ms=int((time.perf_counter() - t0) * 1000),
                 error_code=f"RAPIDOCR_{type(exc).__name__.upper()}",
             )
@@ -227,14 +227,7 @@ class RapidOcrOnnxProvider:
 
         if raw_txts is None or len(raw_txts) == 0:
             return OcrResult(
-                available=True,
-                status="empty",
-                provider=self.name,
-                model_id=self.model_id,
-                full_text="",
-                boxes=[],
-                mean_confidence=0.0,
-                height_cv=0.0,
+                available=True, status="empty", provider=self.name, model_id=self.model_id,
                 latency_ms=latency_ms,
             )
 

@@ -1,6 +1,5 @@
 """Application configuration loaded from backend/.env or environment variables."""
 
-import hashlib
 from functools import lru_cache
 from pathlib import Path
 from typing import Final, Literal
@@ -49,9 +48,11 @@ class Settings(BaseSettings):
 
     analyst_pin: str = ""
     ioc_hmac_secret: str = ""
+    case_token_secret: str = ""
     block_rule_ttl_minutes: int = Field(default=30, ge=1, le=1440)
 
     model_dir: str = "app/data/models"
+    onnx_intra_threads: int = Field(default=2, ge=1, le=8)
     sqlite_path: str = "verishield.db"
     max_upload_bytes: int = Field(
         default=MAX_UPLOAD_CEILING_BYTES,
@@ -72,6 +73,8 @@ class Settings(BaseSettings):
     enable_gemini_ocr_fallback: bool = True
 
     rate_limit_per_minute: int = Field(default=45, ge=1)
+    assistant_rate_limit_per_minute: int = Field(default=12, ge=1)
+    assistant_rate_limit_per_hour: int = Field(default=60, ge=1)
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
 
     @field_validator("llm_provider", mode="before")
@@ -95,7 +98,7 @@ class Settings(BaseSettings):
         pin = self.analyst_pin.strip()
         if self.app_env == "demo" and not pin:
             self.analyst_pin = "2026"
-            return self
+            pin = "2026"
 
         placeholder_pins = {
             "change_me",
@@ -116,27 +119,83 @@ class Settings(BaseSettings):
         if self.app_env == "production" and len(pin) < 8:
             raise ValueError("APP_ENV=production requires ANALYST_PIN of at least 8 characters.")
 
+        disallowed_secret_values = placeholder_pins | {"2026"}
+        disallowed_secret_prefixes = ("change_me", "changeme", "2026_", "2026-")
+
         hmac_secret = self.ioc_hmac_secret.strip()
         if hmac_secret:
-            if hmac_secret.lower() in placeholder_pins or hmac_secret.lower().startswith("change_me"):
-                raise ValueError("IOC_HMAC_SECRET cannot be a placeholder/example value.")
-            if self.app_env == "production" and len(hmac_secret) < 16:
-                raise ValueError("APP_ENV=production requires IOC_HMAC_SECRET of at least 16 characters.")
+            hmac_lower = hmac_secret.lower()
+            if hmac_lower in disallowed_secret_values or hmac_lower.startswith(
+                disallowed_secret_prefixes
+            ):
+                raise ValueError(
+                    "IOC_HMAC_SECRET cannot be a placeholder/example value or '2026'."
+                )
+            if self.app_env == "production":
+                if len(hmac_secret) < 16:
+                    raise ValueError(
+                        "APP_ENV=production requires IOC_HMAC_SECRET of at least 16 characters."
+                    )
+                if hmac_secret == pin:
+                    raise ValueError(
+                        "APP_ENV=production forbids reusing ANALYST_PIN as IOC_HMAC_SECRET."
+                    )
+        elif self.app_env == "production":
+            raise ValueError("APP_ENV=production requires an explicit IOC_HMAC_SECRET (>= 16 chars).")
+
+        token_secret = self.case_token_secret.strip()
+        if token_secret:
+            token_lower = token_secret.lower()
+            if token_lower in disallowed_secret_values or token_lower.startswith(
+                disallowed_secret_prefixes
+            ):
+                raise ValueError(
+                    "CASE_TOKEN_SECRET cannot be a placeholder/example value or '2026'."
+                )
+            if self.app_env == "production":
+                if len(token_secret) < 32:
+                    raise ValueError(
+                        "APP_ENV=production requires CASE_TOKEN_SECRET of at least 32 characters."
+                    )
+                if token_secret == pin:
+                    raise ValueError(
+                        "APP_ENV=production forbids reusing ANALYST_PIN as CASE_TOKEN_SECRET."
+                    )
+                if token_secret == hmac_secret:
+                    raise ValueError(
+                        "APP_ENV=production requires distinct IOC_HMAC_SECRET and CASE_TOKEN_SECRET."
+                    )
+        elif self.app_env == "production":
+            raise ValueError(
+                "APP_ENV=production requires an explicit CASE_TOKEN_SECRET (>= 32 chars)."
+            )
+
+        webhook_secret = self.telegram_webhook_secret.strip()
+        if webhook_secret:
+            webhook_lower = webhook_secret.lower()
+            if webhook_lower in disallowed_secret_values or webhook_lower.startswith(
+                disallowed_secret_prefixes
+            ):
+                raise ValueError(
+                    "TELEGRAM_WEBHOOK_SECRET cannot be a placeholder/example value or '2026'."
+                )
+            if pin and webhook_secret == pin:
+                raise ValueError("TELEGRAM_WEBHOOK_SECRET cannot equal ANALYST_PIN.")
+            if self.app_env == "production" and len(webhook_secret) < 24:
+                raise ValueError(
+                    "APP_ENV=production requires TELEGRAM_WEBHOOK_SECRET of at least 24 characters."
+                )
+        elif self.app_env == "production" and self.telegram_bot_token.strip():
+            raise ValueError(
+                "APP_ENV=production requires TELEGRAM_WEBHOOK_SECRET (>= 24 chars) "
+                "when TELEGRAM_BOT_TOKEN is configured."
+            )
         return self
 
     @property
     def resolved_ioc_hmac_secret(self) -> str:
-        """Return explicit IOC_HMAC_SECRET, or derive a domain-separated key in production."""
-        explicit = self.ioc_hmac_secret.strip()
-        if explicit:
-            return explicit
-        if self.app_env == "production" and self.analyst_pin.strip():
-            # Domain-separated fallback ensures production never uses unsalted SHA-256 even
-            # before IOC_HMAC_SECRET is explicitly provisioned in deploy/.env.prod.
-            return hashlib.sha256(
-                f"verishield-ioc-hmac-v1:{self.analyst_pin.strip()}".encode()
-            ).hexdigest()
-        return ""
+        """Return explicit IOC_HMAC_SECRET without deriving from ANALYST_PIN."""
+        return self.ioc_hmac_secret.strip()
 
     @property
     def resolved_llm_provider(self) -> ResolvedLlmProvider:

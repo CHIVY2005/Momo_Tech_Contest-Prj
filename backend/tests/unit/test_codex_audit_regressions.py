@@ -1058,9 +1058,13 @@ async def test_delta_r4_rejected_emv_frame_6_to_19_acct_tg_rotation_retry_after_
             "VALUES (?, ?, ?, ?, ?)",
             ("vs_tg_555666", leg_tg_rep.created_at, leg_tg_rep.verdict, 10, leg_tg_rep.model_dump_json()),
         )
+        from datetime import UTC, datetime, timedelta
+
+        recent_ts = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
         raw_conn.execute(
             "INSERT INTO telegram_updates (update_id, status, case_id, reply_text, created_at) "
-            "VALUES (555666, 'completed', 'vs_tg_555666', 'Đã xong', '2026-11-26T05:00:00+00:00')"
+            "VALUES (555666, 'completed', 'vs_tg_555666', 'Đã xong', ?)",
+            (recent_ts,),
         )
         raw_conn.execute(
             "INSERT INTO block_rules "

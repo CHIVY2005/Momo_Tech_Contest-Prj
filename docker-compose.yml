@@ -24,12 +24,15 @@ services:
       - APP_ENV=${APP_ENV:-development}
       - ANALYST_PIN=${ANALYST_PIN:-}
       - IOC_HMAC_SECRET=${IOC_HMAC_SECRET:-}
+      - CASE_TOKEN_SECRET=${CASE_TOKEN_SECRET:-}
+      - ONNX_INTRA_THREADS=${ONNX_INTRA_THREADS:-2}
+      - UVICORN_FORWARDED_ALLOW_IPS=${UVICORN_FORWARDED_ALLOW_IPS:-}
       - BLOCK_RULE_TTL_MINUTES=${BLOCK_RULE_TTL_MINUTES:-30}
       - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:3000","https://verishield.joiboi.app"]}
     volumes:
       - verishield_data:/data
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/health"]
       interval: 20s
@@ -42,15 +45,18 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_APP_ENV: ${APP_ENV:-development}
+        ENABLE_NEXT_API_PROXY: "true"
+        BACKEND_INTERNAL_URL: http://backend:8000
     restart: unless-stopped
     environment:
+      - ENABLE_NEXT_API_PROXY=true
       - BACKEND_INTERNAL_URL=http://backend:8000
       - NEXT_PUBLIC_APP_ENV=${APP_ENV:-development}
     depends_on:
       backend:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
 volumes:
   verishield_data:

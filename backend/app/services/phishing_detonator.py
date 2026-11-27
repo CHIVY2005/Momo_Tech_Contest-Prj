@@ -11,20 +11,81 @@ import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Final
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin
 from weakref import WeakKeyDictionary
 
 import httpx
 
+from app.core.http_decompression import SharedByteBudget, read_bounded_http_body
 from app.core.security import (
     SsrfBlockedError,
     async_validate_url_target,
     build_ssrf_pinned_http_client,
 )
+from app.core.url_authority import (
+    extract_strict_ascii_host,
+    has_disallowed_url_backslash,
+)
 from app.schemas import SandboxInspection
 
 MAX_SANDBOX_BODY_BYTES: Final[int] = 1_500_000
 MAX_SANDBOX_REDIRECT_HOPS: Final[int] = 5
+MAX_SANDBOX_SUBREQUESTS: Final[int] = 24
+MAX_SANDBOX_TOTAL_BYTES: Final[int] = 4_000_000
+
+_POSIX_SANDBOX_TMP: Final[str] = "/tmp"  # noqa: S108
+_WINDOWS_ENV_ALLOWLIST: Final[tuple[str, ...]] = (
+    "SYSTEMROOT",
+    "COMSPEC",
+    "TEMP",
+    "TMP",
+    "LOCALAPPDATA",
+    "USERPROFILE",
+    "PATH",
+    "PLAYWRIGHT_BROWSERS_PATH",
+)
+_POSIX_ENV_ALLOWLIST: Final[tuple[str, ...]] = (
+    "PATH",
+    "PLAYWRIGHT_BROWSERS_PATH",
+    "LANG",
+    "LC_ALL",
+    "TZ",
+)
+_CHROMIUM_LAUNCH_ARGS: Final[tuple[str, ...]] = (
+    "--disable-dev-shm-usage",
+    "--disable-background-networking",
+    "--host-resolver-rules=MAP * ~NOTFOUND",
+    "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
+    "--disable-features=WebTransport",
+    "--disable-blink-features=WebTransport",
+    "--proxy-server=http://127.0.0.1:9",
+    "--proxy-bypass-list=<-loopback>",
+)
+_STRIPPED_RESPONSE_HEADERS: Final[frozenset[str]] = frozenset(
+    {
+        "content-encoding",
+        "transfer-encoding",
+        "content-length",
+        "location",
+        "content-security-policy",
+        "content-security-policy-report-only",
+        "report-to",
+        "reporting-endpoints",
+        "nel",
+        "x-content-type-options",
+    }
+)
+_SANDBOX_HTML_CSP: Final[str] = "worker-src 'none'; child-src 'none'; object-src 'none'"
+_ALLOWED_DATA_IMAGE_PREFIXES: Final[tuple[str, ...]] = (
+    "data:image/png;",
+    "data:image/jpeg;",
+    "data:image/jpg;",
+    "data:image/webp;",
+    "data:image/gif;",
+)
+_BLOCKED_RESOURCE_TYPES: Final[frozenset[str]] = frozenset(
+    {"worker", "shared_worker", "websocket", "eventsource"}
+)
 
 _LOOP_SEMAPHORES: WeakKeyDictionary[asyncio.AbstractEventLoop, tuple[int, asyncio.Semaphore]] = (
     WeakKeyDictionary()
@@ -54,15 +115,53 @@ def _get_playwright_semaphore() -> asyncio.Semaphore:
     _LOOP_SEMAPHORES[loop] = (limit, sem)
     return sem
 
+def _sanitized_chromium_env() -> dict[str, str]:
+    """Return a minimal allowlisted env for Chromium so backend secrets never leak."""
+    if os.name == "nt":
+        return {k: v for k in _WINDOWS_ENV_ALLOWLIST if (v := os.environ.get(k))}
+    env: dict[str, str] = {
+        "HOME": _POSIX_SANDBOX_TMP,
+        "TMPDIR": _POSIX_SANDBOX_TMP,
+        "XDG_CACHE_HOME": _POSIX_SANDBOX_TMP,
+        "XDG_CONFIG_HOME": _POSIX_SANDBOX_TMP,
+    }
+    for key in _POSIX_ENV_ALLOWLIST:
+        val = os.environ.get(key)
+        if val:
+            env[key] = val
+    return env
+
+
 _DISABLE_DIRECT_BROWSER_EGRESS_JS: Final[str] = """
 (() => {
-  const deny = () => { throw new Error('Blocked by VeriShield Sandbox Policy'); };
-  Object.defineProperty(window, 'WebSocket', { value: deny, configurable: false, writable: false });
-  Object.defineProperty(window, 'EventSource', { value: deny, configurable: false, writable: false });
-  Object.defineProperty(window, 'RTCPeerConnection', { value: deny, configurable: false, writable: false });
-  if (navigator && 'sendBeacon' in navigator) {
-    Object.defineProperty(navigator, 'sendBeacon', { value: () => false, configurable: false });
+  function deny() { throw new Error('Blocked by VeriShield Sandbox Policy'); }
+  for (const key of [
+    'WebSocket',
+    'EventSource',
+    'RTCPeerConnection',
+    'webkitRTCPeerConnection',
+    'mozRTCPeerConnection',
+    'WebTransport',
+    'Worker',
+    'SharedWorker',
+  ]) {
+    try {
+      Object.defineProperty(window, key, {
+        value: deny,
+        configurable: false,
+        writable: false,
+      });
+    } catch (_) {}
   }
+  try {
+    if (navigator && 'sendBeacon' in navigator) {
+      Object.defineProperty(navigator, 'sendBeacon', {
+        value: () => false,
+        configurable: false,
+        writable: false,
+      });
+    }
+  } catch (_) {}
 })();
 """
 
@@ -92,6 +191,8 @@ def _load_official_brands() -> list[dict[str, Any]]:
 
 def _host_matches_official(host: str, official_domains: list[str]) -> bool:
     h = host.lower().rstrip(".")
+    if not h:
+        return False
     return any(h == dom.lower() or h.endswith("." + dom.lower()) for dom in official_domains)
 
 
@@ -105,10 +206,18 @@ def inspect_rendered_dom(
 ) -> SandboxInspection:
     """Pure analyzer inspecting rendered DOM HTML & title for credential/APK phishing traps."""
     effective_url = final_url or visited_url
-    try:
-        host = (urlsplit(effective_url).hostname or "").lower().rstrip(".")
-    except ValueError:
-        host = ""
+    visited_strict_host = (
+        None
+        if has_disallowed_url_backslash(visited_url)
+        else extract_strict_ascii_host(visited_url)
+    )
+    effective_strict_host = (
+        None
+        if has_disallowed_url_backslash(effective_url)
+        else extract_strict_ascii_host(effective_url)
+    )
+    authority_valid = visited_strict_host is not None and effective_strict_host is not None
+    host = effective_strict_host or ""
 
     has_password = bool(_PASSWORD_INPUT_RE.search(html))
     has_otp = bool(_OTP_SIGNAL_RE.search(html))
@@ -120,7 +229,7 @@ def inspect_rendered_dom(
     corpus = f"{page_title or ''} {html[:6000]}".lower()
     official_entries = _load_official_brands()
 
-    is_any_official = any(
+    is_any_official = authority_valid and any(
         _host_matches_official(host, entry["official_domains"]) for entry in official_entries
     )
     if not is_any_official:
@@ -134,8 +243,10 @@ def inspect_rendered_dom(
     reasons: list[str] = []
     if impersonated_brand:
         risk += 55
+        host_label = host or "không hợp lệ"
         reasons.append(
-            f"Giao diện trang web hiển thị thương hiệu '{impersonated_brand}' trên tên miền lạ '{host}'."
+            f"Giao diện trang web hiển thị thương hiệu '{impersonated_brand}' "
+            f"trên tên miền lạ '{host_label}'."
         )
     if has_password:
         risk += 20
@@ -175,6 +286,9 @@ async def _fetch_via_pinned_client(
     target_url: str,
     download_urls: list[str],
     max_hops: int = MAX_SANDBOX_REDIRECT_HOPS,
+    *,
+    max_body_bytes: int = MAX_SANDBOX_BODY_BYTES,
+    session_budget: SharedByteBudget | None = None,
 ) -> tuple[int, dict[str, str], bytes, str]:
     """Follow redirects strictly inside IP-pinned client; NEVER delegate 3xx to Chromium."""
     current = target_url
@@ -195,7 +309,10 @@ async def _fetch_via_pinned_client(
                 method if method in ("GET", "HEAD") else "GET",
                 current,
                 follow_redirects=False,
-                headers={"User-Agent": "Mozilla/5.0 VeriShieldSandbox/2.0"},
+                headers={
+                    "User-Agent": "Mozilla/5.0 VeriShieldSandbox/2.0",
+                    "Accept-Encoding": "identity",
+                },
             ) as resp:
                 if resp.status_code in (301, 302, 303, 307, 308) and resp.headers.get("location"):
                     if _hop >= max_hops:
@@ -219,21 +336,21 @@ async def _fetch_via_pinned_client(
                     method = "GET"
                     continue
 
-                chunks: list[bytes] = []
-                total = 0
-                async for chunk in resp.aiter_bytes():
-                    total += len(chunk)
-                    if total > MAX_SANDBOX_BODY_BYTES:
-                        break
-                    chunks.append(chunk)
+                body = await read_bounded_http_body(
+                    resp,
+                    max_body_bytes=max_body_bytes,
+                    max_wire_bytes=max_body_bytes,
+                    session_budget=session_budget,
+                )
                 clean_headers = {
                     k: v
                     for k, v in resp.headers.items()
-                    if k.lower()
-                    not in ("content-encoding", "transfer-encoding", "content-length", "location")
+                    if k.lower() not in _STRIPPED_RESPONSE_HEADERS
                 }
+                clean_headers["X-Content-Type-Options"] = "nosniff"
+                clean_headers["Content-Security-Policy"] = _SANDBOX_HTML_CSP
                 status_out = 204 if 300 <= resp.status_code < 400 else resp.status_code
-                return status_out, clean_headers, b"".join(chunks), current
+                return status_out, clean_headers, body, current
         except httpx.RemoteProtocolError as exc:
             if "location header" in str(exc).lower() or "invalid url" in str(exc).lower():
                 raise SsrfBlockedError(f"Malformed redirect Location header: {exc}") from exc
@@ -296,27 +413,30 @@ async def detonate_url_in_sandbox(
                 )
 
             # Pre-resolve initial navigation hops via IP-pinned client to establish true final origin
+            session_budget = SharedByteBudget(MAX_SANDBOX_TOTAL_BYTES)
             init_status, init_headers, init_body, resolved_entry_url = await _fetch_via_pinned_client(
                 safe_client,
                 "GET",
                 cleaned,
                 download_urls,
+                session_budget=session_budget,
             )
             main_frame_url = resolved_entry_url
             staged_docs: dict[str, tuple[int, dict[str, str], bytes]] = {
                 resolved_entry_url: (init_status, init_headers, init_body)
             }
             deferred_main_nav_url: str | None = None
+            subrequest_count = 0
 
             async with async_playwright() as pw:
+                launch_env: dict[str, str | float | bool] = {
+                    k: v for k, v in _sanitized_chromium_env().items()
+                }
                 browser = await pw.chromium.launch(
                     headless=True,
                     chromium_sandbox=_use_chromium_sandbox(),
-                    args=[
-                        "--disable-dev-shm-usage",
-                        "--disable-background-networking",
-                        "--host-resolver-rules=MAP * ~NOTFOUND",
-                    ],
+                    env=launch_env,
+                    args=list(_CHROMIUM_LAUNCH_ARGS),
                 )
                 try:
                     context = await browser.new_context(
@@ -334,10 +454,21 @@ async def detonate_url_in_sandbox(
 
                     async def _pinned_proxy_route(route: Route) -> None:
                         nonlocal blocked_subrequest_reason, main_frame_url, deferred_main_nav_url
+                        nonlocal subrequest_count
                         req = route.request
                         req_url = req.url
-                        if req_url.startswith(("data:", "blob:", "about:")):
+                        req_url_lower = req_url.lower()
+                        if req.resource_type in _BLOCKED_RESOURCE_TYPES:
+                            await route.abort("blockedbyclient")
+                            return
+                        if req_url_lower == "about:blank" or (
+                            req.resource_type == "image"
+                            and req_url_lower.startswith(_ALLOWED_DATA_IMAGE_PREFIXES)
+                        ):
                             await route.continue_()
+                            return
+                        if req_url_lower.startswith(("blob:", "data:", "about:")):
+                            await route.abort("blockedbyclient")
                             return
                         try:
                             if req_url in staged_docs:
@@ -345,12 +476,27 @@ async def detonate_url_in_sandbox(
                                 await route.fulfill(status=st_s, headers=hd_s, body=bd_s)
                                 return
 
+                            if (
+                                subrequest_count >= MAX_SANDBOX_SUBREQUESTS
+                                or session_budget.remaining <= 0
+                            ):
+                                await route.abort("failed")
+                                return
+                            subrequest_count += 1
+                            remaining_budget = min(
+                                MAX_SANDBOX_BODY_BYTES,
+                                session_budget.remaining,
+                            )
+
                             status, headers, body, final_hop = await _fetch_via_pinned_client(
                                 safe_client,
                                 req.method,
                                 req_url,
                                 download_urls,
+                                max_body_bytes=remaining_budget,
+                                session_budget=session_budget,
                             )
+
                             if req.is_navigation_request() and final_hop != req_url:
                                 # Never render a redirected document under the old origin
                                 if req.frame == page.main_frame:

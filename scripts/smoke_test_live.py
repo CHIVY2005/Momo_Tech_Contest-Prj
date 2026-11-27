@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 
@@ -19,16 +20,20 @@ def run_smoke_test(base_url: str, analyst_pin: str = "2026") -> int:
         assert h.status_code == 200, f"Health returned {h.status_code}"
         assert h.headers.get("x-content-type-options") == "nosniff"
         assert h.headers.get("x-frame-options") == "DENY"
-        print(f"  [1/5] Health & security headers OK: {h.json()}")
+        print(f"  [1/6] Health & security headers OK: {h.json()}")
 
         # 2. Demos list
         demos = client.get(f"{root}/api/v1/demos")
         assert demos.status_code == 200 and len(demos.json()) == 5
-        print("  [2/5] 5 Canonical 1-Click Demos OK")
+        print("  [2/6] 5 Canonical 1-Click Demos OK")
 
-        # 3. Incremental SSE stream ordering check
+        # 3. Incremental SSE stream ordering & case session token issuance
         first_trace_ts: float | None = None
         result_ts: float | None = None
+        session_ts: float | None = None
+        current_event = ""
+        session_case_id = ""
+        session_token = ""
         with client.stream(
             "POST",
             f"{root}/api/v1/analyze/stream",
@@ -36,15 +41,49 @@ def run_smoke_test(base_url: str, analyst_pin: str = "2026") -> int:
         ) as sse:
             assert sse.status_code == 200
             for line in sse.iter_lines():
-                if line == "event: trace" and first_trace_ts is None:
-                    first_trace_ts = time.perf_counter()
-                elif line == "event: result" and result_ts is None:
-                    result_ts = time.perf_counter()
-        assert first_trace_ts is not None and result_ts is not None
-        assert first_trace_ts <= result_ts
-        print("  [3/5] Incremental SSE streaming (/api/v1/analyze/stream) OK")
+                if line.startswith("event:"):
+                    current_event = line.split(":", 1)[1].strip()
+                    if current_event == "trace" and first_trace_ts is None:
+                        first_trace_ts = time.perf_counter()
+                    elif current_event == "result" and result_ts is None:
+                        result_ts = time.perf_counter()
+                    elif current_event == "session" and session_ts is None:
+                        session_ts = time.perf_counter()
+                elif line.startswith("data:") and current_event == "session":
+                    sess_data = json.loads(line.split(":", 1)[1].strip())
+                    session_case_id = str(sess_data.get("case_id") or "")
+                    session_token = str(sess_data.get("case_access_token") or "")
+        assert first_trace_ts is not None and result_ts is not None and session_ts is not None
+        assert first_trace_ts <= result_ts <= session_ts
+        assert session_case_id.startswith("vs_") and session_token
+        print("  [3/6] Incremental SSE streaming + session token (/api/v1/analyze/stream) OK")
 
-        # 4. Upload 413 ceiling & SSRF protection
+        # 4. Unified X-Case-Access-Token enforcement on /cases/{id} and /report.pdf
+        unauth_case = client.get(f"{root}/api/v1/cases/{session_case_id}")
+        assert unauth_case.status_code == 403, (
+            f"Expected 403 without token on /cases, got {unauth_case.status_code}"
+        )
+        unauth_pdf = client.get(f"{root}/api/v1/cases/{session_case_id}/report.pdf")
+        assert unauth_pdf.status_code == 403, (
+            f"Expected 403 without token on /report.pdf, got {unauth_pdf.status_code}"
+        )
+
+        auth_headers = {"X-Case-Access-Token": session_token}
+        auth_case = client.get(f"{root}/api/v1/cases/{session_case_id}", headers=auth_headers)
+        assert auth_case.status_code == 200, f"Expected 200 with token, got {auth_case.status_code}"
+        assert "no-store" in auth_case.headers.get("cache-control", "").lower()
+        assert "x-case-access-token" in auth_case.headers.get("vary", "").lower()
+
+        auth_pdf = client.get(
+            f"{root}/api/v1/cases/{session_case_id}/report.pdf", headers=auth_headers
+        )
+        assert auth_pdf.status_code == 200, (
+            f"Expected 200 on PDF with token, got {auth_pdf.status_code}"
+        )
+        assert auth_pdf.content[:5] == b"%PDF-"
+        print("  [4/6] Unified X-Case-Access-Token enforcement on /cases/* & /report.pdf OK")
+
+        # 5. Upload 413 ceiling & SSRF protection
         big_payload = b"\x89PNG\r\n\x1a\n" + (b"0" * (10 * 1024 * 1024 + 4096))
         r_413 = client.post(
             f"{root}/api/v1/analyze",
@@ -63,9 +102,9 @@ def run_smoke_test(base_url: str, analyst_pin: str = "2026") -> int:
         )
         assert r_ssrf.status_code == 200
         assert r_ssrf.json()["url_findings"][0]["is_blocked_ssrf"] is True
-        print("  [4/5] 10MB Upload Guard (HTTP 413) & Cloud Metadata SSRF Block OK")
+        print("  [5/6] 10MB Upload Guard (HTTP 413) & Cloud Metadata SSRF Block OK")
 
-        # 5. Closed-loop /radar non-destructive single-rule create & revoke
+        # 6. Closed-loop /radar non-destructive single-rule create & revoke
         radar = client.get(f"{root}/api/v1/radar/graph")
         assert radar.status_code == 200
         smoke_acct = "999000111222"
@@ -86,9 +125,9 @@ def run_smoke_test(base_url: str, analyst_pin: str = "2026") -> int:
             json={"analyst_pin": analyst_pin},
         )
         assert rev.status_code == 200 and rev.json()["revoked"] is True
-        print("  [5/5] Closed-Loop /radar Isolated Rule Create + Revoke OK")
+        print("  [6/6] Closed-Loop /radar Isolated Rule Create + Revoke OK")
 
-    print("==> [VeriShield Smoke Test] ALL 5 LIVE CHECKS PASSED!")
+    print("==> [VeriShield Smoke Test] ALL 6 LIVE CHECKS PASSED!")
     return 0
 
 
