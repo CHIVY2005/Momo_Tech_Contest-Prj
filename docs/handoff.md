@@ -1,20 +1,23 @@
 # Tài liệu Bàn giao Kỹ thuật (Handoff) — VeriShield AI v2.0
 
-> **Thời điểm bàn giao:** `2026-11-28` · **Nhánh active:** `feat/verishield-v2` @ `1bfc688`  
-> **Thay đổi mới nhất:** Pull fast-forward 28 commit (`272f470..1bfc688`) từ `origin/feat/verishield-v2`.
+> **Thời điểm bàn giao:** `2026-11-28` · **Nhánh active:** `v3` (đồng bộ từ `feat/verishield-v2` @ `7e30ea0` + mock E2E & báo cáo PDF)  
+> **Thay đổi mới nhất:** Fast-forward `v3` theo `feat/verishield-v2` (`7e30ea0`), fix 7 nhãn `SCAM_LABELS` + copy `/technical` & `/privacy`, bổ sung mock test (`workbenchAndChatMock.test.ts` + `scripts/test_web_mock_e2e.py`) và xuất [VeriShield_AI_Danh_Gia_Va_Cai_Thien_Du_An.pdf](VeriShield_AI_Danh_Gia_Va_Cai_Thien_Du_An.pdf).
 
 ---
 
 ## 1. Trạng thái Git & Môi trường Cục bộ
 
 - **Nhánh Git:**
-  - `feat/verishield-v2` (HEAD): `1bfc688` (`build: enforce LF line endings for Linux-executed files via .gitattributes`), khớp `origin/feat/verishield-v2`.
-  - `v3`: đang trỏ tại commit cũ `272f470` (chưa merge `1bfc688`).
+  - `v3` (`[origin/v3]`): đã đồng bộ `7e30ea0` (và chuẩn bị push commit mock tests + PDF + docs mới nhất).
+  - `feat/verishield-v2`: `7e30ea0` (chứa bản chuốt UX copy, fix 7 nhãn `SCAM_LABELS`, sửa `/technical`, `/privacy` và cập nhật `Goals.md`/`handoff.md`/`Lessons.md`).
   - `main`: `63764ab` (`add docs`).
 - **Git Stash bảo toàn sửa đổi trước đó:**
   - `stash@{0}` (`wip-v3-local-edits-before-pull`) chứa các chỉnh sửa MVP Web Demo trước lúc pull trên nhánh cũ (`health.py`, `onnx_session.py`, `pipeline.py`, `test_api_routes.py`, `page.tsx`, `VietQrCard.tsx`, `PhishingSandboxCard.tsx`, `BlockRuleManager.tsx`, `DemoScenarioBar.tsx`, `api.ts`, `render_pdfs.py`, `slides/index.html`, `README.md`, `deploy/.env.prod.example`). Lưu ý không `pop` đè trực tiếp vì `feat/verishield-v2` đã refactor lớn các file Frontend và Pipeline; chỉ nhặt có chọn lọc các phần còn phù hợp (như `ORT_ENABLE_BASIC` ở `onnx_session.py` hoặc thanh `%` Slide 8).
-- **Tệp chưa theo dõi (Untracked):** `docs/Goals.md`, `docs/handoff.md`, `docs/Lessons.md` (tài liệu làm việc nội bộ; lưu ý `scripts/package_submission.py` dùng `git ls-files -z` nên sẽ không tự đưa file untracked vào `.zip`).
-- **Lưu ý môi trường local:** Sau khi pull `1bfc688`, `frontend/package.json` có thêm `lenis` (`^1.3.29`) và `motion` (`^14.14.0`) — cần chạy `npm.cmd ci` trong `frontend/` trước khi chạy test/build. Ngoài ra `submission/dist/` vẫn đang giữ 2 file PDF cũ render ngày `2026-11-26 20:53:46` từ trước đợt cập nhật Assistant/OCR/Motion.
+- **Trạng thái kiểm định mới nhất (`2026-11-28`):**
+  - `frontend`: Đã chạy `npm.cmd ci` (cài đủ `lenis` + `motion`); `npx.cmd tsc --noEmit` đạt; `npm.cmd test` đạt **60/60** (`9` tệp test); `npm.cmd run build` đạt (8/8 route tĩnh).
+  - `Browser Mock E2E`: `scripts/test_web_mock_e2e.py` đạt **4/4 kịch bản** trên Chromium headless (tự chạy `next start --port 3099` + mock SSE/REST).
+  - `backend`: `ruff` & `mypy --strict` (71 file) đạt; `pytest` đạt **419/425** (`6` fail do môi trường `.venv` Windows thiếu `rapidocr` và `onnxruntime 1.32.0` `ORT_ENABLE_ALL`).
+  - `submission/dist/`: vẫn đang giữ 2 file PDF cũ render ngày `2026-11-26 20:53:46` từ trước đợt cập nhật Assistant/OCR/Motion (cần render lại sau khi sửa `slides/` & `guide/`).
 
 ---
 
@@ -60,23 +63,20 @@
   - OCR (`ocr_benchmark/results.json`, 25 ảnh): `PP-OCRv5 Latin use_cls=False` đạt `Exact CER 0.1096`, `ASCII CER 0.0294`, `p50 = 733.5 ms`, `12.14 MB`, `336.2 MB` Peak RSS.
 - **Deploy (`deploy/`, `docker-compose*.yml`, `backend/Dockerfile`, `frontend/Dockerfile`):**
   - 3 container (`backend` `2200m`, `frontend` `512m`, `caddy` `256m`), `read_only: true`, `cap_drop: ALL`, mạng tách biệt, pre-bake Whisper `tiny` + RapidOCR PP-OCRv5 trong image Backend, `.gitattributes` ép `LF` cho script Linux.
-- **Kiểm thử:** `52` file test Backend (`365` test functions) + `8` file test Frontend (`node --test`).
+- **Kiểm thử & Công cụ kiểm định:** `52` file test Backend (`425` item khi thu thập đầy đủ) + `9` file test Frontend (`60` test `node --test`, gồm `workbenchAndChatMock.test.ts`) + `scripts/test_web_mock_e2e.py` (4 kịch bản Playwright E2E) + `scripts/generate_assessment_pdf.py` (xuất `docs/VeriShield_AI_Danh_Gia_Va_Cai_Thien_Du_An.pdf`).
 
 ---
 
 ## 3. Các Điểm Lệch & Tồn đọng Cần Xử lý (Ưu tiên Từ Cao đến Thấp)
 
-1. **[Cao] Tài liệu nộp bài (`submission/`) chưa khớp trạng thái code `1bfc688`:**
+1. **[Cao] Tài liệu nộp bài (`submission/`) chưa khớp trạng thái code hiện tại:**
    - `slides/index.html`, `guide/index.html`, `video-script-3min.md` vẫn giữ mô tả "chuyển giữa 3 chế độ Cá nhân/Chủ cửa hàng/Ví" (giao diện `/` đã đổi sang `MultimodalComposer` tự suy luận), chưa cập nhật **Trợ lý VeriShield RAG**, **PP-OCRv5**, **Radar 120 FPS**, còn dùng một số từ khóa cũ trái `TERMINOLOGY.md` (`Pháp y...`, `Khóa làm nguội 30s`, `Fraud Ops`, `1-Chạm`, lộ `in_active_call`/`HTTP 409`), và `submission/dist/*.pdf` vẫn là bản build từ 26/11.
-2. **[Cao] `onnx_session.py` (`ORT_ENABLE_ALL`) vs `onnxruntime 1.32.0` trên Windows:**
-   - Khi kiểm thử trước lúc pull với `onnxruntime 1.32.0`, `ORT_ENABLE_ALL` làm `advisory_probability` của `scam_e5_int8.onnx` lệch xuống `0.5666` (rớt ngưỡng `>= 0.60` trong `test_scam_classifier.py`), còn `ORT_ENABLE_BASIC` khôi phục `0.7156` và nhanh hơn (`10ms`). Cần kiểm tra lại ngay trên `backend/.venv` sau khi pull và áp dụng `ORT_ENABLE_BASIC` nếu tái diễn.
-3. **[Trung bình] Đồng bộ môi trường & dữ liệu Benchmark trước khi render PDF cuối:**
-   - Chạy `npm.cmd ci` tại `frontend/` để cài `lenis` + `motion`.
-   - `evaluation/results.json` được chạy từ `2026-11-26T10:02Z` với `gemini-4-hydrogen` (trước khi nâng OCR & WP-1..WP-11); cần chạy lại bằng model production thật trước khi render PDF cuối.
-4. **[Trung bình] Độ phủ Smoke Test & Cạnh nhỏ trong Pipeline / UI / Telegram:**
-   - `scripts/smoke_test_live.py` chưa có bước kiểm thử `/api/v1/assistant/chat/stream`.
+2. **[Cao] `onnx_session.py` (`ORT_ENABLE_ALL`) & môi trường `.venv` Windows:**
+   - Với `onnxruntime 1.32.0`, `ORT_ENABLE_ALL` làm `advisory_probability` của `scam_e5_int8.onnx` lệch xuống `0.5666` (rớt ngưỡng `>= 0.60` trong `test_scam_classifier.py`), còn `ORT_ENABLE_BASIC` khôi phục `0.7156`; đồng thời `backend/.venv` cần cài đủ `rapidocr` (hoặc chạy `verify.sh` trong Docker Linux).
+3. **[Trung bình] Dữ liệu Benchmark & Smoke Test trên VPS trước khi render PDF cuối:**
+   - `evaluation/results.json` vẫn từ `2026-11-26T10:02Z` (`gemini-4-hydrogen`); cần chạy lại bằng model production thật trước khi render PDF cuối.
+   - `scripts/smoke_test_live.py` cần bổ sung kiểm thử `/api/v1/assistant/chat/stream`.
+4. **[Thấp / P2] Các cạnh nhỏ trong Pipeline / UI / Telegram:**
    - `pipeline.py` đang bỏ qua `transfer_amount` (`_ = transfer_amount` ở dòng 355); `_resolve_media_lists` bỏ qua `image_bytes` nếu `image_items` có phần tử.
    - `EvidenceTabs.tsx`: tab `receipt` luôn truyền `report.image_forensics` (ảnh đầu) thay vì `activeForensics` khi tải nhiều ảnh, và chưa gắn `key={report.case_id}` nên tab đang chọn giữ nguyên khi đổi ca.
-   - `AssistantDrawer.tsx`: `detectEvidenceAttachmentKind` chưa chặn `image/svg+xml` giống `composerUtils.ts` và auto-scroll xuống cuối mỗi token delta; các modal/drawer trên `/radar` (`CampaignDetailDrawer`, `RuleActionModal`, `ApiPlaygroundCard`) chưa có Tab focus-trap; `IocGraphSvg` fullscreen chưa gọi `useScrollLock`.
-   - `phishing_detonator.py`: nếu redirect xảy ra ở đúng chặng thứ 5 (`MAX_SANDBOX_REDIRECT_HOPS`), vòng lặp thoát trước khi load `final_hop`.
-   - `telegram_bot.py`: khi webhook trả lại từ cache (`claim_state == "cached"`) cho `/start`/`/demo`, `custom_markup` không được lưu nên mất bàn phím inline; `repository.py` lấy tối đa 8 IOC theo thứ tự `phones -> bank_accounts -> domains` nên >8 SĐT sẽ che mất domain/STK phía sau.
+   - `AssistantDrawer.tsx` & `AssistantEvidenceCard.tsx`: còn chữ `"Soundbox"`/`"Radar cộng đồng"` ở 2–3 chỗ, `detectEvidenceAttachmentKind` chưa chặn `image/svg+xml`, và cần kiểm tra focus-trap modal `/radar`; `phishing_detonator.py` (redirect chặng 5) & `telegram_bot.py` (`cached` reply mất markup) giữ nguyên theo danh sách tồn đọng kỹ thuật.

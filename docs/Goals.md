@@ -1,7 +1,7 @@
 # Mục Tiêu & Tiến Độ Dự Án — VeriShield AI v2.0
 
-> **Cập nhật:** `2026-11-28` · **Nhánh hiện tại:** `feat/verishield-v2` (`1bfc688`)  
-> **Hiến pháp & Quy chế:** [AGENTS.md](../AGENTS.md) · [docs/momo.md](momo.md) · [docs/PROPOSAL.md](PROPOSAL.md)
+> **Cập nhật:** `2026-11-28` · **Nhánh hiện tại:** `v3` (đã đồng bộ từ `feat/verishield-v2` @ `7e30ea0` + mock tests & báo cáo đánh giá PDF)  
+> **Hiến pháp & Quy chế:** [AGENTS.md](../AGENTS.md) · [docs/momo.md](momo.md) · [docs/PROPOSAL.md](PROPOSAL.md) · [Báo cáo Đánh giá & Cải thiện (PDF)](VeriShield_AI_Danh_Gia_Va_Cai_Thien_Du_An.pdf)
 
 ---
 
@@ -23,7 +23,7 @@
 
 ---
 
-## 2. Những Hạng mục Đã Hoàn thành (Tính đến `1bfc688`)
+## 2. Những Hạng mục Đã Hoàn thành (Tính đến `2026-11-28`)
 
 - [x] **Backend 3 Tầng & Pháp y 4 Lớp (`FastAPI` + `SQLite WAL`):**
   - Pipeline bất đồng bộ SSE 4 chặng (`media_forensics` → `cyber_guardrails` → `onnx_and_kb` → `multimodal_calibration`) hỗ trợ đa ảnh (tối đa 4) và đa audio (tối đa 2).
@@ -41,14 +41,18 @@
   - `/` (`MultimodalComposer` thống nhất nhận dán ảnh `Ctrl+V`/kéo thả, `VerdictDashboard`, `WalletPreTransferSim` 30s, 5 tab bằng chứng, `ActionCopilotPanel`, `AssistantDrawer` + `SafeMarkdown` không `dangerouslySetInnerHTML`).
   - `/radar` (đồ thị SVG tối ưu `O(N)` spatial hash đạt `98–120 FPS`, `0` chồng lấn ở 500 nút, tooltip không gây re-render, `CampaignDetailDrawer`, `RuleActionModal`, `ApiPlaygroundCard`).
   - `/technical`, `/privacy`, footer thống nhất & hiệu ứng chuyển động chỉ dùng thư viện `MIT` (`lenis`, `motion`) tuân thủ `prefers-reduced-motion` và WCAG 2.2.
-- [x] **Bộ Kiểm thử Đồ sộ:** 52 tệp kiểm thử Backend (`365` test: `41` integration + `324` unit) và `8` tệp kiểm thử Frontend (`node --test`).
+- [x] **Bộ Kiểm thử & Chuốt Câu chữ UX (`7e30ea0` → hiện tại):**
+  - Đồng bộ đủ 7 nhãn phân loại `SCAM_LABELS` (`SAFE_NORMAL..PROMPT_INJECTION`) ở cả Backend fallback (`ai_orchestrator.py`) và Frontend (`copy.ts`), sửa mốc thanh rủi ro `VerdictDashboard` (`0–24 / 25–54 / 55–79 / 80–100`), tách thẻ Radar `SAFE` vs có rủi ro, bỏ mô tả nội bộ `gemini-4-hydrogen` trên `/technical` và sửa mâu thuẫn `"ẩn danh"` vs `"che giấu/giả danh hóa"` trên `/privacy`.
+  - Đạt **52 tệp kiểm thử Backend** (419/425 pass trên `.venv` Windows; 6 ca fail thuộc môi trường local thiếu `rapidocr` và `onnxruntime 1.32.0`), **9 tệp kiểm thử Frontend** (`60/60` test pass gồm [workbenchAndChatMock.test.ts](../frontend/src/lib/__tests__/workbenchAndChatMock.test.ts)), và **4/4 kịch bản E2E Chromium thật** qua [scripts/test_web_mock_e2e.py](../scripts/test_web_mock_e2e.py).
+  - Xuất báo cáo đánh giá tổng thể bám sát đề bài cuộc thi tại [docs/VeriShield_AI_Danh_Gia_Va_Cai_Thien_Du_An.pdf](VeriShield_AI_Danh_Gia_Va_Cai_Thien_Du_An.pdf) (qua [scripts/generate_assessment_pdf.py](../scripts/generate_assessment_pdf.py)).
 
 ---
 
 ## 3. Checklist Việc Còn Lại Trước Hạn Nộp (`28/11 → 03/12/2026`)
 
-- [ ] **Đồng bộ Môi trường Local & Cổng `verify.ps1`:**
-  - Chạy `npm.cmd ci` trong `frontend/` để cài `lenis` + `motion` mới thêm vào `package.json`, đồng bộ `backend/.venv` nếu thiếu gói, sửa/kiểm tra `onnxruntime` (`ORT_ENABLE_BASIC` nếu chạy trên `1.32.0`), và đảm bảo `scripts/verify.ps1` **PASS 100%**.
+- [x] **Cài đặt gói Frontend (`npm.cmd ci`) & Kiểm định Build/Test/Lint:** `tsc --noEmit`, `60/60` `npm test`, `next build` (8/8 route tĩnh), `4/4` Playwright mock E2E, `ruff` & `mypy --strict` (71 file) đều đã đạt.
+- [ ] **Đồng bộ Môi trường Backend & Cổng `verify.sh` (Docker Linux):**
+  - Cài đủ `rapidocr` hoặc chạy `bash scripts/verify.sh` trong container Linux giống VPS thật; đánh giá chuyển `ORT_ENABLE_BASIC` trong `onnx_session.py` nếu môi trường runtime dùng `onnxruntime 1.32.0`.
 - [ ] **Đồng bộ Tài liệu Nộp bài (`submission/`) theo Chuẩn Mới Nhất:**
   - Cập nhật `submission/slides/index.html`, `submission/guide/index.html`, và `submission/video-script-3min.md` theo quy chuẩn thuật ngữ `TERMINOLOGY.md` / `UX_COPY_AUDIT.md`, phản ánh đúng giao diện **Multimodal Composer thống nhất** (đã bỏ 3 nút chế độ cũ), **Trợ lý VeriShield RAG**, **PP-OCRv5**, **đồ thị `/radar` 120 FPS**, và số liệu mới nhất; làm động các thanh `%` trên Slide 8 và `{{ADV_FPR}}` trên Slide 1.
 - [ ] **Làm mới Benchmark & Xuất PDF Cuộc thi:**

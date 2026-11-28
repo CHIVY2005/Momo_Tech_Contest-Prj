@@ -1,6 +1,6 @@
 # Bài học Kỹ thuật & Kinh nghiệm Thực chiến (Lessons Learned) — VeriShield AI
 
-> Đúc kết trực tiếp từ quá trình xây dựng, đánh giá thực nghiệm, và kiểm định bảo mật nhiều vòng trên codebase **VeriShield AI v2.0** (`1bfc688`).
+> Đúc kết trực tiếp từ quá trình xây dựng, đánh giá thực nghiệm, và kiểm định bảo mật nhiều vòng trên codebase **VeriShield AI v2.0** (cập nhật nhánh `v3` — `2026-11-28`).
 
 ---
 
@@ -51,8 +51,10 @@
    - Dùng khóa topology tách biệt khỏi pan/zoom, cache `getBoundingClientRect` bằng `ResizeObserver`, thay `useState` pan/zoom/hover bằng `useRef` + `rAF` + CSS `matrix()` / `translate3d()`, dùng lưới spatial-hash `O(N)` thay cho lực đẩy `O(N²)`, và tắt `onWheel` passive bằng listener `{ passive: false }` + `data-lenis-prevent-wheel`. Kết quả đưa đồ thị 500 nút từ giật/CLS `1.685` lên **`98–120 FPS`**, `0` chồng lấn, `0` CLS.
 2. **Hiệu ứng chuyển động an toàn (`MIT-only` + `prefers-reduced-motion`):**
    - Dùng `lenis` + `motion` (`LazyMotion` `domAnimation`) kèm test tự động (`frontendLicenses.test.ts`) khóa chặt giấy phép mở và cấm thư viện không rõ nguồn gốc; luôn giữ spinner xoay và tắt delay trên cảnh báo khẩn cấp (`Verdict`, `Alert`).
-3. **Quy chuẩn ngôn từ (`TERMINOLOGY.md`) phải đồng bộ cả App lẫn Slide:**
-   - Loại bỏ từ vựng kỹ thuật nội bộ (`in_active_call`, `HTTP 409`, `UNVERIFIED_SCREENSHOT`, `Pháp y...`) khỏi giao diện người dùng và tài liệu trình bày, giữ tiếng Việt tự nhiên và nhất quán từ UI đến Slide/Video.
+3. **Quy chuẩn ngôn từ (`TERMINOLOGY.md`) & Nhất quán 7 Nhãn Phân loại BE ↔ FE:**
+   - Khi đổi tên nhãn phân loại từ snake_case cũ sang 7 `SCAM_LABELS` IN HOA (`SAFE_NORMAL..PROMPT_INJECTION`), phải cập nhật đồng thời bảng ánh xạ ở cả `backend/app/services/ai_orchestrator.py` và `frontend/src/lib/copy.ts` kèm unit test chặn rò rỉ enum thô; đồng bộ mốc thanh rủi ro (`0–24 / 25–54 / 55–79 / 80–100`) và tách rõ câu chữ `"che giấu / giả danh hóa"` thay vì dùng chữ `"ẩn danh"` mâu thuẫn với tuyên bố pháp lý ở Mục 05 trang `/privacy`.
+4. **Kiểm thử Mock 2 Lớp cho Web Input & Chatbot (`node --test` + Playwright `page.route`):**
+   - Kết hợp mock unit client (`workbenchAndChatMock.test.ts` chạy dưới `node --test`) với Playwright E2E thật chạy trên `next start` (`scripts/test_web_mock_e2e.py` mock `/api/v1/**` qua `page.route`, kèm fallback tìm Chromium cached trong `ms-playwright` nếu bản `.venv` lệch revision) giúp kiểm chứng trọn vẹn `FormData`, SSE phân mảnh tiếng Việt, chatbot nhiều lượt, bằng chứng cục bộ và tải file PDF mà không phụ thuộc backend/API key ngoài.
 
 ---
 
