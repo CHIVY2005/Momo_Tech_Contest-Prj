@@ -8,6 +8,7 @@ import {
   PlusCircle,
   RefreshCw,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AnimatedNumber } from "@/components/motion/AnimatedNumber";
@@ -28,7 +29,21 @@ import {
   resetBlockRules,
   revokeBlockRule,
 } from "@/lib/api";
+import { resolveRadarMotionScope } from "@/lib/motion/cyberMotion";
 import { formatMaskedIoc, formatNodeDisplayLabel, getNextRuleExpiryDelayMs } from "@/lib/radarLayout";
+
+const RadarSweepVisual = dynamic(
+  () => import("@/components/radar/RadarSweepVisual").then((mod) => mod.RadarSweepVisual),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        aria-hidden="true"
+        className="h-12 w-12 shrink-0 rounded-xl border border-border-strong/85 bg-surface-deep"
+      />
+    ),
+  },
+);
 import type {
   BlockRule,
   EmergingCampaign,
@@ -283,40 +298,44 @@ export default function RadarPage() {
     graph?.data_scope === "mixed_with_demo" ||
     demoCampaigns > 0 ||
     demoIocs > 0;
+  const radarMotionScope = resolveRadarMotionScope(graph?.data_scope, hasDemoData);
 
   return (
     <div className="space-y-4 sm:space-y-5">
       {/* Clean Security Operations Header */}
       <section className="flex flex-col justify-between gap-3 rounded-2xl border border-border-subtle bg-gradient-to-r from-surface via-[#0f172a] to-[#0c1f2e] px-4 py-4 sm:flex-row sm:items-center sm:px-5">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-lg font-bold text-ink sm:text-xl">Giám sát gian lận</h1>
-            {graph && (
-              <span
-                role="status"
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${
-                  hasDemoData
-                    ? "border-sky-500/40 bg-sky-500/12 text-sky-200"
-                    : "border-emerald-500/40 bg-emerald-500/12 text-emerald-200"
-                }`}
-              >
+        <div className="flex items-start gap-3">
+          <RadarSweepVisual scope={radarMotionScope} isRefreshing={isRefreshing} />
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-lg font-bold text-ink sm:text-xl">Giám sát gian lận</h1>
+              {graph && (
                 <span
-                  aria-hidden="true"
-                  className={`h-1.5 w-1.5 rounded-full ${hasDemoData ? "bg-sky-400" : "bg-emerald-400"}`}
-                />
-                <span>
-                  {graph.data_scope === "live"
-                    ? "Dữ liệu vận hành thực tế"
-                    : graph.data_scope === "mixed_with_demo"
-                      ? "Thực tế + Mẫu minh họa"
-                      : "Môi trường dữ liệu mẫu"}
+                  role="status"
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${
+                    hasDemoData
+                      ? "border-sky-500/40 bg-sky-500/12 text-sky-200"
+                      : "border-emerald-500/40 bg-emerald-500/12 text-emerald-200"
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`h-1.5 w-1.5 rounded-full ${hasDemoData ? "bg-sky-400" : "bg-emerald-400"}`}
+                  />
+                  <span>
+                    {graph.data_scope === "live"
+                      ? "Dữ liệu vận hành thực tế"
+                      : graph.data_scope === "mixed_with_demo"
+                        ? "Thực tế + Mẫu minh họa"
+                        : "Môi trường dữ liệu mẫu"}
+                  </span>
                 </span>
-              </span>
-            )}
+              )}
+            </div>
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-ink-secondary">
+              Theo dõi các chiến dịch lừa đảo, phân tích mối liên hệ và quản lý quy tắc chặn tạm thời.
+            </p>
           </div>
-          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-ink-secondary">
-            Theo dõi các chiến dịch lừa đảo, phân tích mối liên hệ và quản lý quy tắc chặn tạm thời.
-          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -420,8 +439,10 @@ export default function RadarPage() {
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-400" aria-hidden="true" />
               <p>
                 Phạm vi dữ liệu hiện tại bao gồm <strong>dữ liệu mẫu minh họa</strong> (được gắn
-                nhãn riêng) nhằm phục vụ kiểm thử vận hành; các phiên chạy trong{" "}
-                <strong>Mô phỏng giao dịch</strong> không làm tăng thống kê thực tế.
+                nhãn riêng) nhằm phục vụ kiểm thử vận hành; hiệu ứng quét radar và luồng liên kết
+                trên sơ đồ chỉ minh họa cấu trúc mạng lưới, không phải cảnh báo khẩn cấp thực tế,
+                và các phiên chạy trong <strong>Mô phỏng giao dịch</strong> không làm tăng thống kê
+                thực tế.
               </p>
             </div>
           )}
@@ -468,6 +489,7 @@ export default function RadarPage() {
               nodes={graph.nodes}
               edges={graph.edges}
               selectedNodeId={selectedNodeId}
+              allowLiveAlertPulse={radarMotionScope.allowLiveAlertPulse}
               onSelectNode={setSelectedNodeId}
               onRequestBlockNode={openNodeBlockModal}
             />

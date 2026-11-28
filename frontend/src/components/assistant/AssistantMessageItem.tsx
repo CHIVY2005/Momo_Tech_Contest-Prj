@@ -25,6 +25,7 @@ import type {
   AssistantToolStatusEvent,
 } from "@/lib/types";
 
+import { AssistantThinkingIndicator } from "@/components/motion/AssistantThinkingIndicator";
 import {
   AssistantEvidenceCard,
   type PersistedEvidenceState,
@@ -268,14 +269,9 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
         )}
 
         {message.isStreaming && !message.content && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="flex items-center gap-2 py-1 text-xs text-ink-muted"
-          >
-            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-amber-400" aria-hidden="true" />
-            <span>{message.statusLabel ?? "Đang đối chiếu hồ sơ và kiểm tra độ an toàn..."}</span>
-          </div>
+          <AssistantThinkingIndicator
+            label={message.statusLabel ?? "Đang đối chiếu hồ sơ và kiểm tra độ an toàn..."}
+          />
         )}
 
         {message.evidenceReport && parentCaseId && (
@@ -292,10 +288,10 @@ export const AssistantMessageItem = memo(function AssistantMessageItem({
           <div>
             <SafeMarkdown content={message.content} />
             {message.isStreaming && (
-              <div className="mt-2 flex items-center gap-1.5 text-[11px] text-ink-muted">
-                <Loader2 className="h-3 w-3 animate-spin text-amber-400" aria-hidden="true" />
-                <span>{message.statusLabel ?? "Đang tiếp tục phản hồi..."}</span>
-              </div>
+              <AssistantThinkingIndicator
+                compact
+                label={message.statusLabel ?? "Đang tiếp tục phản hồi..."}
+              />
             )}
           </div>
         )}

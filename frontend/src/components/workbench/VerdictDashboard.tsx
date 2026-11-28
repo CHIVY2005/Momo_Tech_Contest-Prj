@@ -1,30 +1,31 @@
 "use client";
 
 import {
-  AlertOctagon,
-  AlertTriangle,
   ArrowUpRight,
   BarChart3,
   Cpu,
   FileWarning,
   Layers,
-  ShieldAlert,
-  ShieldCheck,
   Sparkles,
   Users,
   Volume2,
 } from "lucide-react";
 import * as m from "motion/react-m";
-import { useMemo } from "react";
+import { type CSSProperties, useMemo } from "react";
 
 import { buildContextQuickActions } from "@/components/assistant/AssistantQuickActions";
 import { AnimatedNumber } from "@/components/motion/AnimatedNumber";
+import { VerdictStatusEmblem } from "@/components/motion/VerdictStatusEmblem";
 import {
   formatClassifierLabel,
   SHARED_DISCLAIMERS,
   VERDICT_COPY,
 } from "@/lib/copy";
 import { buildDetectedSignals, type EvidenceTabKey } from "@/lib/explainableAi";
+import {
+  buildVerdictTransitionKey,
+  resolveVerdictMotionProfile,
+} from "@/lib/motion/cyberMotion";
 import { staggerDelaysMs } from "@/lib/motion/motionMath";
 import type { AnalysisReport, AssistantQuickIntent, VerdictLevel } from "@/lib/types";
 
@@ -46,7 +47,6 @@ const VERDICT_META: Record<
     badgeBg: string;
     barColor: string;
     scoreColor: string;
-    Icon: typeof ShieldCheck;
   }
 > = {
   SAFE: {
@@ -55,7 +55,6 @@ const VERDICT_META: Record<
     badgeBg: "border-emerald-500/45 bg-emerald-500/15 text-emerald-200",
     barColor: "bg-emerald-500",
     scoreColor: "text-emerald-300",
-    Icon: ShieldCheck,
   },
   SUSPICIOUS: {
     label: VERDICT_COPY.SUSPICIOUS.label,
@@ -63,7 +62,6 @@ const VERDICT_META: Record<
     badgeBg: "border-amber-500/45 bg-amber-500/15 text-amber-200",
     barColor: "bg-amber-500",
     scoreColor: "text-amber-300",
-    Icon: AlertTriangle,
   },
   HIGH_RISK: {
     label: VERDICT_COPY.HIGH_RISK.label,
@@ -71,7 +69,6 @@ const VERDICT_META: Record<
     badgeBg: "border-orange-500/50 bg-orange-500/15 text-orange-200",
     barColor: "bg-orange-500",
     scoreColor: "text-orange-300",
-    Icon: ShieldAlert,
   },
   CRITICAL_SCAM: {
     label: VERDICT_COPY.CRITICAL_SCAM.label,
@@ -79,7 +76,6 @@ const VERDICT_META: Record<
     badgeBg: "border-rose-500/55 bg-rose-500/18 text-rose-100",
     barColor: "bg-rose-500",
     scoreColor: "text-rose-300",
-    Icon: AlertOctagon,
   },
 };
 
@@ -148,7 +144,12 @@ export function VerdictDashboard({
   onOpenXai,
 }: VerdictDashboardProps) {
   const meta = VERDICT_META[report.verdict];
-  const VerdictIcon = meta.Icon;
+  const transitionKey = buildVerdictTransitionKey(report);
+  const motionProfile = resolveVerdictMotionProfile(
+    report.verdict,
+    report.receipt_verification_status,
+  );
+  const riskScale = Math.max(0.03, Math.min(1, report.risk_score / 100));
   const showMerchantHonestyBanner =
     report.receipt_verification_status === "UNVERIFIED_SCREENSHOT" ||
     Boolean(report.actions.merchant_balance_warning);
@@ -199,7 +200,7 @@ export function VerdictDashboard({
             <span
               className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-bold ${meta.badgeBg}`}
             >
-              <VerdictIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <VerdictStatusEmblem key={transitionKey} tone={motionProfile.tone} />
               <span>{meta.label}</span>
             </span>
 
@@ -251,8 +252,9 @@ export function VerdictDashboard({
           className="h-2.5 w-full overflow-hidden rounded-full bg-surface-elevated"
         >
           <div
-            className={`h-full rounded-full transition-all duration-300 ${meta.barColor}`}
-            style={{ width: `${Math.max(3, report.risk_score)}%` }}
+            key={`bar-${transitionKey}`}
+            className={`vs-risk-bar-reveal h-full w-full rounded-full ${meta.barColor}`}
+            style={{ "--risk-scale": riskScale } as CSSProperties}
           />
         </div>
         <div

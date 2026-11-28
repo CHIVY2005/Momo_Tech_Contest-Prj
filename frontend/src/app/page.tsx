@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AssistantDrawer } from "@/components/assistant/AssistantDrawer";
+import { HeroShieldScanner } from "@/components/motion/HeroShieldScanner";
 import { useSmoothScroll } from "@/components/motion/SmoothScrollProvider";
 import { DemoScenarioBar } from "@/components/workbench/DemoScenarioBar";
 import { InputWorkbench, type WorkbenchFormState } from "@/components/workbench/InputWorkbench";
@@ -397,18 +398,21 @@ export default function HomePage() {
         className="rounded-2xl border border-border-subtle bg-surface px-4 py-4 sm:px-6 sm:py-5"
       >
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-          <div className="min-w-0 max-w-2xl">
-            <h1
-              id="hero-heading"
-              className="text-xl font-bold tracking-tight text-ink sm:text-2xl"
-            >
-              {BRAND_COPY.heroHeading}
-            </h1>
-            {!canCollapseForm && (
-              <p className="mt-1.5 text-sm leading-relaxed text-ink-secondary">
-                {BRAND_COPY.heroDescription}
-              </p>
-            )}
+          <div className="flex min-w-0 max-w-2xl items-start gap-3.5">
+            <HeroShieldScanner paused={isAnalyzing} />
+            <div className="min-w-0">
+              <h1
+                id="hero-heading"
+                className="text-xl font-bold tracking-tight text-ink sm:text-2xl"
+              >
+                {BRAND_COPY.heroHeading}
+              </h1>
+              {!canCollapseForm && (
+                <p className="mt-1.5 text-sm leading-relaxed text-ink-secondary">
+                  {BRAND_COPY.heroDescription}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="flex shrink-0 flex-col items-start gap-2.5 sm:items-end">

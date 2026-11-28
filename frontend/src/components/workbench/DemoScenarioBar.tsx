@@ -1,15 +1,10 @@
 "use client";
 
-import {
-  ArrowRight,
-  Check,
-  FileAudio,
-  Image as ImageIcon,
-  QrCode,
-  ShieldAlert,
-} from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 
+import { ScenarioCategoryIcon } from "@/components/motion/ScenarioCategoryIcon";
 import { SpotlightGroup } from "@/components/motion/SpotlightGroup";
+import { resolveScenarioIconKind } from "@/lib/motion/cyberMotion";
 import type { DemoScenario } from "@/lib/types";
 
 interface DemoScenarioBarProps {
@@ -17,19 +12,6 @@ interface DemoScenarioBarProps {
   activeDemoId: string | null;
   isAnalyzing: boolean;
   onSelectDemo: (demo: DemoScenario) => void;
-}
-
-function pickScenarioIcon(demo: DemoScenario) {
-  if (demo.audio_filename) {
-    return FileAudio;
-  }
-  if (demo.demo_id.includes("vietqr")) {
-    return QrCode;
-  }
-  if (demo.image_filename) {
-    return ImageIcon;
-  }
-  return ShieldAlert;
 }
 
 export function DemoScenarioBar({
@@ -59,7 +41,7 @@ export function DemoScenarioBar({
 
       <SpotlightGroup className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
         {visibleDemos.map((demo) => {
-          const Icon = pickScenarioIcon(demo);
+          const iconKind = resolveScenarioIconKind(demo);
           const isSelected = activeDemoId === demo.demo_id;
 
           return (
@@ -69,7 +51,7 @@ export function DemoScenarioBar({
               disabled={isAnalyzing}
               onClick={() => onSelectDemo(demo)}
               aria-pressed={isSelected}
-              className={`vs-spotlight group flex h-full cursor-pointer flex-col justify-between rounded-xl border p-3.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400 disabled:cursor-not-allowed disabled:opacity-60 ${
+              className={`vs-spotlight vs-scenario-card group flex h-full cursor-pointer flex-col justify-between rounded-xl border p-3.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400 disabled:cursor-not-allowed disabled:opacity-60 ${
                 isSelected
                   ? "border-amber-400 bg-amber-500/12"
                   : "border-border-subtle bg-surface-subtle hover:border-amber-400/60 hover:bg-surface-elevated"
@@ -77,8 +59,8 @@ export function DemoScenarioBar({
             >
               <div>
                 <div className="mb-2 flex items-center gap-1.5">
-                  <span className="inline-flex items-center gap-1 rounded-md border border-border-strong bg-surface px-2 py-0.5 text-[11px] font-medium text-ink-secondary">
-                    <Icon className="h-3 w-3 shrink-0 text-amber-400" aria-hidden="true" />
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-border-strong bg-surface px-2 py-0.5 text-[11px] font-medium text-ink-secondary">
+                    <ScenarioCategoryIcon kind={iconKind} />
                     <span>{demo.category_badge}</span>
                   </span>
                 </div>

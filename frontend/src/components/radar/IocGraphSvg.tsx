@@ -26,7 +26,9 @@ import {
   useTransition,
 } from "react";
 
+import { useViewportMotion } from "@/components/motion/useViewportMotion";
 import { RADAR_KIND_COPY, VERDICT_COPY } from "@/lib/copy";
+import { shouldAnimateRadarEdge } from "@/lib/motion/cyberMotion";
 import {
   buildGraphTopologyKey,
   clampFloatingTooltip,
@@ -44,6 +46,7 @@ interface IocGraphSvgProps {
   nodes: RadarNode[];
   edges: RadarEdge[];
   selectedNodeId?: string | null;
+  allowLiveAlertPulse?: boolean;
   onSelectNode?: (nodeId: string | null) => void;
   onRequestBlockNode?: (node: RadarNode) => void;
 }
@@ -244,6 +247,7 @@ interface GraphSceneLayerProps {
   matchingFilterIds: Set<string>;
   focusedIds: Set<string> | null;
   selectedNodeId: string | null;
+  allowLiveAlertPulse: boolean;
   onToggleSelect: (nodeId: string) => void;
 }
 
@@ -258,6 +262,7 @@ const GraphSceneLayer = memo(function GraphSceneLayer({
   matchingFilterIds,
   focusedIds,
   selectedNodeId,
+  allowLiveAlertPulse,
   onToggleSelect,
 }: GraphSceneLayerProps) {
   const isDense = positioned.length > 80;
@@ -301,7 +306,7 @@ const GraphSceneLayer = memo(function GraphSceneLayer({
         );
       })}
 
-      {/* Edges */}
+      {/* Edges (selective directional Animated Beam only on actively inspected links) */}
       {edges.map((edge) => {
         const src = nodeMap.get(edge.source);
         const dst = nodeMap.get(edge.target);
@@ -313,28 +318,54 @@ const GraphSceneLayer = memo(function GraphSceneLayer({
           (selectedNodeId === edge.source || selectedNodeId === edge.target);
         const dimmedByFocus = focusedIds !== null && !isDirectEdge;
         const isBlockedEdge = src.blocked || dst.blocked;
+        const isDemoEdge = Boolean(src.is_demo || dst.is_demo);
+        const edgeAnim = shouldAnimateRadarEdge({
+          isDirectEdge,
+          isDemoEdge,
+          isBlockedEdge,
+          isDense,
+          selectedNodeId,
+          allowLiveAlertPulse,
+        });
+        const edgeKey = `${edge.source}__${edge.target}__${edge.relation}`;
+        const beamStroke =
+          edgeAnim.variant === "live_blocked_amber" ? "#f59e0b" : "#38bdf8";
 
         return (
-          <line
-            key={`${edge.source}__${edge.target}__${edge.relation}`}
-            x1={src.x}
-            y1={src.y}
-            x2={dst.x}
-            y2={dst.y}
-            stroke={
-              isDirectEdge
-                ? isBlockedEdge
-                  ? "#f87171"
-                  : "#38bdf8"
-                : isBlockedEdge
-                  ? "#ef4444"
-                  : "#475569"
-            }
-            strokeWidth={isDirectEdge ? 2.6 : isDense ? 1.1 : 1.4}
-            strokeOpacity={!passesFilter || dimmedByFocus ? 0.12 : isDense ? 0.65 : 0.85}
-            strokeDasharray={isBlockedEdge ? "5 4" : undefined}
-            className="radar-edge pointer-events-none"
-          />
+          <g key={edgeKey} className="pointer-events-none">
+            <line
+              x1={src.x}
+              y1={src.y}
+              x2={dst.x}
+              y2={dst.y}
+              stroke={
+                isDirectEdge
+                  ? isBlockedEdge
+                    ? "#f87171"
+                    : "#38bdf8"
+                  : isBlockedEdge
+                    ? "#ef4444"
+                    : "#475569"
+              }
+              strokeWidth={isDirectEdge ? 2.4 : isDense ? 1.1 : 1.4}
+              strokeOpacity={!passesFilter || dimmedByFocus ? 0.12 : isDense ? 0.65 : 0.85}
+              strokeDasharray={isBlockedEdge ? "5 4" : undefined}
+              className="radar-edge"
+            />
+            {edgeAnim.animated && passesFilter && (
+              <line
+                x1={src.x}
+                y1={src.y}
+                x2={dst.x}
+                y2={dst.y}
+                stroke={beamStroke}
+                strokeWidth={2.2}
+                strokeOpacity={0.9}
+                strokeLinecap="round"
+                className="radar-edge-beam"
+              />
+            )}
+          </g>
         );
       })}
 
@@ -383,6 +414,23 @@ const GraphSceneLayer = memo(function GraphSceneLayer({
             opacity={isDimmed ? 0.18 : 1}
             className="radar-node cursor-pointer focus:outline-none"
           >
+            {isActive && (
+              <circle
+                key={`focus-${node.node_id}`}
+                cx={node.x}
+                cy={node.y}
+                r={radius + 10}
+                fill="none"
+                stroke={
+                  node.blocked && !node.is_demo && allowLiveAlertPulse
+                    ? "#f59e0b"
+                    : "#38bdf8"
+                }
+                strokeWidth={1.8}
+                className="radar-node-focus-ring pointer-events-none"
+              />
+            )}
+
             {node.blocked && (
               <circle
                 cx={node.x}
@@ -511,6 +559,7 @@ export const IocGraphSvg = memo(function IocGraphSvg({
   nodes,
   edges,
   selectedNodeId,
+  allowLiveAlertPulse = false,
   onSelectNode,
   onRequestBlockNode,
 }: IocGraphSvgProps) {
@@ -520,7 +569,16 @@ export const IocGraphSvg = memo(function IocGraphSvg({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [, startTransition] = useTransition();
 
+  const { ref: motionViewportRef, shouldAnimate: shouldAnimateGraph } =
+    useViewportMotion<HTMLDivElement>();
   const canvasBoxRef = useRef<HTMLDivElement | null>(null);
+  const setCanvasBoxNode = useCallback(
+    (el: HTMLDivElement | null) => {
+      canvasBoxRef.current = el;
+      motionViewportRef(el);
+    },
+    [motionViewportRef],
+  );
   const svgRef = useRef<SVGSVGElement | null>(null);
   const viewportGroupRef = useRef<SVGGElement | null>(null);
   const zoomLabelRef = useRef<HTMLSpanElement | null>(null);
@@ -819,6 +877,9 @@ export const IocGraphSvg = memo(function IocGraphSvg({
       const scaleToCss = metrics?.scaleToCss ?? getSvgViewportMetrics(svg.getBoundingClientRect()).scaleToCss;
 
       draggingRef.current = true;
+      if (canvasBoxRef.current) {
+        canvasBoxRef.current.dataset.dragging = "true";
+      }
       dragOriginRef.current = {
         clientX: ev.clientX,
         clientY: ev.clientY,
@@ -857,6 +918,9 @@ export const IocGraphSvg = memo(function IocGraphSvg({
       if (!draggingRef.current) return;
       const origin = dragOriginRef.current;
       draggingRef.current = false;
+      if (canvasBoxRef.current) {
+        delete canvasBoxRef.current.dataset.dragging;
+      }
       dragOriginRef.current = null;
       ev.currentTarget.style.cursor = "grab";
       try {
@@ -1246,7 +1310,8 @@ export const IocGraphSvg = memo(function IocGraphSvg({
 
         {viewMode === "graph" ? (
           <div
-            ref={canvasBoxRef}
+            ref={setCanvasBoxNode}
+            data-motion-state={shouldAnimateGraph ? "running" : "paused"}
             /* Lenis only honors this on HTMLElement ancestors (not <svg>); keeps wheel = zoom. */
             data-lenis-prevent-wheel
             style={{ contain: "layout paint style" }}
@@ -1300,6 +1365,7 @@ export const IocGraphSvg = memo(function IocGraphSvg({
                     matchingFilterIds={matchingFilterIds}
                     focusedIds={focusedIds}
                     selectedNodeId={activeSelectedId}
+                    allowLiveAlertPulse={allowLiveAlertPulse}
                     onToggleSelect={handleToggleSelect}
                   />
                 </g>
