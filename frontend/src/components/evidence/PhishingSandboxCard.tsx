@@ -1,8 +1,12 @@
 "use client";
 
-import { GlobeLock, ShieldAlert } from "lucide-react";
+import { Check, Copy, GlobeLock, Maximize2, ShieldAlert } from "lucide-react";
+import { useState } from "react";
 
+import { defangUrlForDisplay } from "@/lib/formatters";
 import type { SandboxInspection, UrlFinding } from "@/lib/types";
+
+import { EvidenceImageLightbox } from "./EvidenceImageLightbox";
 
 interface PhishingSandboxCardProps {
   urls: UrlFinding[];
@@ -10,11 +14,28 @@ interface PhishingSandboxCardProps {
 }
 
 export function PhishingSandboxCard({ urls, sandbox }: PhishingSandboxCardProps) {
+  const [sandboxLightboxOpen, setSandboxLightboxOpen] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+
   if (urls.length === 0 && !sandbox) {
     return (
       <p className="text-xs text-slate-400">Không có đường dẫn nào trong lượt kiểm tra này.</p>
     );
   }
+
+  async function handleCopyDefanged(rawUrl: string) {
+    try {
+      await navigator.clipboard.writeText(defangUrlForDisplay(rawUrl));
+      setCopiedUrl(rawUrl);
+      window.setTimeout(() => setCopiedUrl((curr) => (curr === rawUrl ? null : curr)), 1800);
+    } catch {
+      // Clipboard unavailable
+    }
+  }
+
+  const sandboxImgSrc = sandbox?.screenshot_base64
+    ? `data:image/jpeg;base64,${sandbox.screenshot_base64}`
+    : null;
 
   return (
     <div className="space-y-4">
@@ -28,13 +49,33 @@ export function PhishingSandboxCard({ urls, sandbox }: PhishingSandboxCardProps)
           }`}
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-100">
-              <GlobeLock className="h-4 w-4 text-sky-400" aria-hidden="true" />
+            <div className="flex min-w-0 items-center gap-2 text-xs font-bold text-slate-100">
+              <GlobeLock className="h-4 w-4 shrink-0 text-sky-400" aria-hidden="true" />
               <span className="break-all font-mono">{u.url}</span>
             </div>
-            <span className="rounded bg-slate-900 px-2 py-0.5 font-mono text-[11px] font-semibold text-amber-300">
-              Mức rủi ro đường dẫn: {u.risk_points}/100
-            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => void handleCopyDefanged(u.url)}
+                title="Sao chép đường dẫn dạng vô hiệu hóa (hxxp://...[.]) để đối chiếu an toàn"
+                className="inline-flex min-h-[28px] cursor-pointer items-center gap-1 rounded-md border border-border-strong bg-surface-subtle px-2 py-0.5 text-[10.5px] font-medium text-ink-secondary hover:border-sky-400 hover:text-ink"
+              >
+                {copiedUrl === u.url ? (
+                  <>
+                    <Check className="h-3 w-3 text-emerald-400" aria-hidden="true" />
+                    <span className="text-emerald-300">Đã sao chép</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3 w-3" aria-hidden="true" />
+                    <span>Sao chép an toàn</span>
+                  </>
+                )}
+              </button>
+              <span className="tabular-num rounded bg-slate-900 px-2 py-0.5 font-mono text-[11px] font-semibold text-amber-300">
+                Mức rủi ro đường dẫn: {u.risk_points}/100
+              </span>
+            </div>
           </div>
 
           <div className="mt-2.5 flex flex-wrap gap-1.5 text-[11px]">
@@ -139,13 +180,38 @@ export function PhishingSandboxCard({ urls, sandbox }: PhishingSandboxCardProps)
             </ul>
           )}
 
-          {sandbox.screenshot_base64 && (
-            <div className="mt-3">
+          {sandboxImgSrc && (
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-medium text-ink-muted">
+                  Ảnh chụp tĩnh từ trình duyệt cách ly (chỉ xem ảnh, không mở liên kết)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSandboxLightboxOpen(true)}
+                  className="inline-flex min-h-[28px] cursor-pointer items-center gap-1 rounded-md border border-border-strong bg-surface-subtle px-2 py-0.5 text-[11px] font-medium text-ink-secondary hover:border-amber-400 hover:text-ink"
+                >
+                  <Maximize2 className="h-3 w-3 text-amber-400" aria-hidden="true" />
+                  <span>Phóng to</span>
+                </button>
+              </div>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`data:image/jpeg;base64,${sandbox.screenshot_base64}`}
+                src={sandboxImgSrc}
                 alt="Ảnh chụp trang web được mở trong môi trường cách ly an toàn"
                 className="max-h-64 w-full rounded-lg border border-slate-800 bg-slate-950 object-contain"
+              />
+              <EvidenceImageLightbox
+                open={sandboxLightboxOpen}
+                title={`Ảnh chụp trình duyệt cách ly — ${sandbox.page_title ?? defangUrlForDisplay(sandbox.visited_url)}`}
+                imageUrl={sandboxImgSrc}
+                metadata={[
+                  { label: "Rủi ro trang đích", value: `${sandbox.risk_points}/100` },
+                  { label: "Ô mật khẩu", value: sandbox.has_password_field ? "Có" : "Không" },
+                  { label: "Ô OTP/PIN", value: sandbox.has_otp_field ? "Có" : "Không" },
+                  { label: "Liên kết .APK", value: sandbox.has_apk_download ? "Có" : "Không" },
+                ]}
+                onClose={() => setSandboxLightboxOpen(false)}
               />
             </div>
           )}

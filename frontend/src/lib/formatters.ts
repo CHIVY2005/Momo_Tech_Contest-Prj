@@ -63,6 +63,16 @@ export function maskDisplayIoc(raw: string | null | undefined): string {
   return trimmed;
 }
 
+/**
+ * Neutralize URLs/domains for safe forensic display and copy (never clickable phishing links).
+ */
+export function defangUrlForDisplay(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^https?:\/\//i, (match) => match.replace("http", "hxxp"))
+    .replace(/\./g, "[.]");
+}
+
 export function formatVietQrAmount(amount?: string | null): string {
   if (!amount || !amount.trim()) {
     return "QR tĩnh (tự nhập số tiền)";

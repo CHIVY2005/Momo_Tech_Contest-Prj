@@ -289,9 +289,33 @@ export default function RadarPage() {
       {/* Clean Security Operations Header */}
       <section className="flex flex-col justify-between gap-3 rounded-2xl border border-border-subtle bg-gradient-to-r from-surface via-[#0f172a] to-[#0c1f2e] px-4 py-4 sm:flex-row sm:items-center sm:px-5">
         <div>
-          <h1 className="text-lg font-bold text-ink sm:text-xl">Giám sát gian lận</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-lg font-bold text-ink sm:text-xl">Giám sát gian lận</h1>
+            {graph && (
+              <span
+                role="status"
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${
+                  hasDemoData
+                    ? "border-sky-500/40 bg-sky-500/12 text-sky-200"
+                    : "border-emerald-500/40 bg-emerald-500/12 text-emerald-200"
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`h-1.5 w-1.5 rounded-full ${hasDemoData ? "bg-sky-400" : "bg-emerald-400"}`}
+                />
+                <span>
+                  {graph.data_scope === "live"
+                    ? "Dữ liệu vận hành thực tế"
+                    : graph.data_scope === "mixed_with_demo"
+                      ? "Thực tế + Mẫu minh họa"
+                      : "Môi trường dữ liệu mẫu"}
+                </span>
+              </span>
+            )}
+          </div>
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-ink-secondary">
-            Theo dõi các chiến dịch lừa đảo, phân tích mối liên hệ và quản lý quy tắc chặn.
+            Theo dõi các chiến dịch lừa đảo, phân tích mối liên hệ và quản lý quy tắc chặn tạm thời.
           </p>
         </div>
 

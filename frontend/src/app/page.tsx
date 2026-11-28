@@ -5,15 +5,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AssistantDrawer } from "@/components/assistant/AssistantDrawer";
-import { ActionCopilotPanel } from "@/components/copilot/ActionCopilotPanel";
-import { EvidenceTabs } from "@/components/evidence/EvidenceTabs";
 import { useSmoothScroll } from "@/components/motion/SmoothScrollProvider";
-import { WalletPreTransferSim } from "@/components/wallet/WalletPreTransferSim";
 import { DemoScenarioBar } from "@/components/workbench/DemoScenarioBar";
 import { InputWorkbench, type WorkbenchFormState } from "@/components/workbench/InputWorkbench";
 import { LiveTracePanel } from "@/components/workbench/LiveTracePanel";
-import { VerdictDashboard } from "@/components/workbench/VerdictDashboard";
-import { analyzeStream, fetchDemos, fetchHealth } from "@/lib/api";
+import { InvestigationWorkspace } from "@/components/workspace/InvestigationWorkspace";
+import { analyzeStream, fetchAssistantCase, fetchDemos, fetchHealth } from "@/lib/api";
+import { createConversationRecord, forgetConversation, loadHomeConversation, saveHomeConversation, type ConversationRecord } from "@/lib/assistantConversation";
 import { inferAnalyzeMode } from "@/lib/composerUtils";
 import { BRAND_COPY } from "@/lib/copy";
 import { ANCHOR_OFFSET_PX, shouldAutoScrollIntoView } from "@/lib/motion/scrollControl";
@@ -39,6 +37,7 @@ interface SubmittedSnapshot {
   caseAccessToken: string | null;
   imageFiles: File[];
   transferAmount: string;
+  submittedText: string;
 }
 
 export default function HomePage() {
@@ -53,6 +52,7 @@ export default function HomePage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isFormCollapsed, setIsFormCollapsed] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [conversation, setConversation] = useState<ConversationRecord | null>(null);
   const [assistantInitialPrompt, setAssistantInitialPrompt] = useState<string | undefined>(
     undefined,
   );
@@ -60,6 +60,7 @@ export default function HomePage() {
     useState<AssistantQuickIntent | null>(null);
   const [assistantPromptNonce, setAssistantPromptNonce] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
+  const restoreRef = useRef<AbortController | null>(null);
   const resultRef = useRef<HTMLDivElement | null>(null);
   const scrolledCaseRef = useRef<string | null>(null);
   const { scrollToElement } = useSmoothScroll();
@@ -77,6 +78,43 @@ export default function HomePage() {
   }, []);
 
   const submittedImageFiles = submittedSnapshot?.imageFiles;
+
+  useEffect(() => {
+    const saved = loadHomeConversation();
+    if (!saved?.record.caseAccessToken) return;
+    const controller = new AbortController();
+    restoreRef.current = controller;
+    void fetchAssistantCase(saved.record.caseId, saved.record.caseAccessToken, controller.signal)
+      .then((report) => {
+        if (controller.signal.aborted) return;
+        if (!report) {
+          forgetConversation(saved.record.id);
+          saveHomeConversation(null);
+          return;
+        }
+        setSubmittedSnapshot({
+          report,
+          caseAccessToken: saved.record.caseAccessToken,
+          imageFiles: [],
+          transferAmount: "",
+          submittedText: "",
+        });
+        setConversation(saved.record);
+        setIsFormCollapsed(true);
+        setIsAssistantOpen(saved.isOpen);
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+
+  function resetAssistant() {
+    restoreRef.current?.abort();
+    saveHomeConversation(null);
+    setConversation(null);
+    setIsAssistantOpen(false);
+    setAssistantInitialPrompt(undefined);
+    setAssistantInitialIntent(null);
+  }
 
   useEffect(() => {
     const files = submittedImageFiles ?? [];
@@ -101,13 +139,16 @@ export default function HomePage() {
     setErrorMsg(null);
     setTraceSteps([]);
     setSubmittedSnapshot(null);
-    setIsAssistantOpen(false);
-    setAssistantInitialPrompt(undefined);
-    setAssistantInitialIntent(null);
+    resetAssistant();
     setIsAnalyzing(true);
     setIsFormCollapsed(true);
 
     const capturedImageFiles = !overrideDemo && !activeDemo ? [...form.imageFiles] : [];
+    const capturedText = overrideDemo
+      ? overrideDemo.url && !overrideDemo.text.includes(overrideDemo.url)
+        ? `${overrideDemo.text}\n${overrideDemo.url}`.trim()
+        : overrideDemo.text
+      : form.text;
     const capturedAmount = overrideDemo
       ? overrideDemo.transfer_amount !== null && overrideDemo.transfer_amount !== undefined
         ? String(overrideDemo.transfer_amount)
@@ -164,6 +205,7 @@ export default function HomePage() {
               caseAccessToken: capturedTokenCaseId === res.case_id ? capturedToken : null,
               imageFiles: capturedImageFiles,
               transferAmount: capturedAmount,
+              submittedText: capturedText,
             });
           },
           onSession: (session) => {
@@ -185,6 +227,7 @@ export default function HomePage() {
           caseAccessToken: capturedTokenCaseId === finalReport.case_id ? capturedToken : null,
           imageFiles: capturedImageFiles,
           transferAmount: capturedAmount,
+          submittedText: capturedText,
         });
       }
     } catch (err) {
@@ -226,9 +269,7 @@ export default function HomePage() {
     setIsAnalyzing(false);
     setActiveDemo(null);
     setSubmittedSnapshot(null);
-    setIsAssistantOpen(false);
-    setAssistantInitialPrompt(undefined);
-    setAssistantInitialIntent(null);
+    resetAssistant();
     setTraceSteps([]);
     setErrorMsg(null);
     setForm(next);
@@ -262,6 +303,73 @@ export default function HomePage() {
   const caseAccessToken = submittedSnapshot?.caseAccessToken ?? null;
   const canCollapseForm = isAnalyzing || Boolean(report) || traceSteps.length > 0;
   const reportCaseId = report?.case_id ?? null;
+
+  useEffect(() => {
+    if (!isAssistantOpen || !reportCaseId || (!caseAccessToken && isAnalyzing)) return;
+    if (conversation?.caseId === reportCaseId && conversation.caseAccessToken === caseAccessToken) return;
+    setConversation(createConversationRecord(reportCaseId, caseAccessToken));
+  }, [caseAccessToken, conversation, isAnalyzing, isAssistantOpen, reportCaseId]);
+
+  useEffect(() => {
+    if (conversation?.caseId === reportCaseId) saveHomeConversation(conversation.id, isAssistantOpen);
+  }, [conversation, isAssistantOpen, reportCaseId]);
+
+  // Publish non-sensitive active-case flag to Global Command Palette (zero PII)
+  useEffect(() => {
+    const maskedCaseId = reportCaseId
+      ? reportCaseId.length > 14
+        ? `${reportCaseId.slice(0, 10)}…${reportCaseId.slice(-4)}`
+        : reportCaseId
+      : null;
+    window.dispatchEvent(
+      new CustomEvent("verishield:active-case-changed", {
+        detail: { hasActiveCase: Boolean(reportCaseId), maskedCaseId },
+      }),
+    );
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent("verishield:active-case-changed", {
+          detail: { hasActiveCase: false, maskedCaseId: null },
+        }),
+      );
+    };
+  }, [reportCaseId]);
+
+  // Listen to Global Command Palette actions on `/`
+  useEffect(() => {
+    function handleNewAnalysis() {
+      abortRef.current?.abort();
+      abortRef.current = null;
+      setIsAnalyzing(false);
+      setIsFormCollapsed(false);
+      setActiveDemo(null);
+      setSubmittedSnapshot(null);
+      restoreRef.current?.abort();
+      saveHomeConversation(null);
+      setConversation(null);
+      setIsAssistantOpen(false);
+      setAssistantInitialPrompt(undefined);
+      setAssistantInitialIntent(null);
+      setTraceSteps([]);
+      setErrorMsg(null);
+      setForm(INITIAL_FORM);
+      window.requestAnimationFrame(() => {
+        const textarea = document.querySelector<HTMLTextAreaElement>("main textarea");
+        textarea?.focus();
+      });
+    }
+    function handleCommandOpenAssistant() {
+      if (reportCaseId) {
+        setIsAssistantOpen(true);
+      }
+    }
+    window.addEventListener("verishield:new-analysis", handleNewAnalysis);
+    window.addEventListener("verishield:open-assistant", handleCommandOpenAssistant);
+    return () => {
+      window.removeEventListener("verishield:new-analysis", handleNewAnalysis);
+      window.removeEventListener("verishield:open-assistant", handleCommandOpenAssistant);
+    };
+  }, [reportCaseId]);
 
   // Bring the verdict into view once per case, only when it landed off-screen. Never moves focus.
   useEffect(() => {
@@ -366,9 +474,7 @@ export default function HomePage() {
           setIsFormCollapsed(false);
           setActiveDemo(null);
           setSubmittedSnapshot(null);
-          setIsAssistantOpen(false);
-          setAssistantInitialPrompt(undefined);
-          setAssistantInitialIntent(null);
+          resetAssistant();
           setTraceSteps([]);
           setErrorMsg(null);
           setForm(INITIAL_FORM);
@@ -385,56 +491,26 @@ export default function HomePage() {
         </div>
       )}
 
-      <LiveTracePanel steps={traceSteps} isAnalyzing={isAnalyzing} hasReport={Boolean(report)} />
+      <LiveTracePanel
+        steps={traceSteps}
+        isAnalyzing={isAnalyzing}
+        hasReport={Boolean(report)}
+        hasError={Boolean(errorMsg)}
+      />
 
       {report && (
         <div id="verdict-result" ref={resultRef} className="scroll-mt-[84px] space-y-5">
-          <VerdictDashboard report={report} onOpenAssistant={handleOpenAssistant} />
-
-          <WalletPreTransferSim
+          <InvestigationWorkspace
             report={report}
+            caseAccessToken={caseAccessToken}
+            submittedText={submittedSnapshot?.submittedText ?? ""}
             transferAmountInput={submittedSnapshot?.transferAmount ?? ""}
+            originalPreviewUrls={submittedPreviewUrls}
+            onOpenAssistant={handleOpenAssistant}
           />
 
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-            <div className="xl:col-span-7">
-              <EvidenceTabs
-                report={report}
-                originalPreviewUrl={submittedPreviewUrls[0] ?? null}
-                originalPreviewUrls={submittedPreviewUrls}
-              />
-            </div>
-            <div className="xl:col-span-5">
-              <ActionCopilotPanel report={report} caseAccessToken={caseAccessToken} />
-
-              {(report.iocs.bank_accounts.length > 0 ||
-                report.iocs.domains.length > 0 ||
-                report.iocs.phones.length > 0) && (
-                <div className="mt-4 rounded-2xl border border-sky-500/35 bg-surface/95 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-bold text-sky-200">
-                        Đã ghi nhận dấu hiệu đáng ngờ vào hệ thống giám sát
-                      </p>
-                      <p className="mt-0.5 text-[11px] text-ink-muted">
-                        Đội ngũ vận hành có thể theo dõi và thêm cảnh báo chặn trên toàn hệ thống
-                        với thông tin đã che giấu.
-                      </p>
-                    </div>
-                    <Link
-                      href="/radar"
-                      className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl border border-sky-400/50 bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-200 hover:bg-sky-500/25"
-                    >
-                      <Radar className="h-4 w-4" aria-hidden="true" />
-                      <span>Mở giám sát gian lận</span>
-                    </Link>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
           <button
+            id="assistant-launcher"
             type="button"
             hidden={isAssistantOpen}
             aria-hidden={isAssistantOpen}
@@ -449,16 +525,17 @@ export default function HomePage() {
             <span>Hỏi Trợ lý VeriShield</span>
           </button>
 
-          <AssistantDrawer
+          {conversation?.caseId === report.case_id && <AssistantDrawer
+            key={conversation.id}
             report={report}
-            caseAccessToken={caseAccessToken}
+            conversation={conversation}
             isOpen={isAssistantOpen}
             onClose={handleCloseAssistant}
             initialPrompt={assistantInitialPrompt}
             initialIntent={assistantInitialIntent}
             initialPromptNonce={assistantPromptNonce}
             onClearInitialPrompt={handleClearInitialPrompt}
-          />
+          />}
         </div>
       )}
     </div>

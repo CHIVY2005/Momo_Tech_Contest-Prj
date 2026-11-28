@@ -1,10 +1,14 @@
 "use client";
 
 import {
+  ArrowDown,
   AlertTriangle,
+  ExternalLink,
   FileAudio,
   FileWarning,
   Image as ImageIcon,
+  Maximize2,
+  Minimize2,
   Paperclip,
   Send,
   Shield,
@@ -20,6 +24,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { useScrollLock } from "@/components/motion/SmoothScrollProvider";
 import {
@@ -27,13 +32,8 @@ import {
   streamAssistantChat,
   streamAssistantEvidenceChat,
 } from "@/lib/api";
-import {
-  applyFollowupSelection,
-  buildSessionKey,
-  collectAskedQuestions,
-  createAssistantSessionStore,
-  reconcileAssistantMessages,
-} from "@/lib/assistantSession";
+import { createConversationStore, expireInterruptedTurn, type ConversationRecord } from "@/lib/assistantConversation";
+import { applyFollowupSelection, findRegenerableUserTurn, reconcileAssistantMessages } from "@/lib/assistantSession";
 import { MODE_COPY, VERDICT_COPY } from "@/lib/copy";
 import type {
   AnalysisReport,
@@ -53,10 +53,13 @@ import {
   type AssistantQuickAction,
   isMerchantOrReceiptContext,
 } from "./AssistantQuickActions";
+import { useAssistantPanel } from "./useAssistantPanel";
+import { useAssistantScroll } from "./useAssistantScroll";
 
 export interface AssistantDrawerProps {
   report: AnalysisReport;
-  caseAccessToken: string | null;
+  conversation: ConversationRecord;
+  standalone?: boolean;
   isOpen: boolean;
   onClose: () => void;
   initialPrompt?: string;
@@ -70,7 +73,6 @@ const MAX_HISTORY_TURNS = 12;
 const MAX_HISTORY_ITEM_CHARS = 1200;
 const MAX_HISTORY_TOTAL_CHARS = 6000;
 const MAX_EVIDENCE_UPLOAD_BYTES = 10 * 1024 * 1024;
-const tabSessionStore = createAssistantSessionStore<AssistantChatMessage>(8);
 
 const ALLOWED_IMAGE_EXT_RE = /\.(?:jpe?g|png|webp|gif)$/i;
 const ALLOWED_AUDIO_EXT_RE = /\.(?:wav|mp3|m4a|mp4|ogg|webm)$/i;
@@ -104,7 +106,10 @@ const MERCHANT_HONESTY_BANNER_TEXT =
   "Ảnh chụp biên lai không phải bằng chứng tiền đã vào tài khoản. Luôn kiểm tra số dư thực tế trên ứng dụng ngân hàng hoặc loa thông báo biến động số dư (Soundbox) trước khi giao hàng.";
 
 const CLEAR_CONVERSATION_TOOLTIP =
-  "Xóa hội thoại khỏi bộ nhớ trình duyệt hiện tại. Thao tác này không xóa hồ sơ phân tích đã lưu và không thu hồi nội dung đã gửi tới dịch vụ AI ở các lượt trước.";
+  "Xóa lịch sử trong các tab đang mở cùng hội thoại. Không xóa hồ sơ đã lưu hoặc thu hồi nội dung từng gửi tới dịch vụ AI.";
+
+const HEADER_ACTION = "inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border-strong bg-surface-deep text-ink-secondary hover:border-amber-400/60 hover:text-ink focus-visible:outline-2 focus-visible:outline-amber-400 disabled:cursor-not-allowed disabled:opacity-45";
+const SYNC_NOTICE = "Hội thoại đang bận hoặc đang đồng bộ từ tab khác. Hãy thử lại sau.";
 
 const VERDICT_BADGE_STYLES: Record<VerdictLevel, string> = {
   SAFE: "border-emerald-500/45 bg-emerald-500/15 text-emerald-200",
@@ -215,7 +220,8 @@ interface FailedTurnRecord {
 
 export function AssistantDrawer({
   report,
-  caseAccessToken,
+  conversation,
+  standalone = false,
   isOpen,
   onClose,
   initialPrompt,
@@ -223,22 +229,16 @@ export function AssistantDrawer({
   initialPromptNonce = 0,
   onClearInitialPrompt,
 }: AssistantDrawerProps) {
-  const [detachedGeneralMode, setDetachedGeneralMode] = useState(false);
-  const [generalSessionNonce, setGeneralSessionNonce] = useState(1);
-  const activeSessionKey = buildSessionKey(
-    report.case_id,
-    detachedGeneralMode,
-    `g-${generalSessionNonce}`,
-  );
-  const [loadedSessionKey, setLoadedSessionKey] = useState<string>(activeSessionKey);
-  const [messages, setMessages] = useState<AssistantChatMessage[]>(
-    () => tabSessionStore.reload(buildSessionKey(report.case_id, false))?.messages ?? [],
-  );
-  const [askedQuestions, setAskedQuestions] = useState<string[]>(
-    () => tabSessionStore.reload(buildSessionKey(report.case_id, false))?.askedQuestions ?? [],
-  );
+  const [store] = useState(() => createConversationStore(conversation));
+  const [snapshot, setSnapshot] = useState(store.getSnapshot);
+  const { messages, detached: detachedGeneralMode } = snapshot;
+  const caseAccessToken = conversation.caseAccessToken;
+  const [expanded, setExpanded] = useState(false);
+  const [canPopOut, setCanPopOut] = useState(false);
+  const [panelNotice, setPanelNotice] = useState<string | null>(null);
   const [input, setInput] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
+  const [localStreaming, setLocalStreaming] = useState(false);
+  const isStreaming = snapshot.streaming || localStreaming;
   const [sessionExpired, setSessionExpired] = useState(false);
   const [retryCountdown, setRetryCountdown] = useState(0);
   const [lastFailedTurn, setLastFailedTurn] = useState<FailedTurnRecord | null>(null);
@@ -248,24 +248,30 @@ export function AssistantDrawer({
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(false);
   const inFlightRef = useRef(false);
   const consumedPromptKeyRef = useRef<string | null>(null);
   const onCloseRef = useRef(onClose);
   const onClearInitialPromptRef = useRef(onClearInitialPrompt);
-  const messagesRef = useRef<AssistantChatMessage[]>([]);
-  const askedQuestionsRef = useRef<string[]>([]);
+  const layerRef = useRef<HTMLDivElement>(null);
   const drawerRef = useRef<HTMLElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
-  const lastCaseIdRef = useRef<string>(report.case_id);
+  const scroll = useAssistantScroll(isOpen, messages);
+  const panel = useAssistantPanel(drawerRef, isOpen && !standalone && !expanded, scroll.suspendForResize, scroll.resumeAfterResize);
+  const full = standalone || expanded || panel.mobile;
+  const modal = !standalone && full;
+  const closeLabel = standalone ? "Đóng trang chat" : "Đóng khung chat";
+  const modeLabel = expanded ? "Thu về khung bên phải" : "Mở rộng toàn màn hình";
+  const setMessages = useCallback((update: (previous: AssistantChatMessage[]) => AssistantChatMessage[]) => {
+    const current = store.getSnapshot();
+    store.publish({ ...current, messages: update(current.messages) });
+  }, [store]);
 
   onCloseRef.current = onClose;
   onClearInitialPromptRef.current = onClearInitialPrompt;
-  messagesRef.current = messages;
-  askedQuestionsRef.current = askedQuestions;
 
   const showMerchantBanner = isMerchantOrReceiptContext(report);
   const hasCaseToken = Boolean(caseAccessToken && caseAccessToken.trim());
@@ -282,70 +288,28 @@ export function AssistantDrawer({
     }
   }, []);
 
-  // Abort any in-flight stream whenever the drawer closes so backend SSE slots release immediately
   useEffect(() => {
-    if (!isOpen && (abortRef.current || inFlightRef.current)) {
-      abortRef.current?.abort();
-      abortRef.current = null;
-      inFlightRef.current = false;
-      setIsStreaming(false);
-    }
-  }, [isOpen]);
+    const disconnect = store.connect(setSnapshot);
+    setCanPopOut(store.canOpenStandalone());
+    return disconnect;
+  }, [store]);
 
-  useScrollLock(isOpen);
+  useScrollLock(isOpen && full);
 
-  // Reset/switch isolated session state cleanly when switching to a different analysis report
   useEffect(() => {
-    if (lastCaseIdRef.current !== report.case_id) {
-      lastCaseIdRef.current = report.case_id;
-      abortRef.current?.abort();
-      abortRef.current = null;
-      inFlightRef.current = false;
-      consumedPromptKeyRef.current = null;
-      setDetachedGeneralMode(false);
-      const nextKey = buildSessionKey(report.case_id, false);
-      const restored = tabSessionStore.reload(nextKey);
-      const nextMessages = restored?.messages ?? [];
-      const nextAsked = restored?.askedQuestions ?? [];
-      messagesRef.current = nextMessages;
-      askedQuestionsRef.current = nextAsked;
-      setLoadedSessionKey(nextKey);
-      setMessages(nextMessages);
-      setAskedQuestions(nextAsked);
-      setInput("");
-      setIsStreaming(false);
-      setSessionExpired(false);
-      setRetryCountdown(0);
-      setLastFailedTurn(null);
-      clearAttachment();
-    }
-  }, [clearAttachment, report.case_id]);
-
-  // Keep in-memory tab session snapshot synchronized strictly when loadedSessionKey matches activeSessionKey
-  useEffect(() => {
-    if (loadedSessionKey !== activeSessionKey) {
-      return;
-    }
-    if (messages.length === 0 && askedQuestions.length === 0) {
-      return;
-    }
-    tabSessionStore.save({
-      sessionKey: activeSessionKey,
-      messages,
-      askedQuestions: collectAskedQuestions(messages, askedQuestions),
-    });
-  }, [activeSessionKey, askedQuestions, loadedSessionKey, messages]);
-
-  // Clear sessionExpired whenever a new non-empty caseAccessToken arrives (even replacing an expired one)
-  useEffect(() => {
-    if (caseAccessToken && caseAccessToken.trim()) {
-      setSessionExpired(false);
-    }
-  }, [caseAccessToken]);
+    if (!conversation.expiresAt) return;
+    const timeout = window.setTimeout(() => {
+      setSessionExpired(true);
+      setCanPopOut(false);
+    }, Math.max(0, conversation.expiresAt - Date.now()));
+    return () => window.clearTimeout(timeout);
+  }, [conversation.expiresAt]);
 
   // Abort active request on unmount
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       abortRef.current?.abort();
       abortRef.current = null;
       inFlightRef.current = false;
@@ -361,22 +325,11 @@ export function AssistantDrawer({
     return () => window.clearInterval(timer);
   }, [retryCountdown]);
 
-  // Auto-scroll to latest message/chunk
-  useEffect(() => {
-    if (!isOpen) return;
-    messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
-  }, [isOpen, messages]);
-
-  // WCAG 2.2 dialog focus management, Tab trap, body scroll lock, and Escape close.
-  // Depends strictly on [isOpen] using onCloseRef so parent re-renders never thrash focus.
   useEffect(() => {
     if (!isOpen) return;
 
     previousFocusRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
     const rafId = window.requestAnimationFrame(() => {
       if (textareaRef.current && !textareaRef.current.disabled) {
         textareaRef.current.focus();
@@ -385,13 +338,45 @@ export function AssistantDrawer({
       }
     });
 
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      const opener = previousFocusRef.current;
+      window.requestAnimationFrame(() => {
+        if (document.getElementById("assistant-chat-panel")) return;
+        if (opener && opener.isConnected && opener !== document.body && !opener.hidden) {
+          opener.focus({ preventScroll: true });
+        } else {
+          document.getElementById("assistant-launcher")?.focus({ preventScroll: true });
+        }
+      });
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !full) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const siblings = Array.from(document.body.children).filter(
+      (node): node is HTMLElement => node instanceof HTMLElement && node !== layerRef.current && !node.inert,
+    );
+    for (const sibling of siblings) sibling.inert = true;
+    if (!drawerRef.current?.contains(document.activeElement)) closeButtonRef.current?.focus();
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      for (const sibling of siblings) sibling.inert = false;
+    };
+  }, [full, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
     function handleKeyDown(ev: globalThis.KeyboardEvent) {
-      if (ev.key === "Escape") {
+      if (ev.defaultPrevented) return;
+      if (ev.key === "Escape" && (full || drawerRef.current?.contains(document.activeElement))) {
         ev.preventDefault();
         onCloseRef.current();
         return;
       }
-      if (ev.key === "Tab" && drawerRef.current) {
+      if (ev.key === "Tab" && modal && drawerRef.current) {
         const focusables = getFocusableElements(drawerRef.current);
         if (focusables.length === 0) return;
         const first = focusables[0];
@@ -408,29 +393,22 @@ export function AssistantDrawer({
     }
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.cancelAnimationFrame(rafId);
-      window.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = prevOverflow;
-      const opener = previousFocusRef.current;
-      if (opener && opener.isConnected) {
-        opener.focus();
-      }
-    };
-  }, [isOpen]);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [full, isOpen, modal]);
 
-  const sendMessage = useCallback(
+  const executeTurn = useCallback(
     async (
       rawPrompt: string,
       quickIntent: AssistantQuickIntent | null = null,
       options?: {
-        forceGeneralMode?: boolean;
         replaceMessageIds?: readonly string[];
         attachmentOverride?: PendingEvidenceAttachment | null;
       },
     ) => {
+      if (!mountedRef.current) return;
+      const current = store.getSnapshot();
       const trimmed = rawPrompt.trim().slice(0, MAX_MESSAGE_CHARS);
-      const useGeneralMode = Boolean(options?.forceGeneralMode) || detachedGeneralMode;
+      const useGeneralMode = current.detached;
       const pendingAttachment: PendingEvidenceAttachment | null = useGeneralMode
         ? null
         : options?.attachmentOverride !== undefined
@@ -443,12 +421,13 @@ export function AssistantDrawer({
               }
             : null;
 
-      if ((!trimmed && !pendingAttachment) || inFlightRef.current || retryCountdown > 0) return;
+      if (!trimmed && !pendingAttachment) return;
 
       const effectiveCaseId = useGeneralMode ? null : report.case_id;
       const effectiveToken = useGeneralMode ? null : caseAccessToken;
 
-      if (!useGeneralMode && (!effectiveToken || !effectiveToken.trim() || sessionExpired)) {
+      if (!useGeneralMode && (!effectiveToken?.trim() || sessionExpired ||
+        (conversation.expiresAt > 0 && Date.now() >= conversation.expiresAt))) {
         setSessionExpired(true);
         if (trimmed) {
           setInput(trimmed);
@@ -456,8 +435,6 @@ export function AssistantDrawer({
         return;
       }
 
-      inFlightRef.current = true;
-      abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
 
@@ -465,7 +442,7 @@ export function AssistantDrawer({
         options?.replaceMessageIds && options.replaceMessageIds.length > 0
           ? new Set(options.replaceMessageIds)
           : undefined;
-      const history = buildBoundedHistory(messagesRef.current, replaceSet);
+      const history = buildBoundedHistory(current.messages, replaceSet);
       const userMsgId = createMessageId("user");
       const assistantMsgId = createMessageId("assistant");
       const displayUserText =
@@ -479,28 +456,23 @@ export function AssistantDrawer({
       if (options?.attachmentOverride === undefined) {
         clearAttachment();
       }
-      setIsStreaming(true);
+      setLocalStreaming(true);
 
       const currentBase = replaceSet
-        ? messagesRef.current.filter((item) => !replaceSet.has(item.id))
-        : messagesRef.current;
+        ? current.messages.filter((item) => !replaceSet.has(item.id))
+        : current.messages;
       const selectionState = applyFollowupSelection(
         currentBase,
-        askedQuestionsRef.current,
+        current.askedQuestions,
         displayUserText,
       );
-      askedQuestionsRef.current = selectionState.askedQuestions;
-      setAskedQuestions(selectionState.askedQuestions);
 
-      setMessages((prev) => {
-        const base = replaceSet ? prev.filter((item) => !replaceSet.has(item.id)) : prev;
-        const clearedPrev = applyFollowupSelection(
-          base,
-          askedQuestionsRef.current,
-          displayUserText,
-        ).messages;
-        return [
-          ...clearedPrev,
+      store.publish({
+        ...current,
+        streaming: true,
+        askedQuestions: selectionState.askedQuestions,
+        messages: [
+          ...selectionState.messages,
           {
             id: userMsgId,
             role: "user",
@@ -522,7 +494,7 @@ export function AssistantDrawer({
             citations: [],
             suggestedFollowups: [],
           },
-        ];
+        ],
       });
 
       const updateAssistantMsg = (
@@ -622,7 +594,7 @@ export function AssistantDrawer({
                     }
                   : item,
               ),
-              { askedQuestions: askedQuestionsRef.current },
+              { askedQuestions: store.getSnapshot().askedQuestions },
             ),
           );
         },
@@ -681,7 +653,7 @@ export function AssistantDrawer({
           );
         }
 
-        if (abortRef.current === controller) {
+        if (abortRef.current === controller && !controller.signal.aborted) {
           if (!receivedAnyOutcome) {
             setLastFailedTurn({
               prompt: trimmed,
@@ -707,23 +679,6 @@ export function AssistantDrawer({
         }
       } catch (err) {
         if ((err as Error).name === "AbortError") {
-          setMessages((prev) =>
-            prev
-              .map((item) =>
-                item.id === assistantMsgId
-                  ? { ...item, isStreaming: false, statusLabel: null }
-                  : item,
-              )
-              .filter(
-                (item) =>
-                  !(
-                    item.id === assistantMsgId &&
-                    !item.content.trim() &&
-                    !item.evidenceReport &&
-                    (item.safetyNotices?.length ?? 0) === 0
-                  ),
-              ),
-          );
           return;
         }
 
@@ -759,8 +714,8 @@ export function AssistantDrawer({
       } finally {
         if (abortRef.current === controller) {
           abortRef.current = null;
-          inFlightRef.current = false;
-          setIsStreaming(false);
+          setLocalStreaming(false);
+          store.publish(expireInterruptedTurn(store.getSnapshot()));
         }
       }
     },
@@ -770,12 +725,41 @@ export function AssistantDrawer({
       attachedKind,
       caseAccessToken,
       clearAttachment,
-      detachedGeneralMode,
+      conversation.expiresAt,
       report.case_id,
-      retryCountdown,
       sessionExpired,
+      setMessages,
+      store,
     ],
   );
+
+  const sendMessage = useCallback(async (...args: Parameters<typeof executeTurn>) => {
+    if (inFlightRef.current || retryCountdown > 0) return;
+    inFlightRef.current = true;
+    setPanelNotice(null);
+    const revision = store.getSnapshot().revision;
+    let started = false;
+    try {
+      await store.exclusive(async () => {
+        if (store.getSnapshot().revision !== revision) return;
+        started = true;
+        await executeTurn(...args);
+      });
+      if (!started && mountedRef.current) {
+        setInput((draft) => draft || args[0].slice(0, MAX_MESSAGE_CHARS));
+        setPanelNotice(SYNC_NOTICE);
+      }
+    } catch {
+      if (mountedRef.current) {
+        setLocalStreaming(false);
+        abortRef.current = null;
+        setInput((draft) => draft || args[0].slice(0, MAX_MESSAGE_CHARS));
+        setPanelNotice(SYNC_NOTICE);
+      }
+    } finally {
+      inFlightRef.current = false;
+    }
+  }, [executeTurn, retryCountdown, store]);
 
   // StrictMode-safe initialPrompt consumption: guards against double-send and preserves
   // prompt in composer if rate-limited or waiting for session resolution.
@@ -816,24 +800,16 @@ export function AssistantDrawer({
   ]);
 
   function handleClearConversation() {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    inFlightRef.current = false;
-    setIsStreaming(false);
-    tabSessionStore.delete(activeSessionKey);
-    messagesRef.current = [];
-    askedQuestionsRef.current = [];
-    setMessages([]);
-    setAskedQuestions([]);
-    setLastFailedTurn(null);
-    clearAttachment();
+    changeConversation(() => {
+      store.publish({ ...store.getSnapshot(), messages: [], askedQuestions: [] });
+      setLastFailedTurn(null);
+      setInput("");
+      clearAttachment();
+    });
   }
 
   function handleAbortStream() {
     abortRef.current?.abort();
-    abortRef.current = null;
-    inFlightRef.current = false;
-    setIsStreaming(false);
   }
 
   function handleQuickActionSelect(action: AssistantQuickAction) {
@@ -852,31 +828,55 @@ export function AssistantDrawer({
   }
 
   function handleSwitchToGeneralMode() {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    inFlightRef.current = false;
-    const nextNonce = generalSessionNonce + 1;
-    const nextKey = buildSessionKey(null, true, `g-${nextNonce}`);
-    messagesRef.current = [];
-    askedQuestionsRef.current = [];
-    setGeneralSessionNonce(nextNonce);
-    setDetachedGeneralMode(true);
-    setLoadedSessionKey(nextKey);
-    setSessionExpired(false);
-    setIsStreaming(false);
-    setMessages([]);
-    setAskedQuestions([]);
-    setLastFailedTurn(null);
-    clearAttachment();
+    changeConversation(() => {
+      store.publish({ ...store.getSnapshot(), detached: true, messages: [], askedQuestions: [] });
+      setLastFailedTurn(null);
+      clearAttachment();
+    });
   }
 
-  function handleEvidencePersisted(messageId: string, persisted: PersistedEvidenceState) {
-    setMessages((prev) =>
+  const changeConversation = useCallback((change: () => void) => {
+    setPanelNotice(null);
+    void store.exclusive(() => { if (mountedRef.current) change(); }).then((changed) => {
+      if (!changed && mountedRef.current) setPanelNotice(SYNC_NOTICE);
+    }).catch(() => { if (mountedRef.current) setPanelNotice(SYNC_NOTICE); });
+  }, [store]);
+
+  const handleEvidencePersisted = useCallback((messageId: string, persisted: PersistedEvidenceState) => {
+    const update = () => setMessages((prev) =>
       prev.map((item) =>
         item.id === messageId ? { ...item, persistedEvidence: persisted } : item,
       ),
     );
-  }
+    if (abortRef.current) update();
+    else changeConversation(update);
+  }, [changeConversation, setMessages]);
+
+  const handleSelectFollowup = useCallback((q: string) => {
+    void sendMessage(q, inferQuickIntentFromPrompt(q), {
+      attachmentOverride: null,
+    });
+  }, [sendMessage]);
+
+  const handleRegenerateMessage = useCallback((messageId: string) => {
+    const target = findRegenerableUserTurn(store.getSnapshot().messages, messageId);
+    if (!target) return;
+    void sendMessage(target.prompt, inferQuickIntentFromPrompt(target.prompt), {
+      replaceMessageIds: [target.userMsgId, target.assistantMsgId],
+      attachmentOverride: null,
+    });
+  }, [sendMessage, store]);
+
+  const handleRetryFailedTurn = useCallback(() => {
+    if (!lastFailedTurn) return;
+    void sendMessage(lastFailedTurn.prompt, lastFailedTurn.intent, {
+      replaceMessageIds: [
+        lastFailedTurn.userMsgId,
+        lastFailedTurn.assistantMsgId,
+      ],
+      attachmentOverride: lastFailedTurn.attachment ?? null,
+    });
+  }, [lastFailedTurn, sendMessage]);
 
   function handleFileChange(ev: ChangeEvent<HTMLInputElement>) {
     const file = ev.target.files?.[0] ?? null;
@@ -919,23 +919,20 @@ export function AssistantDrawer({
     (!input.trim() && !attachedFile) ||
     needsSessionResolution;
 
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div
-        aria-hidden="true"
-        onClick={onClose}
-        className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs"
-      />
-
+  return createPortal(
+    <div ref={layerRef} className="assistant-shell" data-mode={standalone ? "standalone" : expanded ? "expanded" : "docked"}>
       <aside
+        id="assistant-chat-panel"
         ref={drawerRef}
-        role="dialog"
-        aria-modal="true"
+        role={standalone ? "main" : "dialog"}
+        aria-modal={modal || undefined}
         aria-labelledby="assistant-drawer-title"
-        className="relative z-10 flex h-full w-full flex-col border-l border-border-strong bg-surface shadow-2xl sm:w-[460px] lg:w-[500px]"
+        style={{ "--assistant-width": `${panel.width}px` } as React.CSSProperties}
+        className="assistant-panel relative flex h-full min-w-0 flex-col border-l border-border-strong bg-surface shadow-2xl"
       >
+        {!full && <div {...panel.separator} className="assistant-resize" />}
         {/* Header */}
-        <header className="flex items-start justify-between gap-3 border-b border-border-subtle px-4 py-3.5 sm:px-5">
+        <header className="assistant-gutter flex shrink-0 items-center justify-between gap-2 border-b border-border-subtle py-3">
           <div className="flex min-w-0 items-start gap-2.5">
             <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-amber-500/45 bg-amber-500/15">
               <Shield className="h-4 w-4 text-amber-300" aria-hidden="true" />
@@ -956,24 +953,38 @@ export function AssistantDrawer({
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
+            {!standalone && !panel.mobile && (
+              <button type="button" className={HEADER_ACTION} title={modeLabel} aria-label={modeLabel}
+                onClick={() => setExpanded((value) => !value)}>
+                {expanded ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}
+              </button>
+            )}
+            {!standalone && (
+              <button type="button" className={HEADER_ACTION} disabled={!canPopOut || sessionExpired}
+                title={canPopOut && !sessionExpired ? "Mở hội thoại trong tab mới" : "Cần phiên hồ sơ còn hạn và trình duyệt hỗ trợ đồng bộ tab"}
+                aria-label="Mở hội thoại trong tab mới"
+                onClick={() => setPanelNotice(store.openStandalone() ? null : "Không mở được tab chat. Hãy kiểm tra trình chặn cửa sổ bật lên.")}>
+                <ExternalLink size={16} aria-hidden="true" />
+              </button>
+            )}
             <button
               type="button"
               onClick={handleClearConversation}
-              disabled={messages.length === 0 && !isStreaming}
+              disabled={messages.length === 0 || isStreaming}
               title={CLEAR_CONVERSATION_TOOLTIP}
               aria-label="Xóa hội thoại"
-              className="inline-flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-lg border border-border-strong bg-surface-subtle px-2.5 py-1.5 text-[11px] font-medium text-ink-secondary transition-colors hover:border-amber-400/60 hover:text-ink disabled:cursor-not-allowed disabled:opacity-45"
+              className={HEADER_ACTION}
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-              <span className="hidden sm:inline">Xóa hội thoại</span>
             </button>
 
             <button
               ref={closeButtonRef}
               type="button"
               onClick={onClose}
-              aria-label="Đóng Trợ lý VeriShield"
-              className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-border-strong bg-surface-subtle text-ink-secondary transition-colors hover:border-amber-400/60 hover:text-ink"
+              aria-label={closeLabel}
+              title={closeLabel}
+              className={HEADER_ACTION}
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -981,7 +992,7 @@ export function AssistantDrawer({
         </header>
 
         {/* Case Context Summary Strip (masked metadata only, zero raw PII) */}
-        <div className="border-b border-border-subtle bg-surface-subtle/85 px-4 py-2.5 sm:px-5">
+        <div className="assistant-gutter shrink-0 border-b border-border-subtle bg-surface-subtle/85 py-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className={`inline-flex items-center rounded-md border px-2 py-0.5 font-bold ${verdictStyle}`}>
@@ -1006,7 +1017,7 @@ export function AssistantDrawer({
           <div
             role="alert"
             data-testid="merchant-honesty-banner"
-            className="border-b-2 border-amber-400/75 bg-amber-500/15 px-4 py-3 text-xs text-amber-100 sm:px-5"
+            className="assistant-gutter shrink-0 border-b-2 border-amber-400/75 bg-amber-500/15 py-2.5 text-xs text-amber-100"
           >
             <div className="flex items-start gap-2.5">
               <FileWarning
@@ -1024,7 +1035,7 @@ export function AssistantDrawer({
         {needsSessionResolution && (
           <div
             role="alert"
-            className="border-b border-amber-500/45 bg-surface-deep px-4 py-3 text-xs sm:px-5"
+            className="assistant-gutter shrink-0 border-b border-amber-500/45 bg-surface-deep py-3 text-xs"
           >
             <div className="flex items-start gap-2.5">
               <AlertTriangle
@@ -1040,6 +1051,7 @@ export function AssistantDrawer({
                 <button
                   type="button"
                   onClick={handleSwitchToGeneralMode}
+                  disabled={isStreaming}
                   className="inline-flex min-h-[34px] cursor-pointer items-center rounded-lg border border-amber-400/60 bg-amber-500/15 px-3 py-1 text-[11px] font-semibold text-amber-100 transition-colors hover:bg-amber-500/25"
                 >
                   Chuyển sang hỏi đáp chung
@@ -1050,7 +1062,11 @@ export function AssistantDrawer({
         )}
 
         {/* Scrollable Message Thread */}
-        <div data-lenis-prevent className="flex-1 space-y-3.5 overflow-y-auto px-4 py-4 sm:px-5">
+        <div className="relative min-h-0 min-w-0 flex-1">
+        <div ref={scroll.threadRef} onScroll={scroll.onScroll} data-lenis-prevent
+          role="region" aria-label="Nội dung hội thoại" tabIndex={0}
+          className="assistant-gutter assistant-thread h-full min-w-0 overflow-x-hidden overflow-y-auto py-4 outline-offset-[-2px] focus-visible:outline-2 focus-visible:outline-amber-400">
+          <div className="min-w-0 space-y-3.5">
           {messages.length === 0 ? (
             <div className="space-y-4">
               <div className="rounded-2xl border border-border-subtle bg-surface-subtle p-4">
@@ -1085,47 +1101,55 @@ export function AssistantDrawer({
             </div>
           ) : (
             messages.map((msg) => {
+              const isLatest = msg.id === latestAssistantId;
               const canRetryMessage =
-                msg.id === latestAssistantId &&
+                isLatest &&
                 Boolean(msg.errorMessage) &&
                 lastFailedTurn !== null &&
                 lastFailedTurn.assistantMsgId === msg.id;
+              const canRegenerate =
+                isLatest &&
+                Boolean(findRegenerableUserTurn(messages, msg.id));
 
               return (
+                <div key={msg.id} data-chat-message={msg.id} className="min-w-0">
                 <AssistantMessageItem
-                  key={msg.id}
                   message={msg}
-                  isLatestAssistant={msg.id === latestAssistantId}
+                  isLatestAssistant={isLatest}
                   disabled={isStreaming || retryCountdown > 0 || needsSessionResolution}
+                  canRegenerate={canRegenerate}
                   parentCaseId={report.case_id}
                   caseAccessToken={caseAccessToken}
                   onEvidencePersisted={handleEvidencePersisted}
-                  onSelectFollowup={(q) =>
-                    void sendMessage(q, inferQuickIntentFromPrompt(q), {
-                      attachmentOverride: null,
-                    })
-                  }
-                  onRetry={
-                    canRetryMessage && lastFailedTurn
-                      ? () =>
-                          void sendMessage(lastFailedTurn.prompt, lastFailedTurn.intent, {
-                            replaceMessageIds: [
-                              lastFailedTurn.userMsgId,
-                              lastFailedTurn.assistantMsgId,
-                            ],
-                            attachmentOverride: lastFailedTurn.attachment ?? null,
-                          })
-                      : undefined
-                  }
+                  onSelectFollowup={handleSelectFollowup}
+                  onRetry={canRetryMessage ? handleRetryFailedTurn : undefined}
+                  onRegenerate={canRegenerate ? handleRegenerateMessage : undefined}
                 />
+                </div>
               );
             })
           )}
-          <div ref={messagesEndRef} />
+          </div>
+        </div>
+        {scroll.showScrollToBottom && (
+          <button type="button" title="Cuộn xuống cuối hội thoại"
+            className="absolute bottom-3 left-1/2 flex -translate-x-1/2 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-amber-400/60 bg-surface-elevated px-3 py-2 text-xs font-semibold text-amber-100 shadow-lg focus-visible:outline-2 focus-visible:outline-amber-400"
+            onClick={() => {
+              scroll.scrollToBottom();
+              scroll.threadRef.current?.focus({ preventScroll: true });
+            }}>
+            <ArrowDown size={14} aria-hidden="true" /> Xuống cuối hội thoại
+          </button>
+        )}
         </div>
 
         {/* Composer Footer */}
-        <footer className="border-t border-border-subtle bg-surface-subtle/90 px-4 py-3 sm:px-5">
+        <footer className="assistant-gutter assistant-composer shrink-0 border-t border-border-subtle bg-surface-subtle/90 pt-3">
+          {(panelNotice || (snapshot.streaming && !localStreaming)) && (
+            <p role="status" className="mb-2 text-xs text-amber-200">
+              {panelNotice ?? "Trợ lý đang trả lời ở một tab khác."}
+            </p>
+          )}
           {retryCountdown > 0 && (
             <p
               role="status"
@@ -1244,10 +1268,10 @@ export function AssistantDrawer({
                       ? "Nhập thêm ghi chú cho bằng chứng đính kèm (tùy chọn)..."
                       : "Hỏi Trợ lý VeriShield về hồ sơ này... (Enter để gửi, Shift+Enter xuống dòng)"
                 }
-                className="min-h-[46px] max-h-32 flex-1 resize-y rounded-xl border border-border-strong bg-surface-deep px-3 py-2 text-xs leading-relaxed text-ink placeholder:text-ink-muted focus:border-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-55"
+                className="min-h-[46px] min-w-0 flex-1 resize-none rounded-xl border border-border-strong bg-surface-deep px-3 py-2 text-xs leading-relaxed text-ink placeholder:text-ink-muted focus:border-amber-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-55"
               />
 
-              {isStreaming ? (
+              {localStreaming ? (
                 <button
                   type="button"
                   onClick={handleAbortStream}
@@ -1283,6 +1307,7 @@ export function AssistantDrawer({
           </form>
         </footer>
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }

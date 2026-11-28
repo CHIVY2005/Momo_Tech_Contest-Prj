@@ -3,6 +3,8 @@
 import {
   AlertOctagon,
   AlertTriangle,
+  ArrowUpRight,
+  BarChart3,
   Cpu,
   FileWarning,
   Layers,
@@ -13,6 +15,7 @@ import {
   Volume2,
 } from "lucide-react";
 import * as m from "motion/react-m";
+import { useMemo } from "react";
 
 import { buildContextQuickActions } from "@/components/assistant/AssistantQuickActions";
 import { AnimatedNumber } from "@/components/motion/AnimatedNumber";
@@ -21,6 +24,7 @@ import {
   SHARED_DISCLAIMERS,
   VERDICT_COPY,
 } from "@/lib/copy";
+import { buildDetectedSignals, type EvidenceTabKey } from "@/lib/explainableAi";
 import { staggerDelaysMs } from "@/lib/motion/motionMath";
 import type { AnalysisReport, AssistantQuickIntent, VerdictLevel } from "@/lib/types";
 
@@ -30,6 +34,8 @@ const SECONDARY_DELAYS = staggerDelaysMs(3, 60, 180);
 export interface VerdictDashboardProps {
   report: AnalysisReport;
   onOpenAssistant?: (initialPrompt?: string, initialIntent?: AssistantQuickIntent) => void;
+  onInspectSignal?: (tab: EvidenceTabKey, source?: string) => void;
+  onOpenXai?: () => void;
 }
 
 const VERDICT_META: Record<
@@ -135,13 +141,19 @@ function summarizeLayerConsensus(report: AnalysisReport): { activeCount: number;
   return { activeCount: Math.max(1, activeCount), flaggedCount };
 }
 
-export function VerdictDashboard({ report, onOpenAssistant }: VerdictDashboardProps) {
+export function VerdictDashboard({
+  report,
+  onOpenAssistant,
+  onInspectSignal,
+  onOpenXai,
+}: VerdictDashboardProps) {
   const meta = VERDICT_META[report.verdict];
   const VerdictIcon = meta.Icon;
   const showMerchantHonestyBanner =
     report.receipt_verification_status === "UNVERIFIED_SCREENSHOT" ||
     Boolean(report.actions.merchant_balance_warning);
   const consensus = summarizeLayerConsensus(report);
+  const detectedSignals = useMemo(() => buildDetectedSignals(report).slice(0, 5), [report]);
   const quickAssistantActions = onOpenAssistant
     ? buildContextQuickActions(report).slice(0, 3)
     : [];
@@ -252,7 +264,58 @@ export function VerdictDashboard({ report, onOpenAssistant }: VerdictDashboardPr
           <span>50 · Cao</span>
           <span>75–100 · Rất cao</span>
         </div>
+        <p className="mt-1 text-[10.5px] text-ink-muted">
+          Chỉ số rủi ro tổng hợp (0–100) phản ánh mức độ khớp các dấu hiệu kỹ thuật và ngữ cảnh,
+          không phải xác suất thống kê tuyệt đối.
+        </p>
       </div>
+
+      {detectedSignals.length > 0 && (
+        <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border-subtle/80 bg-surface-subtle/75 px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-ink-secondary">Tín hiệu chính:</span>
+            {detectedSignals.map((sig) => {
+              const chipTone =
+                sig.severity === "CRITICAL"
+                  ? "border-rose-500/45 bg-rose-500/15 text-rose-100 hover:border-rose-400"
+                  : sig.severity === "HIGH"
+                    ? "border-orange-500/45 bg-orange-500/12 text-orange-100 hover:border-orange-400"
+                    : sig.severity === "MEDIUM"
+                      ? "border-amber-500/40 bg-amber-500/10 text-amber-100 hover:border-amber-400"
+                      : "border-sky-500/40 bg-sky-500/10 text-sky-100 hover:border-sky-400";
+              return onInspectSignal ? (
+                <button
+                  key={sig.id}
+                  type="button"
+                  onClick={() => onInspectSignal(sig.evidenceTab, sig.evidenceSource)}
+                  className={`vs-pressable inline-flex cursor-pointer items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium ${chipTone}`}
+                >
+                  <span>{sig.label}</span>
+                  <ArrowUpRight className="h-3 w-3 opacity-80" aria-hidden="true" />
+                </button>
+              ) : (
+                <span
+                  key={sig.id}
+                  className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${chipTone}`}
+                >
+                  {sig.label}
+                </span>
+              );
+            })}
+          </div>
+
+          {onOpenXai && (
+            <button
+              type="button"
+              onClick={onOpenXai}
+              className="inline-flex shrink-0 cursor-pointer items-center gap-1 text-[11px] font-semibold text-sky-300 transition-colors hover:text-sky-200"
+            >
+              <BarChart3 className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Phân tích chi tiết (XAI)</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {onOpenAssistant && (
         <m.div

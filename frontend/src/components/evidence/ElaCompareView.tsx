@@ -1,9 +1,11 @@
 "use client";
 
-import { Columns2, Eye, Info, Layers, SlidersHorizontal } from "lucide-react";
+import { Columns2, Eye, Info, Layers, Maximize2, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 
 import type { ImageForensicsResult } from "@/lib/types";
+
+import { EvidenceImageLightbox, type LightboxMetadataItem } from "./EvidenceImageLightbox";
 
 interface ElaCompareViewProps {
   forensics: ImageForensicsResult;
@@ -17,6 +19,27 @@ export function ElaCompareView({ forensics, originalPreviewUrl }: ElaCompareView
   const canCompare = Boolean(originalPreviewUrl && elaSrc);
   const [viewMode, setViewMode] = useState<"slider" | "side-by-side">("slider");
   const [splitPct, setSplitPct] = useState<number>(52);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  const lightboxPrimaryUrl = originalPreviewUrl ?? elaSrc;
+  const lightboxOverlayUrl = originalPreviewUrl && elaSrc ? elaSrc : null;
+  const lightboxMetadata: LightboxMetadataItem[] = [
+    { label: "Mức nghi vấn chỉnh sửa", value: `${forensics.tamper_score}/100` },
+    { label: "Kích thước", value: `${forensics.width}×${forensics.height} (${forensics.format})` },
+    { label: "dHash", value: forensics.dhash_hex || "—" },
+    { label: "EXIF", value: forensics.exif_software ?? "Không có" },
+    ...(forensics.ocr_provider
+      ? [
+          {
+            label: "OCR",
+            value:
+              typeof forensics.ocr_confidence === "number" && forensics.ocr_confidence > 0
+                ? `${forensics.ocr_provider} (${Math.round(forensics.ocr_confidence * 100)}%)`
+                : forensics.ocr_provider,
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div className="space-y-4">
@@ -42,37 +65,49 @@ export function ElaCompareView({ forensics, originalPreviewUrl }: ElaCompareView
               <Layers className="h-4 w-4 text-amber-400" aria-hidden="true" />
               <span>So sánh ảnh gốc và vùng nghi vấn chỉnh sửa ({forensics.filename})</span>
             </div>
-            <div
-              role="group"
-              aria-label="Chế độ so sánh hình ảnh"
-              className="inline-flex rounded-lg border border-border-strong bg-surface-deep p-0.5 text-[11px]"
-            >
-              <button
-                type="button"
-                aria-pressed={viewMode === "slider"}
-                onClick={() => setViewMode("slider")}
-                className={`inline-flex min-h-[32px] cursor-pointer items-center gap-1 rounded-md px-2.5 py-1 font-medium transition-colors ${
-                  viewMode === "slider"
-                    ? "bg-amber-500/20 text-amber-200"
-                    : "text-ink-muted hover:text-ink"
-                }`}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {lightboxPrimaryUrl && (
+                <button
+                  type="button"
+                  onClick={() => setLightboxOpen(true)}
+                  className="vs-pressable inline-flex min-h-[32px] cursor-pointer items-center gap-1 rounded-lg border border-border-strong bg-surface-deep px-2.5 py-1 text-[11px] font-medium text-ink-secondary hover:border-amber-400/70 hover:text-ink"
+                >
+                  <Maximize2 className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
+                  <span>Phóng to</span>
+                </button>
+              )}
+              <div
+                role="group"
+                aria-label="Chế độ so sánh hình ảnh"
+                className="inline-flex rounded-lg border border-border-strong bg-surface-deep p-0.5 text-[11px]"
               >
-                <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>Thanh kéo</span>
-              </button>
-              <button
-                type="button"
-                aria-pressed={viewMode === "side-by-side"}
-                onClick={() => setViewMode("side-by-side")}
-                className={`inline-flex min-h-[32px] cursor-pointer items-center gap-1 rounded-md px-2.5 py-1 font-medium transition-colors ${
-                  viewMode === "side-by-side"
-                    ? "bg-amber-500/20 text-amber-200"
-                    : "text-ink-muted hover:text-ink"
-                }`}
-              >
-                <Columns2 className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>Song song</span>
-              </button>
+                <button
+                  type="button"
+                  aria-pressed={viewMode === "slider"}
+                  onClick={() => setViewMode("slider")}
+                  className={`inline-flex min-h-[32px] cursor-pointer items-center gap-1 rounded-md px-2.5 py-1 font-medium transition-colors ${
+                    viewMode === "slider"
+                      ? "bg-amber-500/20 text-amber-200"
+                      : "text-ink-muted hover:text-ink"
+                  }`}
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Thanh kéo</span>
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={viewMode === "side-by-side"}
+                  onClick={() => setViewMode("side-by-side")}
+                  className={`inline-flex min-h-[32px] cursor-pointer items-center gap-1 rounded-md px-2.5 py-1 font-medium transition-colors ${
+                    viewMode === "side-by-side"
+                      ? "bg-amber-500/20 text-amber-200"
+                      : "text-ink-muted hover:text-ink"
+                  }`}
+                >
+                  <Columns2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Song song</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -177,9 +212,19 @@ export function ElaCompareView({ forensics, originalPreviewUrl }: ElaCompareView
                 !originalPreviewUrl ? "md:col-span-2" : ""
               }`}
             >
-              <figcaption className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-amber-300">
-                <Layers className="h-4 w-4 text-amber-400" aria-hidden="true" />
-                <span>Bản đồ vùng có dấu hiệu chỉnh sửa ảnh</span>
+              <figcaption className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold text-amber-300">
+                <span className="inline-flex items-center gap-1.5">
+                  <Layers className="h-4 w-4 text-amber-400" aria-hidden="true" />
+                  <span>Bản đồ vùng có dấu hiệu chỉnh sửa ảnh</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setLightboxOpen(true)}
+                  className="inline-flex min-h-[28px] cursor-pointer items-center gap-1 rounded-md border border-border-strong bg-surface-deep px-2 py-0.5 text-[11px] font-medium text-ink-secondary hover:border-amber-400 hover:text-ink"
+                >
+                  <Maximize2 className="h-3 w-3 text-amber-400" aria-hidden="true" />
+                  <span>Phóng to</span>
+                </button>
               </figcaption>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -190,6 +235,21 @@ export function ElaCompareView({ forensics, originalPreviewUrl }: ElaCompareView
             </figure>
           )}
         </div>
+      )}
+
+      {lightboxPrimaryUrl && (
+        <EvidenceImageLightbox
+          open={lightboxOpen}
+          title={
+            originalPreviewUrl
+              ? `Ảnh gốc & bản đồ ELA (${forensics.filename})`
+              : `Bản đồ vùng bất thường ELA (${forensics.filename})`
+          }
+          imageUrl={lightboxPrimaryUrl}
+          overlayUrl={lightboxOverlayUrl}
+          metadata={lightboxMetadata}
+          onClose={() => setLightboxOpen(false)}
+        />
       )}
 
       {/* Plain-language legend & limitations */}

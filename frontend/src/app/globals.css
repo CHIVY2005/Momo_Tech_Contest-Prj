@@ -68,6 +68,90 @@ html {
   color: var(--text-primary);
 }
 
+.assistant-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+@property --assistant-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 620px;
+}
+
+.assistant-panel {
+  width: min(var(--assistant-width, 620px), 85vw);
+  pointer-events: auto;
+  --assistant-gutter: clamp(1rem, 2vw, 1.25rem);
+}
+
+.assistant-shell:not([data-mode="docked"]) .assistant-panel {
+  width: 100%;
+  border-inline-start: 0;
+  --assistant-gutter: max(1rem, calc((100% - 880px) / 2));
+}
+
+.assistant-gutter { padding-inline: var(--assistant-gutter); }
+.assistant-composer { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+
+.assistant-thread {
+  overflow-anchor: none;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+
+.assistant-panel[data-resizing] .assistant-thread {
+  overflow-anchor: auto;
+}
+
+.assistant-thread[data-resize-containment] [data-chat-message] {
+  content-visibility: auto;
+}
+
+.assistant-resize {
+  position: absolute;
+  inset: 0 auto 0 -5px;
+  width: 10px;
+  z-index: 1;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  background: linear-gradient(90deg, transparent 4px, var(--border-strong) 4px 6px, transparent 6px);
+}
+
+.assistant-resize:is(:hover, :focus-visible),
+.assistant-panel[data-resizing] > .assistant-resize {
+  background: color-mix(in srgb, var(--accent-amber) 48%, transparent);
+}
+
+html[data-assistant-resizing] * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+.assistant-markdown { overflow-wrap: anywhere; word-break: normal; }
+
+.assistant-inline-code {
+  display: inline-block;
+  max-inline-size: 100%;
+  white-space: pre-wrap;
+}
+
+.assistant-markdown pre {
+  max-inline-size: 100%;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+@media (max-width: 639px) {
+  .assistant-shell[data-mode="docked"] .assistant-panel { width: 100%; border-inline-start: 0; }
+  .assistant-resize { display: none; }
+}
+
 body {
   min-height: 100vh;
   background:
@@ -92,6 +176,40 @@ body {
 :focus {
   scroll-margin-top: 84px;
   scroll-margin-bottom: 48px;
+}
+
+/* Command Palette — refined brand focus-visible indicator & instant container-only scrolling */
+.vs-palette-input {
+  outline: none;
+  scroll-margin: 0;
+}
+
+.vs-palette-input:focus,
+.vs-palette-input:focus-visible {
+  outline: none;
+}
+
+.vs-palette-search-field {
+  transition:
+    border-color 140ms ease-out,
+    background-color 140ms ease-out,
+    box-shadow 140ms ease-out;
+}
+
+.vs-palette-search-field:has(.vs-palette-input:focus-visible) {
+  border-color: color-mix(in srgb, var(--accent-cyan) 72%, var(--border-strong));
+  background-color: var(--bg-deep);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-cyan) 20%, transparent);
+}
+
+.vs-palette-list {
+  scroll-behavior: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.vs-palette-list [role="option"] {
+  scroll-margin: 0;
 }
 
 /* WCAG 2.4.1 Skip Navigation Link */
@@ -216,6 +334,80 @@ body {
     opacity 160ms ease-out var(--delay, 0ms);
 }
 
+/* Purposeful tactile press feedback (GPU transform only; never animates layout geometry) */
+.vs-pressable {
+  transition: transform 110ms ease-out, border-color 140ms ease-out, background-color 140ms ease-out, color 140ms ease-out;
+}
+
+.vs-pressable:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+/* Live Analysis Pipeline — Directional SVG beam pulse & active stage border accent */
+@keyframes vs-beam-dash {
+  from {
+    stroke-dashoffset: 28;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.vs-beam-flow {
+  stroke-dasharray: 6 8;
+  animation: vs-beam-dash 0.9s linear infinite;
+}
+
+@keyframes vs-border-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.35), 0 0 16px -6px rgba(14, 165, 233, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.55), 0 0 20px -4px rgba(245, 158, 11, 0.32);
+  }
+}
+
+.vs-stage-running {
+  animation: vs-border-pulse 1.8s ease-in-out infinite;
+}
+
+/* Scoped Forensic Graphite theme for lazy-loaded React Flow case relationship graph */
+.vs-flow-canvas .react-flow__background {
+  background-color: var(--bg-deep);
+}
+
+.vs-flow-canvas .react-flow__controls {
+  border: 1px solid var(--border-strong);
+  border-radius: 0.625rem;
+  background-color: var(--bg-surface);
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.55);
+}
+
+.vs-flow-canvas .react-flow__controls-button {
+  background-color: var(--bg-surface);
+  border-bottom-color: var(--border-subtle);
+  color: var(--text-secondary);
+  fill: currentColor;
+}
+
+.vs-flow-canvas .react-flow__controls-button:hover {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.vs-flow-canvas .react-flow__minimap {
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-strong);
+  border-radius: 0.625rem;
+}
+
+.vs-flow-canvas .react-flow__attribution {
+  background-color: rgba(7, 11, 20, 0.78);
+  color: var(--text-muted);
+  font-size: 9px;
+}
+
 @keyframes vs-spin {
   from {
     transform: rotate(0deg);
@@ -245,6 +437,16 @@ body {
     animation: none !important;
     background-image: none;
     color: var(--accent-amber);
+  }
+
+  .vs-beam-flow {
+    animation: none !important;
+    stroke-dasharray: none;
+  }
+
+  .vs-stage-running {
+    animation: none !important;
+    box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.55);
   }
 
   /* Reduced motion enabled after DrawOnView armed: never leave arrows hidden waiting for scroll */

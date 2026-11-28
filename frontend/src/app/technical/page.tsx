@@ -1196,9 +1196,9 @@ export default function TechnicalPage() {
             ],
             [
               "Thư viện Frontend",
-              "Next.js 15, React 19, Tailwind CSS v4, Lenis (cuộn mượt), Motion (hiệu ứng xuất hiện) (MIT) · TypeScript 5.8 (Apache-2.0) · Lucide React (ISC)",
+              "Next.js 15, React 19, Tailwind CSS v4, Lenis (cuộn mượt), Motion (hiệu ứng xuất hiện), @xyflow/react (sơ đồ mối liên hệ hồ sơ, nạp động khi mở) (MIT) · TypeScript 5.8, Apache ECharts (biểu đồ giải thích AI dạng tree-shaken, nạp động khi mở) (Apache-2.0) · Lucide React (ISC)",
               "MIT / Apache-2.0 / ISC",
-              "Đối chiếu từ khai báo phụ thuộc của ứng dụng web. Các hiệu ứng nhỏ (bộ đếm số, quầng sáng thẻ, vẽ luồng sơ đồ) do nhóm tự viết, không sao chép mã nguồn bên thứ ba.",
+              "Đối chiếu từ khai báo phụ thuộc của ứng dụng web. Các thành phần bảng lệnh nhanh (Ctrl+K), hộp phóng to bằng chứng, bộ đếm số, quầng sáng thẻ và luồng tiến trình SSE do nhóm tự viết, không sao chép mã nguồn bên thứ ba.",
             ],
             [
               "Phông chữ",

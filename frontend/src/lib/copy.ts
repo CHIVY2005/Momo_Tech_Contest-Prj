@@ -158,6 +158,13 @@ export function formatEvidenceSource(source: string): string {
 }
 
 const CLASSIFIER_LABEL_COPY: Record<string, string> = {
+  SAFE_NORMAL: "Giao dịch hoặc hội thoại bình thường",
+  SAFE_ADVISORY: "Thông báo khuyến cáo phòng tránh lừa đảo",
+  SCAM_IMPERSONATION: "Giả mạo cơ quan nhà nước hoặc tổ chức",
+  SCAM_TASK_INVEST_LOAN: "Việc nhẹ lương cao, đầu tư hoặc vay giả mạo",
+  SCAM_PHISHING_APK_OTP: "Đường dẫn giả mạo, tệp .APK hoặc chiếm đoạt OTP",
+  SCAM_URGENT_BORROW: "Giả mạo người thân vay tiền khẩn cấp",
+  PROMPT_INJECTION: "Dấu hiệu chèn chỉ thị đánh lừa AI",
   authority_impersonation: "Giả mạo cơ quan nhà nước hoặc công an",
   fake_bill: "Biên lai chuyển khoản giả hoặc bị chỉnh sửa",
   phishing_link: "Đường dẫn hoặc trang web giả mạo",

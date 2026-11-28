@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 
+import { CommandPalette } from "@/components/layout/CommandPalette";
 import { MotionProviders } from "@/components/motion/MotionProviders";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { TopNav } from "@/components/layout/TopNav";
@@ -73,6 +74,7 @@ export default function RootLayout({
         </main>
 
         <SiteFooter />
+        <CommandPalette />
         </MotionProviders>
       </body>
     </html>

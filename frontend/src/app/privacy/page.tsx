@@ -120,7 +120,7 @@ export default function PrivacyPage() {
             [
               "Hội thoại với Trợ lý VeriShield",
               "Câu hỏi bạn nhập trong khung Trợ lý, lịch sử hội thoại ngắn trong phiên đang mở (tối đa 6 lượt gần nhất) và ngữ cảnh hồ sơ bạn đang xem.",
-              "Không lưu nội dung hội thoại vào cơ sở dữ liệu máy chủ. Lịch sử trò chuyện chỉ nằm tạm trong bộ nhớ phiên trình duyệt hiện tại và bạn có thể bấm nút \"Xóa hội thoại\" bất cứ lúc nào.",
+              "Không lưu nội dung hội thoại vào cơ sở dữ liệu máy chủ. Lịch sử giữ tạm trong phiên tab để tiếp tục sau khi tải lại hoặc mở tab chat; bạn có thể xóa lịch sử khi Trợ lý không đang trả lời.",
             ],
             [
               "Bằng chứng bổ sung trong Trợ lý VeriShield",
@@ -303,9 +303,10 @@ export default function PrivacyPage() {
             </li>
             <li>
               <strong>Giới hạn của khóa phiên truy cập không cần đăng nhập:</strong> Mỗi hồ sơ trên
-              web được bảo vệ bằng khóa phiên truy cập riêng (tự động hết hạn sau 2 giờ và chỉ giữ
-              tạm trong tab trình duyệt hiện tại). Nếu đóng tab, tải lại trang hoặc quá 2 giờ, bạn
-              cần phân tích lại để đối chiếu hồ sơ (hoặc dùng Trợ lý ở chế độ hỏi đáp chung). Hệ
+              web được bảo vệ bằng khóa riêng hết hạn sau 2 giờ. Khi dùng Trợ lý, khóa được giữ tạm
+              trong phiên của tab phân tích và tab chat bạn mở từ đó, để có thể tải lại mà không mất
+              phiên. Khi không còn tab giữ phiên hợp lệ hoặc khóa đã hết hạn, bạn cần phân tích lại
+              để đối chiếu hồ sơ (hoặc dùng Trợ lý ở chế độ hỏi đáp chung). Hệ
               thống không có tài khoản đăng nhập dài hạn, vì vậy bất kỳ ai sử dụng chung thiết bị
               trong khi tab đang mở vẫn có thể xem hồ sơ đó.
             </li>
@@ -386,8 +387,8 @@ export default function PrivacyPage() {
             ],
             [
               "Lịch sử hội thoại Trợ lý VeriShield",
-              "Không lưu trong cơ sở dữ liệu máy chủ; chỉ giữ tạm trong phiên trình duyệt hiện tại và xóa ngay khi bấm \"Xóa hội thoại\", đổi hồ sơ hoặc đóng tab.",
-              "Lưu ý trung thực: nút \"Xóa hội thoại\" chỉ xóa hội thoại trong trình duyệt hiện tại, không xóa các hồ sơ phân tích bạn đã lưu trên máy chủ và không thu hồi được nội dung (đã lọc/ẩn danh) từng gửi tới nhà cung cấp AI bên ngoài ở các lượt trước.",
+              "Không lưu trong cơ sở dữ liệu máy chủ. Lịch sử gắn riêng với từng hồ sơ, còn trong phiên tab qua thao tác tải lại và không được khôi phục sau khi khóa hết hạn.",
+              "Nút \"Xóa hội thoại\" đồng bộ việc xóa tới các tab đang mở cùng hội thoại. Thao tác này không xóa hồ sơ phân tích trên máy chủ và không thu hồi được nội dung (đã lọc/ẩn danh) từng gửi tới nhà cung cấp AI bên ngoài.",
             ],
             [
               "Bằng chứng bổ sung tạm thời trong Trợ lý & khóa phiên truy cập hồ sơ",
@@ -430,10 +431,10 @@ export default function PrivacyPage() {
             <strong className="font-semibold text-ink">Không dùng cookie theo dõi hay quảng cáo:</strong>{" "}
             Giao diện web VeriShield AI hiện không đặt cookie theo dõi hành vi, không cài công cụ
             phân tích quảng cáo của bên thứ ba và không lưu nội dung bạn nhập vào bộ nhớ lưu trữ lâu
-            dài của trình duyệt. Khóa phiên truy cập hồ sơ (hết hạn sau 2 giờ) và lịch sử trò chuyện
-            với Trợ lý VeriShield chỉ tồn tại tạm thời trong bộ nhớ phiên đang mở của tab trình
-            duyệt và tự xóa khi bạn bấm <em>&ldquo;Xóa hội thoại&rdquo;</em>, tải lại trang hoặc
-            đóng tab.
+            dài của trình duyệt. Trợ lý dùng bộ lưu trữ phiên của tab để khôi phục lịch sử và khóa
+            hồ sơ còn hạn sau khi tải lại. Đường dẫn tab chat không chứa khóa hay nội dung hội thoại.
+            Bộ lưu trữ lâu dài chỉ dùng cho tùy chọn chiều rộng và dấu phiên bản đồng bộ ngẫu nhiên,
+            không lưu khóa truy cập hay nội dung trò chuyện.
           </li>
           <li>
             <strong className="font-semibold text-ink">Phông chữ đóng gói sẵn:</strong> Phông chữ
@@ -462,7 +463,7 @@ export default function PrivacyPage() {
             <strong className="font-semibold text-ink">
               Kiểm soát hội thoại và bằng chứng bổ sung trong Trợ lý VeriShield:
             </strong>{" "}
-            Bạn có thể bấm nút <em>&ldquo;Xóa hội thoại&rdquo;</em> bất cứ lúc nào để dọn nội dung
+            Bạn có thể bấm nút <em>&ldquo;Xóa hội thoại&rdquo;</em> khi Trợ lý không đang trả lời để dọn nội dung
             trò chuyện trên trình duyệt, giữ nguyên mặc định xử lý cục bộ khi đính kèm ảnh hoặc ghi
             âm bổ sung (không gửi tới AI bên ngoài và không ghi cơ sở dữ liệu), đồng thời tự quyết
             định có bấm <em>&ldquo;Lưu hồ sơ bổ sung &amp; tải PDF&rdquo;</em> hay đóng góp ẩn danh

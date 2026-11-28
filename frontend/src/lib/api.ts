@@ -41,6 +41,18 @@ function apiUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
+export async function fetchAssistantCase(caseId: string, token: string, signal?: AbortSignal): Promise<AnalysisReport | null> {
+  const response = await fetch(apiUrl(`/api/v1/cases/${encodeURIComponent(caseId)}`), {
+    headers: { "X-Case-Access-Token": token },
+    cache: "no-store",
+    signal,
+  });
+  if (response.status === 401 || response.status === 403 || response.status === 404) return null;
+  if (!response.ok) throw new Error("Không thể kiểm tra quyền truy cập hồ sơ lúc này.");
+  const report: unknown = await response.json();
+  return isValidAnalysisReport(report) && report.case_id === caseId ? report : null;
+}
+
 async function extractErrorMessage(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as { detail?: unknown };
