@@ -246,4 +246,10 @@ body {
     background-image: none;
     color: var(--accent-amber);
   }
+
+  /* Reduced motion enabled after DrawOnView armed: never leave arrows hidden waiting for scroll */
+  .vs-draw[data-draw-ready="true"] :is(line, path, polyline)[marker-end]:not([stroke-dasharray]) {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
 }

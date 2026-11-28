@@ -107,14 +107,14 @@ export function SmoothScrollProvider({ children }: { children: ReactNode }) {
   // New route: re-measure limits and start the new page at the top (unless deep-linking a hash).
   const isFirstPathRef = useRef(true);
   useEffect(() => {
+    // Consume the first-route flag even when Lenis is off (reduced motion at load), so a later
+    // re-enable does not mistake the next navigation for the initial deep-link restore.
+    const isFirstRoute = isFirstPathRef.current;
+    isFirstPathRef.current = false;
     const lenis = lenisRef.current;
     if (!lenis) return;
     lenis.resize();
-    if (isFirstPathRef.current) {
-      isFirstPathRef.current = false;
-      return;
-    }
-    if (!window.location.hash) {
+    if (!isFirstRoute && !window.location.hash) {
       lenis.scrollTo(0, { immediate: true, force: true });
     }
   }, [pathname]);
