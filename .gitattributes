@@ -1,0 +1,13 @@
+# Files executed or parsed on Linux (VPS / Docker / CI) must keep LF line endings,
+# even when exported via `git archive` from a Windows checkout with core.autocrlf=true.
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+Caddyfile       text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+.dockerignore   text eol=lf
+.env.example    text eol=lf
+.env.*.example  text eol=lf
+
+# Windows PowerShell 5.1 scripts stay CRLF-friendly on Windows.
+*.ps1           text eol=crlf
