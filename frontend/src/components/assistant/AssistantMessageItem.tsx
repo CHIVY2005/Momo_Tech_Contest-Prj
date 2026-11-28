@@ -108,6 +108,7 @@ export function AssistantMessageItem({
   const showFollowups =
     isLatestAssistant &&
     !message.isStreaming &&
+    !message.errorMessage &&
     suggestedFollowups.length > 0 &&
     Boolean(onSelectFollowup);
 

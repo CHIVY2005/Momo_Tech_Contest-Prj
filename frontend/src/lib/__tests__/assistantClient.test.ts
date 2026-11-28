@@ -56,7 +56,7 @@ test("parseSafeMarkdownBlocks parses headings, paragraphs, lists, bold, and inli
   assert.equal(blocks[2]?.type, "ul");
   if (blocks[2]?.type === "ul") {
     assert.equal(blocks[2].items.length, 2);
-    assert.deepEqual(blocks[2].items[1], [
+    assert.deepEqual(blocks[2].items[1]?.tokens, [
       { type: "text", value: "Không cung cấp " },
       { type: "bold", value: "mã OTP" },
       { type: "text", value: " cho bất kỳ ai" },
@@ -65,8 +65,9 @@ test("parseSafeMarkdownBlocks parses headings, paragraphs, lists, bold, and inli
 
   assert.equal(blocks[3]?.type, "ol");
   if (blocks[3]?.type === "ol") {
+    assert.equal(blocks[3].start, 1);
     assert.equal(blocks[3].items.length, 2);
-    assert.deepEqual(blocks[3].items[1], [
+    assert.deepEqual(blocks[3].items[1]?.tokens, [
       { type: "text", value: "Trình báo " },
       { type: "bold", value: "Công an địa phương" },
       { type: "text", value: " hoặc " },

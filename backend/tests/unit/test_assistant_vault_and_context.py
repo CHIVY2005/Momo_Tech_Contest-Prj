@@ -714,3 +714,34 @@ def test_redteam_context_case_id_case_zwsp_untrusted_report_fields_and_quick_int
     assert "0912345678" not in prompt
 
 
+def test_build_assistant_prompt_includes_response_quality_and_followup_turn_directives() -> None:
+    report = _sample_report(mode="personal")
+    sys_inst, first_turn_prompt = build_assistant_prompt(
+        message="Giải thích hồ sơ này.",
+        vault=RequestEntityVault(),
+        report=report,
+        rag_chunks=[],
+        history=[],
+    )
+    assert "không lặp lại" in sys_inst.lower()
+    assert "trả lời trực tiếp" in sys_inst.lower()
+    assert "không tự bịa" in sys_inst.lower() or "không bịa" in sys_inst.lower()
+    assert "[CONVERSATION_TURN_GUIDANCE]" not in first_turn_prompt
+
+    _, followup_prompt = build_assistant_prompt(
+        message="Cách lưu bằng chứng để trình báo Công an?",
+        vault=RequestEntityVault(),
+        report=report,
+        rag_chunks=[],
+        history=[
+            AssistantHistoryTurn(role="user", content="Giải thích hồ sơ này."),
+            AssistantHistoryTurn(role="assistant", content="Hồ sơ có dấu hiệu giả mạo ngân hàng."),
+        ],
+    )
+    assert followup_prompt.count("<UNTRUSTED_USER_CONTENT>") == 1
+    trusted_prefix = followup_prompt.split("<UNTRUSTED_USER_CONTENT>", 1)[0]
+    assert "[CONVERSATION_TURN_GUIDANCE]" in trusted_prefix
+    assert "không lặp lại toàn bộ kết luận" in trusted_prefix.lower()
+
+
+

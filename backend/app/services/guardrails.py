@@ -24,7 +24,8 @@ _INVISIBLE_CHARS_RE: Final[re.Pattern[str]] = re.compile(
 XML_BREAKOUT_TAG_RE: Final[re.Pattern[str]] = re.compile(
     r"<\s*/?\s*(?:untrusted_user_content|system_case_facts|grounded_kb_context|"
     r"available_user_entity_refs|case_evidence_excerpts|conversation_history_untrusted|"
-    r"current_user_message|tool_results|quick_intent|system|developer)(?:\b[^>]*)?>",
+    r"conversation_turn_guidance|current_user_message|tool_results|quick_intent|system|developer)"
+    r"(?:\b[^>]*)?>",
     re.IGNORECASE,
 )
 

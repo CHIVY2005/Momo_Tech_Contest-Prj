@@ -18,6 +18,7 @@ from app.core.security import InvalidMediaError, UploadTooLargeError, validate_u
 from app.schemas import AnalysisReport
 from app.schemas.assistant import AssistantChatRequest, AssistantCitation
 from app.services import assistant_guardrails as ag
+from app.services.assistant_followups import generate_followup_suggestions
 from app.services.assistant_rag import RetrievedChunk
 from app.services.assistant_service import AssistantService
 from app.services.assistant_stage import (
@@ -45,14 +46,6 @@ _REPLAY_NEUTRAL_NOTE_VI: Final[str] = (
     "nhận trước đó — bao gồm trường hợp bạn tải lại cùng bức ảnh từ hồ sơ ban đầu. Hãy kiểm tra "
     "trực tiếp biến động số dư thực tế trên ứng dụng ngân hàng hoặc loa Soundbox."
 )
-_FOLLOWUPS: Final[dict[str, tuple[str, ...]]] = {
-    "merchant": ("Tôi có nên giao hàng ngay dựa trên ảnh biên lai này không?",
-                 "Cách đối chiếu tiền đã thực sự vào tài khoản?"),
-    "high": ("Tôi lỡ chuyển tiền rồi cần làm gì ngay?",
-             "Cách lưu bằng chứng và trình báo cơ quan chức năng?"),
-    "low": ("Kết quả rủi ro thấp có nghĩa là chắc chắn an toàn không?",
-            "Cần tự kiểm chứng thêm bước nào trước khi chuyển tiền?"),
-}
 
 __all__ = [
     "DEFAULT_STAGE_MAX_ENTRIES", "DEFAULT_STAGE_TTL_SECONDS", "EVIDENCE_STREAM_TOTAL_TIMEOUT_SEC",
@@ -125,12 +118,10 @@ def build_local_evidence_explanation(
     """Build deterministic local-only Vietnamese explanation with zero external LLM calls."""
     if ag.is_merchant_or_receipt_report(report):
         base_reply, notice = ag.build_tier0_deterministic_reply(report, rag_chunks)
-        output_tier, followups = 0, list(_FOLLOWUPS["merchant"])
+        output_tier = 0
     else:
         base_reply = ag.build_degraded_rag_reply(report, rag_chunks, message=message)
         notice, output_tier = None, 1
-        key = "high" if report.verdict in ("CRITICAL_SCAM", "HIGH_RISK") else "low"
-        followups = list(_FOLLOWUPS[key])
     parts = [base_reply]
     highlights = [
         item for ev in report.evidence[:3]
@@ -138,12 +129,16 @@ def build_local_evidence_explanation(
         and not ag.check_policy_violations(item, rag_chunks=rag_chunks)
     ]
     if highlights:
-        parts.append("**Dấu hiệu nổi bật từ bằng chứng bổ sung:**")
-        parts.extend(f"- {item}" for item in dict.fromkeys(highlights))
+        bullet_block = "\n".join(f"- {item}" for item in dict.fromkeys(highlights))
+        parts.append(f"**Dấu hiệu nổi bật từ bằng chứng bổ sung:**\n{bullet_block}")
     if report.receipt_verification_status == "REPLAYED_RECEIPT":
         parts.append(_REPLAY_NEUTRAL_NOTE_VI)
     parts.append(_LOCAL_PRIVACY_NOTE_VI)
-    return "\n\n".join(parts), notice, output_tier, followups
+    full_reply = "\n\n".join(parts)
+    followups = generate_followup_suggestions(
+        report=report, current_message=message, reply_text=full_reply, rag_chunks=rag_chunks,
+    )
+    return full_reply, notice, output_tier, followups
 
 
 async def stream_ephemeral_evidence(

@@ -27,6 +27,13 @@ import {
   streamAssistantChat,
   streamAssistantEvidenceChat,
 } from "@/lib/api";
+import {
+  applyFollowupSelection,
+  buildSessionKey,
+  collectAskedQuestions,
+  createAssistantSessionStore,
+  reconcileAssistantMessages,
+} from "@/lib/assistantSession";
 import { MODE_COPY, VERDICT_COPY } from "@/lib/copy";
 import type {
   AnalysisReport,
@@ -63,6 +70,7 @@ const MAX_HISTORY_TURNS = 12;
 const MAX_HISTORY_ITEM_CHARS = 1200;
 const MAX_HISTORY_TOTAL_CHARS = 6000;
 const MAX_EVIDENCE_UPLOAD_BYTES = 10 * 1024 * 1024;
+const tabSessionStore = createAssistantSessionStore<AssistantChatMessage>(8);
 
 const ALLOWED_IMAGE_EXT_RE = /\.(?:jpe?g|png|webp|gif)$/i;
 const ALLOWED_AUDIO_EXT_RE = /\.(?:wav|mp3|m4a|mp4|ogg|webm)$/i;
@@ -215,11 +223,23 @@ export function AssistantDrawer({
   initialPromptNonce = 0,
   onClearInitialPrompt,
 }: AssistantDrawerProps) {
-  const [messages, setMessages] = useState<AssistantChatMessage[]>([]);
+  const [detachedGeneralMode, setDetachedGeneralMode] = useState(false);
+  const [generalSessionNonce, setGeneralSessionNonce] = useState(1);
+  const activeSessionKey = buildSessionKey(
+    report.case_id,
+    detachedGeneralMode,
+    `g-${generalSessionNonce}`,
+  );
+  const [loadedSessionKey, setLoadedSessionKey] = useState<string>(activeSessionKey);
+  const [messages, setMessages] = useState<AssistantChatMessage[]>(
+    () => tabSessionStore.reload(buildSessionKey(report.case_id, false))?.messages ?? [],
+  );
+  const [askedQuestions, setAskedQuestions] = useState<string[]>(
+    () => tabSessionStore.reload(buildSessionKey(report.case_id, false))?.askedQuestions ?? [],
+  );
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
-  const [detachedGeneralMode, setDetachedGeneralMode] = useState(false);
   const [retryCountdown, setRetryCountdown] = useState(0);
   const [lastFailedTurn, setLastFailedTurn] = useState<FailedTurnRecord | null>(null);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
@@ -233,6 +253,7 @@ export function AssistantDrawer({
   const onCloseRef = useRef(onClose);
   const onClearInitialPromptRef = useRef(onClearInitialPrompt);
   const messagesRef = useRef<AssistantChatMessage[]>([]);
+  const askedQuestionsRef = useRef<string[]>([]);
   const drawerRef = useRef<HTMLElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -244,6 +265,7 @@ export function AssistantDrawer({
   onCloseRef.current = onClose;
   onClearInitialPromptRef.current = onClearInitialPrompt;
   messagesRef.current = messages;
+  askedQuestionsRef.current = askedQuestions;
 
   const showMerchantBanner = isMerchantOrReceiptContext(report);
   const hasCaseToken = Boolean(caseAccessToken && caseAccessToken.trim());
@@ -272,7 +294,7 @@ export function AssistantDrawer({
 
   useScrollLock(isOpen);
 
-  // Reset conversation state cleanly when switching to a different analysis report
+  // Reset/switch isolated session state cleanly when switching to a different analysis report
   useEffect(() => {
     if (lastCaseIdRef.current !== report.case_id) {
       lastCaseIdRef.current = report.case_id;
@@ -280,16 +302,39 @@ export function AssistantDrawer({
       abortRef.current = null;
       inFlightRef.current = false;
       consumedPromptKeyRef.current = null;
-      setMessages([]);
+      setDetachedGeneralMode(false);
+      const nextKey = buildSessionKey(report.case_id, false);
+      const restored = tabSessionStore.reload(nextKey);
+      const nextMessages = restored?.messages ?? [];
+      const nextAsked = restored?.askedQuestions ?? [];
+      messagesRef.current = nextMessages;
+      askedQuestionsRef.current = nextAsked;
+      setLoadedSessionKey(nextKey);
+      setMessages(nextMessages);
+      setAskedQuestions(nextAsked);
       setInput("");
       setIsStreaming(false);
       setSessionExpired(false);
-      setDetachedGeneralMode(false);
       setRetryCountdown(0);
       setLastFailedTurn(null);
       clearAttachment();
     }
   }, [clearAttachment, report.case_id]);
+
+  // Keep in-memory tab session snapshot synchronized strictly when loadedSessionKey matches activeSessionKey
+  useEffect(() => {
+    if (loadedSessionKey !== activeSessionKey) {
+      return;
+    }
+    if (messages.length === 0 && askedQuestions.length === 0) {
+      return;
+    }
+    tabSessionStore.save({
+      sessionKey: activeSessionKey,
+      messages,
+      askedQuestions: collectAskedQuestions(messages, askedQuestions),
+    });
+  }, [activeSessionKey, askedQuestions, loadedSessionKey, messages]);
 
   // Clear sessionExpired whenever a new non-empty caseAccessToken arrives (even replacing an expired one)
   useEffect(() => {
@@ -435,10 +480,27 @@ export function AssistantDrawer({
         clearAttachment();
       }
       setIsStreaming(true);
+
+      const currentBase = replaceSet
+        ? messagesRef.current.filter((item) => !replaceSet.has(item.id))
+        : messagesRef.current;
+      const selectionState = applyFollowupSelection(
+        currentBase,
+        askedQuestionsRef.current,
+        displayUserText,
+      );
+      askedQuestionsRef.current = selectionState.askedQuestions;
+      setAskedQuestions(selectionState.askedQuestions);
+
       setMessages((prev) => {
         const base = replaceSet ? prev.filter((item) => !replaceSet.has(item.id)) : prev;
+        const clearedPrev = applyFollowupSelection(
+          base,
+          askedQuestionsRef.current,
+          displayUserText,
+        ).messages;
         return [
-          ...base,
+          ...clearedPrev,
           {
             id: userMsgId,
             role: "user",
@@ -546,14 +608,23 @@ export function AssistantDrawer({
         }) => {
           if (abortRef.current !== controller) return;
           receivedAnyOutcome = true;
-          updateAssistantMsg((curr) => ({
-            ...curr,
-            isStreaming: false,
-            statusLabel: null,
-            degradedMode: ev.degraded_mode,
-            outputTier: ev.output_tier,
-            suggestedFollowups: ev.suggested_followups,
-          }));
+          setMessages((prev) =>
+            reconcileAssistantMessages(
+              prev.map((item) =>
+                item.id === assistantMsgId
+                  ? {
+                      ...item,
+                      isStreaming: false,
+                      statusLabel: null,
+                      degradedMode: ev.degraded_mode,
+                      outputTier: ev.output_tier,
+                      suggestedFollowups: ev.suggested_followups,
+                    }
+                  : item,
+              ),
+              { askedQuestions: askedQuestionsRef.current },
+            ),
+          );
         },
         onError: (ev: { code: string; message: string }) => {
           if (abortRef.current !== controller) return;
@@ -749,7 +820,11 @@ export function AssistantDrawer({
     abortRef.current = null;
     inFlightRef.current = false;
     setIsStreaming(false);
+    tabSessionStore.delete(activeSessionKey);
+    messagesRef.current = [];
+    askedQuestionsRef.current = [];
     setMessages([]);
+    setAskedQuestions([]);
     setLastFailedTurn(null);
     clearAttachment();
   }
@@ -777,8 +852,20 @@ export function AssistantDrawer({
   }
 
   function handleSwitchToGeneralMode() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    inFlightRef.current = false;
+    const nextNonce = generalSessionNonce + 1;
+    const nextKey = buildSessionKey(null, true, `g-${nextNonce}`);
+    messagesRef.current = [];
+    askedQuestionsRef.current = [];
+    setGeneralSessionNonce(nextNonce);
     setDetachedGeneralMode(true);
+    setLoadedSessionKey(nextKey);
     setSessionExpired(false);
+    setIsStreaming(false);
+    setMessages([]);
+    setAskedQuestions([]);
     setLastFailedTurn(null);
     clearAttachment();
   }

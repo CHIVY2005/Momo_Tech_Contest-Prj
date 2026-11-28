@@ -1,0 +1,189 @@
+/**
+ * Pure-TS ephemeral in-memory conversation session manager for Trợ lý VeriShield.
+ * Zero localStorage / zero cookies (compliant with /privacy), strict per-case / per-session
+ * isolation, immediate follow-up selection updates, and reload reconciliation.
+ */
+
+import { filterFollowupSuggestions, normalizeFollowupText } from "./assistantFollowups.ts";
+
+export interface AssistantSessionMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  isStreaming?: boolean;
+  errorMessage?: string | null;
+  suggestedFollowups?: string[];
+}
+
+export interface AssistantSessionSnapshot<T extends AssistantSessionMessage = AssistantSessionMessage> {
+  sessionKey: string;
+  messages: T[];
+  askedQuestions: string[];
+}
+
+export function buildSessionKey(
+  caseId: string | null,
+  detachedGeneralMode: boolean,
+  generalSessionId = "default",
+): string {
+  if (detachedGeneralMode || !caseId || !caseId.trim()) {
+    return `general:${generalSessionId.trim() || "default"}`;
+  }
+  return `case:${caseId.trim()}`;
+}
+
+export function collectAskedQuestions<T extends AssistantSessionMessage>(
+  messages: readonly T[],
+  extraAsked: readonly string[] = [],
+): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  function pushUnique(raw: string): void {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    const norm = normalizeFollowupText(trimmed);
+    if (!norm || seen.has(norm)) return;
+    seen.add(norm);
+    out.push(trimmed);
+  }
+
+  for (const msg of messages) {
+    if (msg.role === "user") {
+      pushUnique(msg.content);
+    }
+  }
+  for (const q of extraAsked) {
+    pushUnique(q);
+  }
+  return out;
+}
+
+/**
+ * Immediately clears suggested follow-ups from all prior assistant messages and records the
+ * selected/submitted question so stale suggestions disappear synchronously on click/submit.
+ */
+export function applyFollowupSelection<T extends AssistantSessionMessage>(
+  messages: readonly T[],
+  askedQuestions: readonly string[],
+  selectedQuestion: string,
+): { messages: T[]; askedQuestions: string[] } {
+  const clearedMessages = messages.map((msg) =>
+    msg.role === "assistant" && (msg.suggestedFollowups?.length ?? 0) > 0
+      ? { ...msg, suggestedFollowups: [] }
+      : msg,
+  );
+  const nextAsked = collectAskedQuestions(clearedMessages, [...askedQuestions, selectedQuestion]);
+  return {
+    messages: clearedMessages,
+    askedQuestions: nextAsked,
+  };
+}
+
+export interface ReconcileOptions {
+  askedQuestions?: readonly string[];
+  maxSuggestions?: number;
+}
+
+/**
+ * Ensures suggested follow-ups appear ONLY on the latest completed, non-errored assistant turn,
+ * and deduplicates them against ALL user questions asked in the session (exact + semantic).
+ */
+export function reconcileAssistantMessages<T extends AssistantSessionMessage>(
+  messages: readonly T[],
+  options: ReconcileOptions = {},
+): T[] {
+  let latestAssistantIdx = -1;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i]?.role === "assistant") {
+      latestAssistantIdx = i;
+      break;
+    }
+  }
+
+  const allAsked = collectAskedQuestions(messages, options.askedQuestions ?? []);
+
+  return messages.map((msg, idx) => {
+    if (msg.role !== "assistant") return msg;
+    const isLatestCompleted =
+      idx === latestAssistantIdx && !msg.isStreaming && !msg.errorMessage;
+    if (!isLatestCompleted) {
+      return (msg.suggestedFollowups?.length ?? 0) > 0
+        ? { ...msg, suggestedFollowups: [] }
+        : msg;
+    }
+    const rawFollowups = msg.suggestedFollowups ?? [];
+    const filtered = filterFollowupSuggestions(rawFollowups, {
+      askedTexts: allAsked,
+      maxSuggestions: options.maxSuggestions ?? 3,
+    });
+    return { ...msg, suggestedFollowups: filtered };
+  });
+}
+
+export interface AssistantSessionStore<T extends AssistantSessionMessage = AssistantSessionMessage> {
+  get: (sessionKey: string) => AssistantSessionSnapshot<T> | null;
+  save: (snapshot: AssistantSessionSnapshot<T>) => void;
+  reload: (sessionKey: string, maxSuggestions?: number) => AssistantSessionSnapshot<T> | null;
+  delete: (sessionKey: string) => void;
+  clearAll: () => void;
+}
+
+export function createAssistantSessionStore<
+  T extends AssistantSessionMessage = AssistantSessionMessage,
+>(maxSessions = 8): AssistantSessionStore<T> {
+  const cap = Math.max(1, maxSessions);
+  const map = new Map<string, AssistantSessionSnapshot<T>>();
+
+  function cloneSnapshot(snap: AssistantSessionSnapshot<T>): AssistantSessionSnapshot<T> {
+    return {
+      sessionKey: snap.sessionKey,
+      messages: snap.messages.map((m) => ({
+        ...m,
+        suggestedFollowups: m.suggestedFollowups ? [...m.suggestedFollowups] : undefined,
+      })),
+      askedQuestions: [...snap.askedQuestions],
+    };
+  }
+
+  return {
+    get(sessionKey: string) {
+      const existing = map.get(sessionKey);
+      return existing ? cloneSnapshot(existing) : null;
+    },
+    save(snapshot: AssistantSessionSnapshot<T>) {
+      if (map.has(snapshot.sessionKey)) {
+        map.delete(snapshot.sessionKey);
+      }
+      map.set(snapshot.sessionKey, cloneSnapshot(snapshot));
+      while (map.size > cap) {
+        const oldestKey = map.keys().next().value;
+        if (oldestKey === undefined) break;
+        map.delete(oldestKey);
+      }
+    },
+    reload(sessionKey: string, maxSuggestions = 3) {
+      const existing = map.get(sessionKey);
+      if (!existing) return null;
+      const cloned = cloneSnapshot(existing);
+      const askedQuestions = collectAskedQuestions(cloned.messages, cloned.askedQuestions);
+      const reconciled = reconcileAssistantMessages(cloned.messages, {
+        askedQuestions,
+        maxSuggestions,
+      });
+      const refreshed: AssistantSessionSnapshot<T> = {
+        sessionKey: cloned.sessionKey,
+        messages: reconciled,
+        askedQuestions,
+      };
+      map.set(sessionKey, cloneSnapshot(refreshed));
+      return refreshed;
+    },
+    delete(sessionKey: string) {
+      map.delete(sessionKey);
+    },
+    clearAll() {
+      map.clear();
+    },
+  };
+}

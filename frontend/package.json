@@ -9,7 +9,7 @@
     "build": "next build",
     "start": "next start --port 3000",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/lib/__tests__/sse.test.ts src/lib/__tests__/radarLayout.test.ts src/lib/__tests__/auditRegressions.test.ts src/lib/__tests__/composerUtils.test.ts src/lib/__tests__/assistantClient.test.ts src/lib/__tests__/frontendLicenses.test.ts src/lib/__tests__/motionMath.test.ts src/lib/__tests__/scrollControl.test.ts"
+    "test": "node --test src/lib/__tests__/sse.test.ts src/lib/__tests__/radarLayout.test.ts src/lib/__tests__/auditRegressions.test.ts src/lib/__tests__/composerUtils.test.ts src/lib/__tests__/assistantClient.test.ts src/lib/__tests__/safeMarkdown.test.ts src/lib/__tests__/assistantSession.test.ts src/lib/__tests__/frontendLicenses.test.ts src/lib/__tests__/motionMath.test.ts src/lib/__tests__/scrollControl.test.ts"
   },
   "dependencies": {
     "lenis": "^1.3.29",

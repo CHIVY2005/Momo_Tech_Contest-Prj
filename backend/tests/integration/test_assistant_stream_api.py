@@ -755,4 +755,73 @@ async def test_midstream_disconnect_propagates_aclose_to_upstream_llm(
     assert svc._semaphore._value == MAX_CONCURRENT_STREAMS
 
 
+def test_multiturn_chat_deduplicates_followups_and_preserves_nested_markdown_streaming(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _app, client = _make_app_client(tmp_path)
+    case_id, token = _create_case(client, mode="personal")
+
+    nested_md_chunks = [
+        "1. **Liên hệ ngân hàng ngay**\n",
+        "   - Gọi tổng đài in mặt sau thẻ\n",
+        "   - Yêu cầu tra soát khẩn\n\n",
+        "2. **Thu thập bằng chứng**\n",
+        "   - Lưu toàn bộ tin nhắn và biên lai\n",
+        "   - Tải báo cáo PDF từ VeriShield\n\n",
+        "3. **Trình báo Công an địa phương**\n",
+        "   - Nộp đơn kèm chứng cứ tại Công an xã/phường.",
+    ]
+
+    async def _nested_md_llm(*_args: Any, **_kwargs: Any) -> AsyncIterator[str]:
+        for ch in nested_md_chunks:
+            yield ch
+
+    monkeypatch.setattr("app.services.assistant_service.stream_assistant_llm", _nested_md_llm)
+
+    history: list[dict[str, str]] = []
+    asked_questions: list[str] = [
+        "Giải thích các dấu hiệu rủi ro chính trong hồ sơ này?",
+        "Mình vừa chuyển khoản nhầm cho kẻ gian mất rồi, bây giờ xử lý sao?",
+    ]
+    seen_followups: list[str] = []
+
+    for turn_idx in range(6):
+        msg = asked_questions[turn_idx] if turn_idx < len(asked_questions) else seen_followups[-1]
+        with client.stream(
+            "POST",
+            "/api/v1/assistant/chat/stream",
+            headers={"X-Case-Access-Token": token},
+            json={"case_id": case_id, "message": msg, "history": history[-12:]},
+        ) as resp:
+            assert resp.status_code == 200
+            events = _parse_sse("".join(resp.iter_text()))
+
+        full_delta = "".join(d["text"] for n, d in events if n == "delta")
+        if turn_idx == 0:
+            # Verify nested ordered + unordered Markdown survives Tier-2 streaming verbatim
+            assert full_delta == "".join(nested_md_chunks)
+
+        done = events[-1][1]
+        fups = done["suggested_followups"]
+        assert isinstance(fups, list)
+        assert len(fups) <= 3
+        # Paraphrased transfer-money question asked on turn 2 must NOT be re-suggested afterwards
+        if turn_idx >= 1:
+            assert not any("lỡ chuyển tiền" in q.lower() for q in fups), (
+                f"Turn {turn_idx + 1} re-suggested already-asked transfer question: {fups}"
+            )
+        for q in fups:
+            assert q not in asked_questions, f"Re-suggested exact asked question: {q}"
+
+        history.append({"role": "user", "content": msg})
+        history.append({"role": "assistant", "content": full_delta[:400]})
+        if not fups:
+            break
+        seen_followups.append(fups[0])
+        if turn_idx + 1 >= len(asked_questions):
+            asked_questions.append(fups[0])
+
+
+
 

@@ -20,6 +20,7 @@ from app.schemas.assistant import AssistantChatRequest, AssistantCitation
 from app.services import assistant_guardrails as ag
 from app.services import assistant_slots as _slots
 from app.services.assistant_context import build_assistant_prompt
+from app.services.assistant_followups import generate_followup_suggestions
 from app.services.assistant_llm import AssistantLlmUnavailableError, stream_assistant_llm
 from app.services.assistant_rag import AssistantKnowledgeRetriever, RetrievedChunk
 from app.services.assistant_tools import iter_pre_tools_for_vault
@@ -52,16 +53,6 @@ _EPISTEMIC_ASK_RE: Final[re.Pattern[str]] = re.compile(
 _MERCHANT_NOTICE: Final[dict[str, str]] = {
     "code": "MERCHANT_BALANCE_REQUIRED", "message": ag.MERCHANT_BALANCE_WARNING_VI,
 }
-_FOLLOWUPS: Final[dict[str, tuple[str, ...]]] = {
-    "merchant": ("Tôi có nên giao hàng ngay dựa trên ảnh biên lai này không?",
-                 "Cách đối chiếu tiền đã thực sự vào tài khoản?"),
-    "high": ("Tôi lỡ chuyển tiền rồi cần làm gì ngay?",
-             "Tôi lỡ cung cấp mã OTP hoặc cài tệp .apk thì xử lý sao?"),
-    "low": ("Kết quả rủi ro thấp có nghĩa là chắc chắn an toàn không?",
-            "Cần tự kiểm chứng thêm bước nào trước khi chuyển tiền?"),
-    "general": ("Tôi lỡ chuyển tiền cho kẻ lừa đảo thì cần làm gì ngay?",
-                "Làm sao phân biệt tên miền ngân hàng thật và giả?"),
-}
 ToolRunner = Callable[
     [AssistantChatRequest, RequestEntityVault, AnalysisReport | None],
     Awaitable[tuple[list[dict[str, Any]], list[str], list[AssistantCitation]]],
@@ -92,12 +83,6 @@ def _done(degraded: bool, tier: int, followups: list[str]) -> str:
     return _sse("done", {"degraded_mode": degraded, "output_tier": tier, "suggested_followups": followups})
 def _rate_headers(retry_after: str) -> dict[str, str]:
     return {"Retry-After": retry_after, "Cache-Control": "no-store", "Vary": "X-Case-Access-Token"}
-def _suggested_followups(report: AnalysisReport | None) -> list[str]:
-    key = (
-        "merchant" if ag.is_merchant_or_receipt_report(report) else "general" if report is None
-        else "high" if report.verdict in ("CRITICAL_SCAM", "HIGH_RISK") else "low"
-    )
-    return list(_FOLLOWUPS[key])
 def _build_citations(
     report: AnalysisReport | None, chunks: list[RetrievedChunk], tool_cits: list[AssistantCitation]
 ) -> list[dict[str, Any]]:
@@ -178,10 +163,17 @@ class AssistantService:
                     rag_emb = await asyncio.to_thread(self.classifier.encode_text, rag_query)
         rag = self.retriever.search(rag_query, query_embedding=rag_emb, scam_type_hint=hint, top_k=4)
         yield _sse("status", {"phase": "retrieving", "label": "Đang đối chiếu hồ sơ và kho tri thức..."})
-        followups = _suggested_followups(report)
+
+        def _fups(reply_text: str, extra: tuple[str, ...] = ()) -> list[str]:
+            return generate_followup_suggestions(
+                report=report, current_message=req_msg, history=request.history,
+                reply_text=reply_text, quick_intent=request.quick_intent,
+                rag_chunks=rag.chunks, extra_covered_intents=extra,
+            )
+
         if report is None and not rag.in_domain and not vault.list_public_refs():
             yield _sse("delta", {"text": _OOD_REFUSAL_VI})
-            yield _done(False, 0, followups)
+            yield _done(False, 0, _fups(_OOD_REFUSAL_VI))
             return
         tool_summaries, tool_cits = None, list[AssistantCitation]()
         if tool_runner is not None:
@@ -210,7 +202,7 @@ class AssistantService:
             reply_text, notice = ag.build_tier0_deterministic_reply(report, rag.chunks)
             yield _sse("safety_notice", notice)
             yield _sse("delta", {"text": reply_text})
-            yield _done(False, 0, followups)
+            yield _done(False, 0, _fups(reply_text, extra=("merchant_handover",)))
             return
         sys_inst, prompt = build_assistant_prompt(
             message=safe_msg, vault=vault, report=report, rag_chunks=rag.chunks,
@@ -232,7 +224,7 @@ class AssistantService:
                     yield _sse("safety_notice", _MERCHANT_NOTICE)
                 fb = ag.build_degraded_rag_reply(report, rag.chunks, message=req_msg)
                 yield _sse("delta", {"text": fb})
-                yield _done(True, 1, followups)
+                yield _done(True, 1, _fups(fb))
                 return
             ok, _codes, safe_text = ag.validate_full_reply(
                 draft_text="".join(pieces), report=report, rag_chunks=rag.chunks,
@@ -247,7 +239,7 @@ class AssistantService:
             elif is_merchant:
                 yield _sse("safety_notice", _MERCHANT_NOTICE)
             yield _sse("delta", {"text": safe_text})
-            yield _done(not ok, 1, followups)
+            yield _done(not ok, 1, _fups(safe_text))
             return
         yield _sse("status", {"phase": "thinking", "label": "Đang phân tích và đối chiếu dữ liệu..."})
         gate, emitted = ag.Tier2SentenceGate(report=report, rag_chunks=rag.chunks), False
@@ -261,14 +253,15 @@ class AssistantService:
                         break
         except (AssistantLlmUnavailableError, TimeoutError):
             yield _sse("status", {"phase": "fallback", "label": "Đang dùng kho tri thức cục bộ..."})
+            fb_reply = gate.emitted_prefix
             if not emitted:
-                fb = ag.build_degraded_rag_reply(report, rag.chunks, message=req_msg)
-                yield _sse("delta", {"text": fb})
-            yield _done(True, 2, followups)
+                fb_reply = ag.build_degraded_rag_reply(report, rag.chunks, message=req_msg)
+                yield _sse("delta", {"text": fb_reply})
+            yield _done(True, 2, _fups(fb_reply))
             return
         ok, _codes, tail, t2_notice = gate.finalize()
         if not ok and t2_notice is not None:
             yield _sse("safety_notice", t2_notice)
         if tail:
             yield _sse("delta", {"text": f"\n\n{tail}" if (not ok and emitted) else tail})
-        yield _done(not ok, 2, followups)
+        yield _done(not ok, 2, _fups(f"{gate.emitted_prefix}{tail}"))
