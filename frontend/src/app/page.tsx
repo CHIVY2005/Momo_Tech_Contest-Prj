@@ -414,11 +414,14 @@ export default function HomePage() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold text-sky-200">
-                        Đã ghi nhận dấu hiệu đáng ngờ vào hệ thống giám sát
+                        {report.verdict === "SAFE"
+                          ? "Đã lưu hồ sơ kiểm tra ẩn thông tin cá nhân"
+                          : "Đã ghi nhận dấu hiệu đáng ngờ vào hệ thống giám sát"}
                       </p>
                       <p className="mt-0.5 text-[11px] text-ink-muted">
-                        Đội ngũ vận hành có thể theo dõi và thêm cảnh báo chặn trên toàn hệ thống
-                        với thông tin đã che giấu.
+                        {report.verdict === "SAFE"
+                          ? "Số điện thoại, số tài khoản hoặc tên miền (nếu có) đã được che giấu; chỉ những dấu hiệu có rủi ro mới được đưa vào danh sách cảnh báo chặn."
+                          : "Đội ngũ vận hành có thể theo dõi và thiết lập cảnh báo chặn trên toàn hệ thống với thông tin đã che giấu."}
                       </p>
                     </div>
                     <Link

@@ -6,6 +6,7 @@ import {
   analyzeSyncWithSession,
   fetchReportPdfBlob,
 } from "../api.ts";
+import { formatClassifierLabel } from "../copy.ts";
 import type { CaseSessionInfo } from "../types";
 import {
   formatVietQrAmount,
@@ -650,5 +651,22 @@ test("fetchReportPdfBlob throws Vietnamese expiry error on HTTP 403 and on null/
     assert.equal(fetchCalls, 1);
   } finally {
     globalThis.fetch = origFetch;
+  }
+});
+
+test("formatClassifierLabel maps all 7 uppercase SCAM_LABELS to Vietnamese without raw enum leak", () => {
+  const labels = [
+    "SAFE_NORMAL",
+    "SAFE_ADVISORY",
+    "SCAM_IMPERSONATION",
+    "SCAM_TASK_INVEST_LOAN",
+    "SCAM_PHISHING_APK_OTP",
+    "SCAM_URGENT_BORROW",
+    "PROMPT_INJECTION",
+  ];
+  for (const label of labels) {
+    const formatted = formatClassifierLabel(label);
+    assert.notEqual(formatted, label);
+    assert.ok(formatted.length >= 10);
   }
 });

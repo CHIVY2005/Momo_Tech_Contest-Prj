@@ -73,6 +73,9 @@ async def test_gemini_safety_null_or_exception_falls_back_cleanly_with_backup_re
     assert res.degraded_mode is True
     assert res.ai_score is None
     assert len(res.summary_vi) > 20
+    assert "giả mạo cơ quan nhà nước" in res.summary_vi
+    assert "nguy cơ dấu hiệu lừa đảo" not in res.summary_vi
+    assert "SCAM_IMPERSONATION" not in res.summary_vi
     assert len(res.counter_replies) >= 1
 
 

@@ -87,7 +87,7 @@ export default function TechnicalPage() {
             [
               "Trợ lý VeriShield (Hybrid E5 + BM25/RRF RAG cục bộ, cổng kiểm duyệt đầu ra 3 tầng, công cụ xác minh chỉ đọc theo tham chiếu, bằng chứng bổ sung cục bộ tạm thời & khóa phiên truy cập hồ sơ thống nhất)",
               <ImplementationStatus key="s2b" status="implemented" />,
-              "Tái sử dụng phiên E5 ONNX sẵn có (không thêm framework RAG hay Vector DB); bảo vệ đồng bộ đọc hồ sơ/PDF/Trợ lý bằng khóa phiên HMAC 128-bit (2 giờ) trên web và tách biệt PDF Telegram trong chat riêng 1-1.",
+              "Tái sử dụng phiên E5 ONNX đã nạp ở Tầng 1 (không thêm framework RAG hay cơ sở dữ liệu vector rời); bảo vệ đồng bộ đọc hồ sơ, tải PDF và Trợ lý bằng khóa phiên HMAC 128-bit (hết hạn sau 2 giờ), còn Telegram Bot chỉ gửi PDF qua chat riêng 1-1.",
             ],
             [
               "Mạng lưới liên kết gian lận và quy trình áp dụng quy tắc chặn tạm thời (TTL, chống chặn nhầm, mô phỏng tách biệt, nhật ký kiểm toán)",
@@ -111,9 +111,9 @@ export default function TechnicalPage() {
       {/* 2. Kiến trúc tổng thể */}
       <DocSection id="kien-truc-tong-the" number="02" title="Kiến trúc tổng thể">
         <p>
-          VeriShield AI được tổ chức theo cấu trúc monorepo tách biệt lớp giao diện web (Next.js 15),
-          dịch vụ phân tích và suy luận cục bộ (FastAPI + ONNX Runtime), quy trình huấn luyện ngoại
-          tuyến và bộ kịch bản đánh giá thực nghiệm.
+          VeriShield AI được tổ chức trong một kho mã nguồn thống nhất (monorepo), tách biệt lớp
+          giao diện web (Next.js 15), dịch vụ phân tích và suy luận cục bộ (FastAPI + ONNX
+          Runtime), quy trình huấn luyện ngoại tuyến và bộ kịch bản đánh giá thực nghiệm.
         </p>
 
         <DrawOnView>
@@ -121,18 +121,17 @@ export default function TechnicalPage() {
         </DrawOnView>
 
         <p>
-          Lưu lượng sản xuất đi qua reverse proxy Caddy 2 thực hiện xử lý kết nối TLS (TLS
-          termination), áp dụng tiêu đề bảo mật (HSTS, CSP) và giới hạn dung lượng yêu cầu trước khi
-          chuyển tiếp tới FastAPI ở chế độ truyền phát thời gian thực không lưu đệm cho Server-Sent
-          Events (SSE — giao thức đẩy tiến độ và phản hồi Trợ lý VeriShield một chiều từ máy chủ về
-          trình duyệt).
+          Lưu lượng thực tế đi qua máy chủ trung gian (reverse proxy) Caddy 2 để xử lý mã hóa HTTPS
+          (TLS), gắn tiêu đề bảo mật (HSTS, CSP) và giới hạn dung lượng yêu cầu trước khi chuyển
+          tiếp tới FastAPI theo chế độ truyền kết quả trực tiếp theo thời gian thực (SSE, không lưu
+          đệm) nhằm đẩy tiến độ và phản hồi Trợ lý VeriShield về trình duyệt.
         </p>
       </DocSection>
 
       {/* 3. Quy trình phân tích dữ liệu */}
       <DocSection id="quy-trinh-phan-tich" number="03" title="Quy trình phân tích dữ liệu">
         <p>
-          Về mặt thực thi, quy trình phân tích (pipeline) chạy tuần tự qua bước kiểm tra đầu vào và{" "}
+          Về mặt thực thi, quy trình phân tích chạy tuần tự qua bước kiểm tra đầu vào và{" "}
           <strong className="font-semibold text-ink">4 giai đoạn xử lý</strong>, phát sự kiện tiến
           độ thời gian thực ở cuối mỗi giai đoạn. Trong đó, Giai đoạn 1–3 thuộc{" "}
           <strong className="font-semibold text-ink">Tầng 1</strong> (phân tích cục bộ), còn Giai
@@ -303,7 +302,7 @@ export default function TechnicalPage() {
           rows={[
             [
               "Công cụ OCR chính: RapidOCR v3 PP-OCRv5 Latin (ONNX CPU)",
-              "Dùng bộ trọng số phát hiện chữ và nhận diện ký tự Latin PP-OCRv5 bản nhẹ (12,14 MB, Apache-2.0), đóng gói sẵn ngoại tuyến trong container và tắt bước phân loại xoay dòng dựa trên thực nghiệm đối sánh (ablation).",
+              "Dùng bộ trọng số phát hiện chữ và nhận diện ký tự Latin PP-OCRv5 bản nhẹ (12,14 MB, Apache-2.0), đóng gói sẵn ngoại tuyến trong container và tắt bước phân loại xoay dòng dựa trên thực nghiệm loại trừ thành phần (ablation).",
               "Trích xuất văn bản tiếng Việt, số tài khoản, mã giao dịch kèm tọa độ khung chữ phục vụ kiểm tra sai lệch hình học.",
             ],
             [
@@ -473,10 +472,9 @@ export default function TechnicalPage() {
               Tái sử dụng duy nhất 1 phiên E5 INT8 ONNX:
             </strong>{" "}
             Tái sử dụng trực tiếp phiên{" "}
-            <code className="font-mono text-ink">intfloat/multilingual-e5-small</code> INT8 ONNX
-            (giấy phép MIT) đã nạp sẵn trong máy chủ backend (không nạp phiên ONNX thứ 2); toàn bộ
-            gói mô hình và chỉ mục lưu trong kho mã nguồn đạt{" "}
-            <strong className="text-ink">36,11 MB</strong> (&lt; 50 MB).
+            <code className="font-mono text-ink">intfloat/multilingual-e5-small</code> INT8 ONNX đã
+            nạp ở Tầng 1 (xem Mục 05) để mã hóa câu hỏi, giúp giữ nguyên độ gọn nhẹ trên một tiến
+            trình CPU.
           </li>
           <li>
             <strong className="font-semibold text-ink">Kho tri thức 121 đoạn chuẩn hóa:</strong>{" "}
@@ -492,14 +490,14 @@ export default function TechnicalPage() {
           <li>
             <strong className="font-semibold text-ink">
               Lưu vector chuẩn hóa L2 thô (<code className="font-mono text-ink">E_raw</code>) &amp;
-              Mean-Centering trong RAM:
+              trừ trung bình trong RAM:
             </strong>{" "}
             Chỉ mục trên đĩa lưu nguyên ma trận vector chuẩn hóa L2 thô{" "}
             <code className="font-mono text-ink">E_raw</code> (mã hóa bằng chính mô hình INT8 ONNX
             để tránh lệch số học giữa FP32 và INT8). Khi khởi động, hệ thống thực hiện trừ trung bình
-            (Mean-Centering theo kỹ thuật <em>All-but-the-Top</em> nhằm giảm hiện tượng dị hướng của
-            không gian vector E5) đúng một lần trong RAM để sử dụng song song cả tín hiệu thô lẫn tín
-            hiệu đã khử dị hướng.
+            (Mean-Centering theo kỹ thuật <em>All-but-the-Top</em> nhằm giảm hiện tượng các vector bị
+            dồn cụm về cùng một hướng — anisotropy) đúng một lần trong RAM để sử dụng song song cả
+            tín hiệu thô lẫn tín hiệu đã cân bằng không gian vector.
           </li>
           <li>
             <strong className="font-semibold text-ink">
@@ -524,7 +522,7 @@ export default function TechnicalPage() {
           rows={[
             [
               "Kiểm soát truy cập hồ sơ thống nhất",
-              "Cấp khóa phiên truy cập ký HMAC 128-bit (tự động hết hạn sau 2 giờ, phản hồi luôn tắt lưu bộ nhớ đệm) áp dụng đồng bộ cho xem hồ sơ, tải PDF web và Trợ lý; kênh Telegram chỉ gửi PDF trực tiếp trong khung chat riêng 1-1 đúng chủ phiên và khóa mặc định hồ sơ cũ.",
+              "Áp dụng cơ chế khóa phiên HMAC 128-bit (hết hạn sau 2 giờ, không lưu bộ nhớ đệm) đồng bộ cho xem hồ sơ, tải PDF và Trợ lý; riêng Telegram chỉ gửi PDF trong chat 1-1 và khóa hồ sơ cũ (chi tiết tại Mục 16).",
               "Ngăn truy cập trái phép qua mã hồ sơ (IDOR), cô lập hoàn toàn dữ liệu giữa phiên web và Telegram.",
             ],
             [
@@ -534,12 +532,12 @@ export default function TechnicalPage() {
             ],
             [
               "Cổng kiểm duyệt đầu ra 3 tầng trước khi phát luồng (Pre-Emission Safety Gate)",
-              "Kết hợp bộ lọc luồng <think> và 3 tầng kiểm duyệt trước khi phát văn bản: Tầng 0 (phản hồi xác định tức thì cho câu hỏi xác nhận tiền về/giao hàng từ biên lai), Tầng 1 (đệm toàn văn và hậu kiểm fail-closed cho mọi lượt biên lai, người bán, hồ sơ rủi ro thấp, câu hỏi an toàn tuyệt đối hoặc chèn chỉ thị), Tầng 2 (chỉ phát từng câu hoàn chỉnh và tự động nâng lên Tầng 1 khi câu dài hoặc chạm ngữ cảnh biên lai).",
+              "Kết hợp bộ lọc luồng <think> và 3 tầng kiểm duyệt trước khi phát văn bản: Tầng 0 trả lời xác định tức thì cho câu hỏi xác nhận tiền về hoặc giao hàng từ biên lai; Tầng 1 đệm toàn văn bản và đóng an toàn khi không đủ tin cậy (fail-closed) với mọi lượt liên quan biên lai, người bán, hồ sơ rủi ro thấp, câu hỏi an toàn tuyệt đối hoặc dấu hiệu chèn chỉ thị. Với câu trả lời thông thường, Tầng 2 chỉ phát từng câu hoàn chỉnh và tự động nâng lên Tầng 1 nếu câu dài hoặc chạm ngữ cảnh biên lai.",
               "Bảo đảm tuyệt đối nguyên tắc xác minh biên lai người bán, ngăn khẳng định an toàn tuyệt đối và chặn số hotline không có căn cứ.",
             ],
             [
-              "Bộ công cụ xác minh chỉ-đọc theo tham chiếu",
-              "Danh sách công cụ cho phép chỉ gồm các thao tác chỉ đọc nhận mã ref_id từ RequestEntityVault: kiểm tra đường dẫn chống SSRF ràng buộc IP công cộng (không chạy trình duyệt headless), kiểm định mã VietQR EMVCo/CRC-16, tra cứu uy tín IOC chỉ đọc, tra cứu chi tiết bằng chứng hồ sơ gắn phía máy chủ và tìm kiếm kho tri thức RAG.",
+              "Bộ công cụ xác minh chỉ đọc theo tham chiếu",
+              "Danh sách công cụ cho phép chỉ gồm các thao tác chỉ đọc nhận mã ref_id từ RequestEntityVault: kiểm tra đường dẫn chống SSRF ràng buộc IP công cộng (không chạy trình duyệt ảo), kiểm định mã VietQR EMVCo/CRC-16, tra cứu uy tín IOC chỉ đọc, tra cứu chi tiết bằng chứng hồ sơ gắn phía máy chủ và tìm kiếm kho tri thức RAG.",
               "Ngăn mô hình tự tạo URL nội bộ, bảo vệ tài nguyên CPU/RAM và cấm tuyệt đối mọi thao tác ghi hay quản trị Trung tâm giám sát (/radar).",
             ],
             [
@@ -581,16 +579,16 @@ export default function TechnicalPage() {
             >
               /radar
             </Link>{" "}
-            sử dụng bộ bố cục phân cụm lưới không gian độ phức tạp tuyến tính{" "}
-            <code className="font-mono text-ink">O(N)</code> kết hợp cập nhật vùng nhìn đồng bộ{" "}
-            <code className="font-mono text-ink">requestAnimationFrame</code> trên một lớp biến đổi
-            SVG duy nhất, hỗ trợ thu phóng quanh con trỏ, kéo mượt 1:1, vừa khung, toàn màn hình,
-            lọc theo loại đối tượng và chuyển đổi bảng dữ liệu.
+            sử dụng bố cục phân cụm theo lưới tuyến tính{" "}
+            <code className="font-mono text-ink">O(N)</code>, cập nhật mượt theo khung hình (
+            <code className="font-mono text-ink">requestAnimationFrame</code>) trên một lớp SVG duy
+            nhất, hỗ trợ thu phóng quanh con trỏ, kéo mượt 1:1, vừa khung, toàn màn hình, lọc theo
+            loại đối tượng và chuyển đổi bảng dữ liệu.
           </li>
           <li>
             <strong className="font-semibold text-ink">Tách bạch dữ liệu mẫu và dữ liệu thực:</strong>{" "}
-            Chiến dịch mẫu phục vụ trình diễn được gắn nhãn riêng và không tự động nạp trong chế độ
-            vận hành production sạch.
+            Chiến dịch mẫu phục vụ trình diễn được gắn nhãn riêng và không tự động nạp trong môi trường
+            vận hành thực tế.
           </li>
         </ul>
       </DocSection>
@@ -639,8 +637,8 @@ export default function TechnicalPage() {
           rows={[
             [
               "Giao diện Web",
-              "Next.js 15 (App Router), React 19, TypeScript 5.8 (strict), Tailwind CSS v4, Lucide Icons",
-              "Giao diện kiểm tra đa phương thức, ngăn Trợ lý VeriShield (phát luồng SSE + trình hiển thị Markdown thuần React an toàn), Trung tâm giám sát /radar và trang tài liệu; không dùng thư viện biểu đồ, đồ thị hay Markdown bên ngoài.",
+              "Next.js 15 (App Router), React 19, TypeScript 5.8 (strict), Tailwind CSS v4, Lucide Icons, Lenis, Motion",
+              "Giao diện kiểm tra đa phương thức, ngăn Trợ lý VeriShield (phát luồng SSE + trình hiển thị Markdown thuần React an toàn), hiệu ứng cuộn và xuất hiện mượt, Trung tâm giám sát /radar và trang tài liệu; không dùng thư viện biểu đồ, đồ thị hay Markdown bên ngoài.",
             ],
             [
               "Máy chủ API",
@@ -660,12 +658,12 @@ export default function TechnicalPage() {
             [
               "Lưu trữ & Hạ tầng",
               "SQLite 3 (WAL mode), Caddy 2.8, Docker & Docker Compose",
-              "Lưu báo cáo đã che giấu, đồ thị IOC băm, quy tắc TTL và reverse proxy xử lý TLS/CSP.",
+              "Lưu báo cáo đã che giấu, đồ thị dấu hiệu băm, quy tắc TTL và máy chủ trung gian (reverse proxy) xử lý mã hóa TLS/CSP.",
             ],
             [
               "Huấn luyện & Kiểm thử (ngoại tuyến)",
               "PyTorch, Transformers, scikit-learn, pytest, ruff, mypy --strict, node --test",
-              "Chỉ dùng trong bước huấn luyện, xuất mô hình ONNX, đánh giá ablation RAG và kiểm định tự động; tách rời khỏi môi trường vận hành.",
+              "Chỉ dùng trong bước huấn luyện, xuất mô hình ONNX, thử nghiệm loại trừ thành phần (ablation) cho RAG và kiểm định tự động; tách rời khỏi môi trường vận hành.",
             ],
           ]}
         />
@@ -674,28 +672,28 @@ export default function TechnicalPage() {
       {/* 14. Kiến trúc triển khai */}
       <DocSection id="kien-truc-trien-khai" number="14" title="Kiến trúc triển khai">
         <p>
-          Hệ thống được đóng gói bằng Docker Compose thành 3 dịch vụ tối giản đặc quyền, phù hợp vận
-          hành gọn nhẹ trên máy chủ đơn cấu hình phổ thông (4 GB RAM):
+          Hệ thống được đóng gói bằng Docker Compose thành 3 dịch vụ tối giản quyền hạn, phù hợp vận
+          hành gọn nhẹ trên một máy chủ cấu hình phổ thông (4 GB RAM):
         </p>
 
         <DocTable
           caption="Cấu trúc 3 dịch vụ trong môi trường triển khai"
-          headers={["Dịch vụ", "Docker base image & Phân quyền", "Vai trò vận hành"]}
+          headers={["Dịch vụ", "Ảnh Docker & Phân quyền", "Vai trò vận hành"]}
           rows={[
             [
-              "Reverse Proxy (caddy)",
+              "Máy chủ trung gian (caddy)",
               "caddy:2.8-alpine (giảm đặc quyền tối đa, chỉ giữ quyền mở cổng mạng)",
-              "Xử lý kết nối TLS tự động (TLS termination), chuyển hướng HTTP sang HTTPS, gắn tiêu đề HSTS/CSP, giới hạn dung lượng yêu cầu và truyền phát SSE không lưu đệm.",
+              "Xử lý kết nối mã hóa HTTPS (TLS), chuyển hướng HTTP sang HTTPS, gắn tiêu đề HSTS/CSP, giới hạn dung lượng yêu cầu và truyền phát SSE không lưu đệm.",
             ],
             [
               "Giao diện Web (frontend)",
-              "node:22-alpine (chạy dưới tài khoản non-root, loại bỏ toàn bộ Linux capabilities)",
-              "Chạy bản build Next.js standalone nội bộ trong mạng Docker kèm kiểm tra sức khỏe định kỳ.",
+              "node:22-alpine (chạy dưới tài khoản không có quyền root, loại bỏ toàn bộ quyền hạn Linux mở rộng)",
+              "Chạy bản đóng gói Next.js độc lập (standalone) nội bộ trong mạng Docker kèm kiểm tra sức khỏe định kỳ.",
             ],
             [
               "Máy chủ phân tích (backend)",
-              "python:3.12-slim-bookworm (chạy dưới tài khoản non-root, loại bỏ toàn bộ Linux capabilities)",
-              "Chạy FastAPI cùng các mô hình cục bộ (E5 INT8 ONNX, RapidOCR PP-OCRv5 và Whisper tiny) được đóng gói sẵn ngoại tuyến trong image, gắn ổ đĩa lưu trữ SQLite WAL.",
+              "python:3.12-slim-bookworm (chạy dưới tài khoản không có quyền root, loại bỏ toàn bộ quyền hạn Linux mở rộng)",
+              "Chạy FastAPI cùng các mô hình cục bộ (E5 INT8 ONNX, RapidOCR PP-OCRv5 và Whisper tiny) được đóng gói sẵn ngoại tuyến trong ảnh container, gắn ổ đĩa lưu trữ SQLite WAL.",
             ],
           ]}
         />
@@ -713,10 +711,10 @@ export default function TechnicalPage() {
           thống: <strong>Precision</strong> (độ chính xác dương), <strong>Recall</strong> (độ phủ),{" "}
           <strong>F1-score</strong> / <strong>Macro-F1</strong>, <strong>Accuracy</strong> (độ chính
           xác tổng thể), <strong>R@k</strong> (Recall@k — độ phủ ở top-k kết quả truy xuất),{" "}
-          <strong>MRR@5</strong> (Mean Reciprocal Rank ở top-5), <strong>nDCG@3</strong> (chất lượng
-          xếp hạng chiết khấu ở top-3), <strong>FRR</strong> (False Rejection Rate — tỷ lệ từ chối
-          nhầm câu hỏi trong phạm vi), <strong>OOD Reject</strong> (tỷ lệ từ chối đúng câu hỏi ngoài
-          phạm vi), <strong>CER</strong> (Character Error Rate — tỷ lệ lỗi ký tự),{" "}
+          <strong>MRR@5</strong> (thứ hạng nghịch đảo trung bình ở top 5), <strong>nDCG@3</strong> (chất
+          lượng xếp hạng top 3 có tính trọng số vị trí), <strong>FRR</strong> (tỷ lệ từ chối nhầm
+          câu hỏi hợp lệ trong phạm vi), <strong>Tỷ lệ từ chối ngoài phạm vi (OOD Reject)</strong>,{" "}
+          <strong>CER</strong> (Character Error Rate — tỷ lệ lỗi ký tự),{" "}
           <strong>WER</strong> (Word Error Rate — tỷ lệ lỗi từ), <strong>P50 / P95</strong> (độ trễ
           trung vị và phân vị thứ 95) và <strong>Peak RSS</strong> (đỉnh bộ nhớ RAM tiến trình).
         </p>
@@ -762,8 +760,8 @@ export default function TechnicalPage() {
         </h3>
         <p className="text-xs text-ink-muted">
           Bộ dữ liệu kiểm thử gồm 40 tình huống tổng hợp (28 tình huống lừa đảo/tấn công và 12 tình
-          huống bình thường/khuyến cáo an toàn), chạy đầy đủ quy trình với E5 ONNX cục bộ và dịch vụ
-          AI đa phương thức trực tiếp (<code className="font-mono text-ink-secondary">gemini-4-hydrogen</code>, 40/40 phản hồi thành công).
+          huống bình thường/khuyến cáo an toàn), chạy đầy đủ quy trình với E5 ONNX cục bộ và Google
+          Gemini API hoặc cổng API tương thích OpenAI (40/40 phản hồi thành công).
         </p>
         <DocTable
           caption="Kết quả đánh giá toàn bộ quy trình trên 40 tình huống tổng hợp tiếng Việt"
@@ -878,14 +876,14 @@ export default function TechnicalPage() {
               "0,0000",
               "1,0000",
               "5.182,0 / 12.350,0 ms",
-              "112,2 MB (client)",
+              "112,2 MB (máy gọi API)",
               "Dự phòng có điều kiện",
             ],
           ]}
         />
 
         <h3 className="pt-2 text-sm font-semibold text-ink">
-          15.4. Thực nghiệm đánh giá tầng truy xuất RAG của Trợ lý VeriShield (7-Baseline Ablation)
+          15.4. Thực nghiệm đánh giá tầng truy xuất RAG của Trợ lý VeriShield (7 cấu hình đối chứng)
         </h3>
         <p className="text-xs text-ink-muted">
           Đánh giá trên bộ dữ liệu{" "}
@@ -903,7 +901,7 @@ export default function TechnicalPage() {
           <strong className="text-ink">P95 = 6,77 ms</strong> (trung bình 4,79 ms).
         </p>
         <DocTable
-          caption="Kết quả thực nghiệm 7-Baseline Ablation của tầng truy xuất RAG trên tập Held-out Test tổng hợp (n = 97)"
+          caption="Kết quả thử nghiệm loại trừ thành phần (7 cấu hình) của tầng truy xuất RAG trên tập Held-out Test tổng hợp (n = 97)"
           headers={[
             "Cấu hình (Baseline)",
             "R@1 ↑",
@@ -911,10 +909,10 @@ export default function TechnicalPage() {
             "MRR@5 ↑",
             "nDCG@3 ↑",
             "SOP R@3 ↑",
-            "Không dấu R@3 ↑",
+            "R@3 không dấu ↑",
             "Gated R@3 ↑",
-            "In-Domain FRR ↓",
-            "OOD Reject ↑",
+            "Từ chối nhầm (FRR) ↓",
+            "Chặn ngoài miền ↑",
             "Trễ truy xuất (TB / P95)",
           ]}
           rows={[
@@ -1013,24 +1011,24 @@ export default function TechnicalPage() {
         />
         <ul className="list-disc space-y-1.5 pl-5 text-xs text-ink-muted">
           <li>
-            <strong className="text-ink-secondary">Hạn chế của E5 thô và E5 khử dị hướng đơn lẻ:</strong>{" "}
-            <strong className="text-ink">Raw E5 Cosine (B1)</strong> chịu hiện tượng dị hướng không
-            gian vector nên tỷ lệ từ chối đúng câu hỏi ngoài phạm vi chỉ đạt{" "}
-            <strong className="text-ink">36,4%</strong> (OOD Reject) và độ phủ câu hỏi tiếng Việt
-            không dấu tụt xuống <strong className="text-ink">40,0%</strong>. Khi áp dụng
-            Mean-Centering đơn lẻ (<strong className="text-ink">B2</strong>) hoặc chưa có cổng hai
-            tín hiệu (<strong className="text-ink">B4</strong>), OOD Reject đạt 100,0% nhưng tỷ lệ
-            từ chối nhầm câu hỏi hợp lệ tăng vọt lên <strong className="text-ink">31,2%</strong>{" "}
-            (In-Domain FRR), kéo <code className="font-mono text-ink-secondary">Gated R@3</code>{" "}
-            xuống 68,8% / 67,2%.
+            <strong className="text-ink-secondary">Hạn chế của E5 thô và E5 cân bằng không gian đơn lẻ:</strong>{" "}
+            <strong className="text-ink">Raw E5 Cosine (B1)</strong> chịu hiện tượng các vector bị
+            dồn cụm về cùng một hướng (anisotropy) nên tỷ lệ từ chối đúng câu hỏi ngoài phạm vi chỉ
+            đạt <strong className="text-ink">36,4%</strong> và độ phủ câu hỏi tiếng Việt không dấu
+            tụt xuống <strong className="text-ink">40,0%</strong>. Khi áp dụng Mean-Centering đơn lẻ
+            (<strong className="text-ink">B2</strong>) hoặc chưa có cổng hai tín hiệu (
+            <strong className="text-ink">B4</strong>), tỷ lệ chặn câu hỏi ngoài miền đạt 100,0%
+            nhưng tỷ lệ từ chối nhầm câu hỏi hợp lệ tăng vọt lên{" "}
+            <strong className="text-ink">31,2%</strong>, kéo{" "}
+            <code className="font-mono text-ink-secondary">Gated R@3</code> xuống 68,8% / 67,2%.
           </li>
           <li>
             <strong className="text-ink-secondary">Lợi ích thực nghiệm của cấu hình B5 và B6:</strong>{" "}
             Kết hợp BM25 không dấu + Centered E5 RRF + Dual-Signal Scope Gate (
-            <strong className="text-ink">B5</strong>) giảm mạnh In-Domain FRR xuống{" "}
+            <strong className="text-ink">B5</strong>) giảm mạnh tỷ lệ từ chối nhầm xuống{" "}
             <strong className="text-ink">1,6%</strong> (so với 7,8% ở BM25 đơn lẻ B0 và 31,2% ở
-            B2/B4), đồng thời giữ <strong className="text-ink">100,0%</strong> OOD Reject,{" "}
-            <strong className="text-ink">100,0%</strong> Không dấu R@3 và nâng Gated R@3 lên{" "}
+            B2/B4), đồng thời giữ <strong className="text-ink">100,0%</strong> chặn câu hỏi ngoài
+            miền, <strong className="text-ink">100,0%</strong> R@3 không dấu và nâng Gated R@3 lên{" "}
             <strong className="text-ink">95,3%</strong>. Khi gắn ngữ cảnh hồ sơ đang xem (
             <strong className="text-ink">B6</strong>), hệ thống đạt{" "}
             <strong className="text-ink">R@3 = 98,4%</strong>,{" "}
@@ -1074,8 +1072,8 @@ export default function TechnicalPage() {
             dải địa chỉ không công khai (loopback, mạng nội bộ RFC1918, CGNAT, link-local/metadata
             đám mây, multicast, địa chỉ IPv4 ánh xạ IPv6 và các biến thể mã hóa IP) từ URL ban đầu,
             từng bước chuyển hướng cho tới mọi yêu cầu phụ trong trình duyệt cách ly (và công cụ
-            kiểm tra URL không headless của Trợ lý), kèm ràng buộc kết nối vào IP công cộng đã kiểm
-            tra.
+            kiểm tra URL không chạy trình duyệt ảo của Trợ lý), kèm ràng buộc kết nối vào IP công
+            cộng đã kiểm tra.
           </li>
           <li>
             <strong className="font-semibold text-ink">
@@ -1115,9 +1113,9 @@ export default function TechnicalPage() {
           </li>
           <li>
             <strong className="font-semibold text-ink">Phạm vi dữ liệu huấn luyện tổng hợp:</strong>{" "}
-            Mô hình E5 INT8, kho tri thức Trợ lý và các bộ dữ liệu kiểm thử (bao gồm bộ ablation RAG
-            159 ca) đều xây dựng từ dữ liệu tổng hợp và thông báo khuyến cáo công khai; các kịch bản
-            lừa đảo biến thể mới vẫn cần cập nhật định kỳ.
+            Mô hình E5 INT8, kho tri thức Trợ lý và các bộ dữ liệu kiểm thử (bao gồm thử nghiệm loại
+            trừ thành phần cho RAG 159 ca) đều xây dựng từ dữ liệu tổng hợp và thông báo khuyến cáo
+            công khai; các kịch bản lừa đảo biến thể mới vẫn cần cập nhật định kỳ.
           </li>
           <li>
             <strong className="font-semibold text-ink">Giới hạn OCR và nhận diện giọng nói cục bộ:</strong>{" "}
@@ -1148,12 +1146,12 @@ export default function TechnicalPage() {
       <DocSection id="thu-vien-giay-phep" number="18" title="Thư viện và giấy phép sử dụng">
         <p>
           VeriShield AI chỉ đưa vào môi trường vận hành các thư viện và mô hình mã nguồn mở sử dụng
-          giấy phép mở tiêu chuẩn (permissive) hoặc LGPL-3.0. Phân hệ Trợ lý VeriShield tái sử dụng
-          hoàn toàn ngăn xếp runtime sẵn có mà không bổ sung framework RAG, cơ sở dữ liệu vector hay
-          thư viện dựng Markdown bên ngoài. Các thành phần có điều khoản hạn chế nghiên cứu (như{" "}
-          <code className="font-mono text-ink">uitnlp/visobert</code>), copyleft mạng mạnh (
-          <code className="font-mono text-ink">vinai/phobert*</code> — AGPL-3.0) hoặc giấy phép bổ
-          sung điều kiện thương mại/hiển thị bắt buộc (như{" "}
+          giấy phép nguồn mở tự do (permissive) hoặc LGPL-3.0. Phân hệ Trợ lý VeriShield tái sử
+          dụng hoàn toàn ngăn xếp phần mềm sẵn có mà không bổ sung framework RAG, cơ sở dữ liệu
+          vector hay thư viện dựng Markdown bên ngoài. Các thành phần có điều khoản hạn chế nghiên
+          cứu (như <code className="font-mono text-ink">uitnlp/visobert</code>), giấy phép copyleft
+          ràng buộc mạnh (<code className="font-mono text-ink">vinai/phobert*</code> — AGPL-3.0)
+          hoặc giấy phép bổ sung điều kiện thương mại/hiển thị bắt buộc (như{" "}
           <code className="font-mono text-ink">MinerU</code> theo{" "}
           <code className="font-mono text-ink">LicenseRef-MinerU-Open-Source-License</code> — cho
           phép sử dụng thương mại có điều kiện kèm giới hạn quy mô và yêu cầu ghi nhận thương hiệu
@@ -1180,7 +1178,7 @@ export default function TechnicalPage() {
               "Mô hình & Công cụ OCR",
               "RapidOCR v3 (v3.10.0) · PaddleOCR PP-OCRv5 (ch_PP-OCRv5_det_mobile & latin_PP-OCRv5_rec_mobile)",
               "Apache-2.0",
-              "Xác minh từ metadata gói cài đặt và kho nguồn chính thức của RapidOCR / PaddleOCR.",
+              "Xác minh từ thông tin gói cài đặt và kho nguồn chính thức của RapidOCR / PaddleOCR.",
             ],
             [
               "AI bên thứ ba (tùy chọn)",
@@ -1190,9 +1188,9 @@ export default function TechnicalPage() {
             ],
             [
               "Thư viện Backend",
-              "FastAPI, Pydantic, pydantic-settings, ONNX Runtime (MIT) · Uvicorn, HTTPX, idna, PyAV (BSD-3-Clause) · NumPy (BSD-3-Clause cùng thành phần 0BSD/MIT/Zlib/CC0-1.0) · Pillow (MIT-CMU) · Tokenizers, OpenCV-headless, Playwright, python-multipart (Apache-2.0) · fpdf2 (LGPL-3.0-only)",
-              "MIT / BSD-3-Clause / MIT-CMU / Apache-2.0 / LGPL-3.0-only",
-              "Đối chiếu trực tiếp từ metadata gói cài đặt thực tế trong môi trường runtime.",
+              "FastAPI, Pydantic, pydantic-settings, ONNX Runtime (MIT) · Uvicorn, HTTPX, idna (BSD-3-Clause) · PyAV (BSD-3-Clause; thư viện FFmpeg đi kèm theo LGPL-3.0-or-later) · NumPy (BSD-3-Clause cùng thành phần 0BSD/MIT/Zlib/CC0-1.0) · Pillow (MIT-CMU) · Tokenizers, OpenCV-headless, Playwright, python-multipart (Apache-2.0) · fpdf2 (LGPL-3.0-only)",
+              "MIT / BSD-3-Clause / MIT-CMU / Apache-2.0 / LGPL-3.0",
+              "Đối chiếu trực tiếp từ thông tin gói cài đặt thực tế trong môi trường vận hành.",
             ],
             [
               "Thư viện Frontend",
@@ -1207,10 +1205,10 @@ export default function TechnicalPage() {
               "DejaVuSans: Fonts (c) 2003 Bitstream, Inc.; Arev glyphs (c) 2006 Tavmjong Bah; phần chỉnh sửa DejaVu thuộc Public Domain. Inter và JetBrains Mono đóng gói sẵn qua next/font.",
             ],
             [
-              "Cơ sở dữ liệu & Reverse Proxy",
+              "Cơ sở dữ liệu & Máy chủ trung gian",
               "SQLite 3 (Public Domain) · Caddy 2 (Apache-2.0)",
               "Public Domain / Apache-2.0",
-              "Lưu trữ SQLite WAL và reverse proxy xử lý kết nối TLS.",
+              "Lưu trữ SQLite WAL và máy chủ trung gian (reverse proxy) xử lý kết nối HTTPS (TLS).",
             ],
           ]}
         />

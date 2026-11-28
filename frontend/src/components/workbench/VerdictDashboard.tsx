@@ -194,8 +194,8 @@ export function VerdictDashboard({ report, onOpenAssistant }: VerdictDashboardPr
             <span className="tabular-num inline-flex items-center gap-1 rounded-lg border border-border-subtle bg-surface-subtle px-2.5 py-1 text-[11px] font-medium text-ink-secondary">
               <Layers className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
               <span>
-                Đánh giá tổng hợp: {consensus.flaggedCount}/{consensus.activeCount} lớp ghi nhận bất
-                thường
+                Đánh giá tổng hợp: {consensus.flaggedCount}/{consensus.activeCount} lớp kiểm tra
+                phát hiện bất thường
               </span>
             </span>
           </div>
@@ -220,7 +220,7 @@ export function VerdictDashboard({ report, onOpenAssistant }: VerdictDashboardPr
           </div>
           <div className="h-10 w-px bg-border-subtle" aria-hidden="true" />
           <div>
-            <p className="text-[11px] font-medium text-ink-muted">Mức độ chắc chắn</p>
+            <p className="text-[11px] font-medium text-ink-muted">Độ tin cậy</p>
             <p className="tabular-num font-mono text-lg font-semibold text-ink">
               {Math.round(report.confidence * 100)}%
             </p>
@@ -247,10 +247,10 @@ export function VerdictDashboard({ report, onOpenAssistant }: VerdictDashboardPr
           aria-hidden="true"
           className="tabular-num mt-1 flex justify-between text-[10px] text-ink-muted"
         >
-          <span>0 · Thấp</span>
-          <span>25 · Cần thận trọng</span>
-          <span>50 · Cao</span>
-          <span>75–100 · Rất cao</span>
+          <span>0–24 · Thấp</span>
+          <span>25–54 · Cần thận trọng</span>
+          <span>55–79 · Cao</span>
+          <span>80–100 · Rất cao</span>
         </div>
       </div>
 

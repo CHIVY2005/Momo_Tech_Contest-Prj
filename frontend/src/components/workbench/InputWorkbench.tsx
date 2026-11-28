@@ -279,8 +279,8 @@ export function InputWorkbench({
                       Tôi đang nghe điện thoại khi chuẩn bị chuyển tiền
                     </span>
                     <p className="mt-0.5 text-[11px] text-ink-muted">
-                      Tăng mức cảnh báo và bật nhắc tạm dừng 30 giây nếu đang có người thúc giục qua
-                      điện thoại.
+                      Tăng mức cảnh báo và tự động kích hoạt bước tạm dừng 30 giây để kiểm tra lại
+                      nếu đang có người thúc giục qua điện thoại.
                     </p>
                   </div>
                 </div>
@@ -315,7 +315,7 @@ export function InputWorkbench({
 
         <p className="text-[11px] leading-relaxed text-ink-muted">
           Số điện thoại và số tài khoản được che giấu trước khi lưu hồ sơ; tệp ảnh và ghi âm gốc
-          không lưu trong cơ sở dữ liệu. Xem chi tiết tại{" "}
+          không được lưu trong cơ sở dữ liệu. Xem chi tiết tại{" "}
           <Link
             href="/privacy"
             className="font-medium text-ink-secondary underline decoration-border-strong underline-offset-2 transition-colors hover:text-ink"

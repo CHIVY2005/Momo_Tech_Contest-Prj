@@ -105,7 +105,7 @@ export function WalletPreTransferSim({
         <div className="flex items-center gap-2">
           <Lock className="h-5 w-5 text-rose-400" aria-hidden="true" />
           <h3 id="wallet-guard-heading" className="text-sm font-bold text-ink">
-            Nhắc tạm dừng 30 giây trước khi chuyển tiền
+            Tạm dừng 30 giây để kiểm tra trước khi chuyển tiền
           </h3>
         </div>
         {pre.triggered_by_active_call && (
@@ -264,8 +264,8 @@ export function WalletPreTransferSim({
         </div>
       ) : (
         <p className="mt-3 text-xs text-emerald-300">
-          Chưa cần kích hoạt nhắc tạm dừng 30 giây. Bạn vẫn nên đối chiếu kỹ tên người nhận trên ứng
-          dụng ngân hàng trước khi xác nhận chuyển tiền.
+          Chưa cần tạm dừng 30 giây. Bạn vẫn nên đối chiếu kỹ tên người nhận trên ứng dụng ngân hàng
+          trước khi xác nhận chuyển tiền.
         </p>
       )}
     </section>

@@ -85,20 +85,20 @@ export function SystemArchitectureSvg() {
         {/* Row 1 Middle: Caddy Reverse Proxy */}
         <rect x="300" y="26" width="276" height="80" rx="10" fill="#121a29" stroke="#38bdf8" strokeOpacity="0.6" strokeWidth="1.5" />
         <text x="316" y="48" fill="#38bdf8" fontSize="10" fontWeight="700" fontFamily="var(--font-mono), monospace">
-          REVERSE PROXY (EDGE)
+          MÁY CHỦ TRUNG GIAN (EDGE)
         </text>
         <text x="316" y="68" fill="#f1f5f9" fontSize="12.5" fontWeight="700">Caddy 2</text>
-        <text x="316" y="88" fill="#94a3b8" fontSize="10.5">TLS termination · HSTS · CSP · Giới hạn tải</text>
+        <text x="316" y="88" fill="#94a3b8" fontSize="10.5">Mã hóa HTTPS (TLS) · HSTS · CSP · Giới hạn tải</text>
 
         <line x1="576" y1="66" x2="614" y2="66" stroke="#38bdf8" strokeWidth="1.5" markerEnd="url(#sa-arrow-cyan)" />
 
         {/* Row 1 Right: FastAPI Gateway */}
         <rect x="620" y="26" width="320" height="80" rx="10" fill="#121a29" stroke="#f59e0b" strokeOpacity="0.6" strokeWidth="1.5" />
         <text x="636" y="48" fill="#f59e0b" fontSize="10" fontWeight="700" fontFamily="var(--font-mono), monospace">
-          API GATEWAY &amp; MIDDLEWARE
+          CỔNG API &amp; LỚP BẢO VỆ
         </text>
         <text x="636" y="68" fill="#f1f5f9" fontSize="12.5" fontWeight="700">FastAPI + ASGI Security Middleware</text>
-        <text x="636" y="88" fill="#94a3b8" fontSize="10.3">Khóa phiên HMAC 128-bit · Rate limit · SSE</text>
+        <text x="636" y="88" fill="#94a3b8" fontSize="10.3">Khóa phiên HMAC 128-bit · Giới hạn tần suất · SSE</text>
 
         {/* Connector down to Pipeline */}
         <line x1="780" y1="106" x2="780" y2="140" stroke="#f59e0b" strokeWidth="1.6" markerEnd="url(#sa-arrow-amber)" />
@@ -148,7 +148,7 @@ export function SystemArchitectureSvg() {
         <text x="690" y="206" fill="#10b981" fontSize="10.2" fontWeight="700" fontFamily="var(--font-mono), monospace">
           TẦNG 3 · HIỆU CHUẨN &amp; ỨNG PHÓ
         </text>
-        <text x="690" y="227" fill="#cbd5e1" fontSize="10.5">• Hoàn tất Giai đoạn 4 của pipeline</text>
+        <text x="690" y="227" fill="#cbd5e1" fontSize="10.5">• Hoàn tất Giai đoạn 4 của quy trình</text>
         <text x="690" y="246" fill="#cbd5e1" fontSize="10.5">• Hợp nhất 3 nguồn tín hiệu &amp; áp</text>
         <text x="690" y="262" fill="#cbd5e1" fontSize="10.5">  ngưỡng điểm rủi ro tối thiểu</text>
         <text x="690" y="283" fill="#cbd5e1" fontSize="10.5">• Khuyến nghị ứng phó, tạm dừng</text>
@@ -241,12 +241,12 @@ export function SystemArchitectureSvg() {
         {/* Assistant Box 1: Hybrid E5+BM25 RAG */}
         <rect x="36" y="602" width="282" height="132" rx="10" fill="#121a29" stroke="#38bdf8" strokeOpacity="0.55" strokeWidth="1.4" />
         <text x="50" y="623" fill="#38bdf8" fontSize="10" fontWeight="700" fontFamily="var(--font-mono), monospace">
-          HYBRID RAG &amp; SCOPE GATE
+          HYBRID RAG &amp; CỔNG PHẠM VI
         </text>
         <text x="50" y="644" fill="#cbd5e1" fontSize="10.2">• Tái sử dụng 1 phiên E5 INT8 ONNX</text>
-        <text x="50" y="662" fill="#cbd5e1" fontSize="10.2">• Lưu E_raw · Mean-Centering (RAM)</text>
+        <text x="50" y="662" fill="#cbd5e1" fontSize="10.2">• Lưu E_raw · Trừ trung bình (RAM)</text>
         <text x="50" y="680" fill="#cbd5e1" fontSize="10.2">• BM25 tiếng Việt không dấu + RRF</text>
-        <text x="50" y="698" fill="#cbd5e1" fontSize="10.2">• 121 đoạn KB · Dual-Signal Gate</text>
+        <text x="50" y="698" fill="#cbd5e1" fontSize="10.2">• 121 đoạn KB · Cổng 2 tín hiệu</text>
         <text x="50" y="716" fill="#94a3b8" fontSize="10">• Không LangChain / Vector DB rời</text>
 
         {/* Arrow A1 -> A2 */}
@@ -255,11 +255,11 @@ export function SystemArchitectureSvg() {
         {/* Assistant Box 2: Vault, Ref-Only Tools & Local Ephemeral Evidence */}
         <rect x="348" y="602" width="280" height="132" rx="10" fill="#121a29" stroke="#f59e0b" strokeOpacity="0.55" strokeWidth="1.4" />
         <text x="362" y="623" fill="#f59e0b" fontSize="10" fontWeight="700" fontFamily="var(--font-mono), monospace">
-          VAULT, CÔNG CỤ &amp; BẰNG CHỨNG
+          KHO THAM CHIẾU &amp; CÔNG CỤ
         </text>
-        <text x="362" y="644" fill="#cbd5e1" fontSize="10.2">• RequestEntityVault &amp; Chốt lọc PII</text>
+        <text x="362" y="644" fill="#cbd5e1" fontSize="10.2">• Kho tham chiếu &amp; Chốt lọc PII</text>
         <text x="362" y="662" fill="#cbd5e1" fontSize="10.2">• Công cụ chỉ đọc theo ref_id:</text>
-        <text x="362" y="678" fill="#94a3b8" fontSize="10">  URL chống SSRF (không headless),</text>
+        <text x="362" y="678" fill="#94a3b8" fontSize="10">  URL chống SSRF (không trình duyệt ảo),</text>
         <text x="362" y="694" fill="#94a3b8" fontSize="10">  VietQR EMVCo &amp; tra cứu IOC</text>
         <text x="362" y="714" fill="#10b981" fontSize="10">• Bằng chứng bổ sung cục bộ (15p)</text>
 
@@ -273,7 +273,7 @@ export function SystemArchitectureSvg() {
         </text>
         <text x="672" y="644" fill="#cbd5e1" fontSize="10.2">• Lọc luồng &lt;think&gt; trước khi phát</text>
         <text x="672" y="662" fill="#cbd5e1" fontSize="10.2">• Tầng 0: Xác định biên lai tức thì</text>
-        <text x="672" y="680" fill="#cbd5e1" fontSize="10.2">• Tầng 1: Đệm toàn văn (fail-closed)</text>
+        <text x="672" y="680" fill="#cbd5e1" fontSize="10.2">• Tầng 1: Đệm toàn văn (đóng an toàn)</text>
         <text x="672" y="698" fill="#cbd5e1" fontSize="10.2">• Tầng 2: Kiểm duyệt từng câu</text>
         <text x="672" y="716" fill="#94a3b8" fontSize="10">• Dự phòng RAG cục bộ khi AI lỗi</text>
       </svg>

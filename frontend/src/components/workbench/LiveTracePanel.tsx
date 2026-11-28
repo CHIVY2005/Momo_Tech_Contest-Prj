@@ -76,7 +76,7 @@ export function LiveTracePanel({
           </span>
           {hasWarning && (
             <span className="rounded border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-200">
-              Có lưu ý kỹ thuật
+              Có cảnh báo cần xem
             </span>
           )}
         </div>

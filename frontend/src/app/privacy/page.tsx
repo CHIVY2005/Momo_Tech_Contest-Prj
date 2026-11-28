@@ -12,7 +12,7 @@ import {
 import type { TocItem } from "@/components/docs/DocsToc";
 
 export const metadata: Metadata = {
-  title: "Chính sách quyền riêng tư (Bản dự thảo) — VeriShield AI",
+  title: "Chính sách quyền riêng tư — VeriShield AI",
   description:
     "Tìm hiểu cách VeriShield AI thu thập, xử lý, che giấu, lưu trữ và bảo vệ thông tin khi bạn kiểm tra dấu hiệu lừa đảo.",
 };
@@ -38,7 +38,7 @@ export default function PrivacyPage() {
       title="Chính sách quyền riêng tư"
       description="Tìm hiểu cách VeriShield AI thu thập, xử lý, che giấu và bảo vệ thông tin khi bạn sử dụng dịch vụ."
       metaItems={[
-        { label: "Trạng thái tài liệu", value: "Bản dự thảo (chờ hoàn thiện thông tin quản trị và liên hệ)" },
+        { label: "Trạng thái tài liệu", value: "Bản công bố cho phiên bản thử nghiệm" },
         {
           label: "Phạm vi áp dụng",
           value: "Trang web kiểm tra, Trợ lý VeriShield, Trung tâm giám sát, API và Telegram Bot",
@@ -80,9 +80,9 @@ export default function PrivacyPage() {
           VeriShield AI là công cụ hỗ trợ kiểm tra rủi ro trước khi chuyển tiền. Hệ thống không yêu
           cầu bạn đăng ký tài khoản cá nhân và không kết nối trực tiếp vào tài khoản ngân hàng hay
           ví điện tử của bạn. Đặc biệt, ảnh chụp biên lai chuyển khoản không bao giờ được xem là
-          bằng chứng tiền đã về tài khoản; cả hệ thống và Trợ lý VeriShield luôn yêu cầu người bán
-          kiểm tra số dư thực tế trên ứng dụng ngân hàng hoặc loa thông báo biến động số dư
-          (Soundbox) trước khi giao hàng.
+          bằng chứng tiền đã về tài khoản; hệ thống và Trợ lý VeriShield luôn nhắc người bán kiểm
+          tra số dư thực tế trên ứng dụng ngân hàng hoặc loa thông báo nhận tiền trước khi giao
+          hàng.
         </p>
         <p>
           Tuy nhiên, tin nhắn, ảnh chụp màn hình hoặc tệp ghi âm bạn gửi lên có thể chứa thông tin
@@ -105,7 +105,7 @@ export default function PrivacyPage() {
             [
               "Văn bản và đường dẫn",
               "Nội dung tin nhắn, mô tả tình huống, đường dẫn trang web và thông tin tùy chọn bạn điền thêm (số tiền dự kiến chuyển, số tài khoản đối chiếu, trạng thái đang nghe điện thoại).",
-              "Không lưu bản gốc thành kho dữ liệu riêng. Báo cáo phân tích kết quả được lưu trong cơ sở dữ liệu ứng dụng sau khi chạy bước che giấu số điện thoại và số tài khoản.",
+              "Không lưu trữ tệp gốc. Báo cáo phân tích kết quả được lưu trong cơ sở dữ liệu ứng dụng sau khi chạy bước che giấu số điện thoại và số tài khoản.",
             ],
             [
               "Hình ảnh tải lên",
@@ -125,7 +125,7 @@ export default function PrivacyPage() {
             [
               "Bằng chứng bổ sung trong Trợ lý VeriShield",
               "Tối đa 1 hình ảnh hoặc 1 tệp ghi âm (≤ 10 MB) bạn chủ động đính kèm trong khung Trợ lý để kiểm tra thêm.",
-              "Mặc định xử lý hoàn toàn cục bộ trên máy chủ VeriShield: không gửi tệp media tới AI bên ngoài, không phát yêu cầu mạng ra bên ngoài từ mã QR hay bản ghi âm, không ghi vào cơ sở dữ liệu hay Radar cộng đồng, và chỉ giữ kết quả đã ẩn danh tạm thời trong bộ nhớ tối đa 15 phút. Chỉ lưu thành hồ sơ bổ sung hoặc đóng góp vào Radar khi bạn chủ động xác nhận.",
+              "Mặc định xử lý hoàn toàn cục bộ trên máy chủ VeriShield, không lưu vào cơ sở dữ liệu hay Trung tâm giám sát gian lận (xem chi tiết tại Mục 04). Chỉ lưu hồ sơ bổ sung hoặc đóng góp dấu hiệu khi bạn chủ động chọn.",
             ],
             [
               "Nội dung qua Telegram Bot",
@@ -182,11 +182,12 @@ export default function PrivacyPage() {
       {/* 4. Quy trình xử lý dữ liệu */}
       <DocSection id="quy-trinh-xu-ly" number="04" title="Quy trình xử lý dữ liệu">
         <p>
-          Mỗi lượt kiểm tra đi qua 4 bước chính: tiếp nhận dữ liệu, phân tích tạm thời (kèm tùy chọn
-          chuyển dữ liệu ra bên ngoài khi cần), lọc che giấu thông tin và lưu báo cáo kết quả. Riêng
-          nhánh <strong className="font-semibold text-ink">Trợ lý VeriShield</strong> lọc và ẩn danh
-          thông tin nhạy cảm trước khi gọi mô hình AI bên ngoài, đồng thời xử lý bằng chứng bổ sung
-          theo mặc định hoàn toàn cục bộ trên máy chủ.
+          Mỗi lượt kiểm tra đi qua 4 bước chính: tiếp nhận dữ liệu, phân tích tạm thời (chỉ gửi dữ
+          liệu tới AI đa phương thức ở lượt kiểm tra chính khi máy chủ có cấu hình dịch vụ này), lọc
+          che giấu thông tin và lưu báo cáo kết quả. Riêng nhánh{" "}
+          <strong className="font-semibold text-ink">Trợ lý VeriShield</strong> lọc và che giấu
+          thông tin nhạy cảm trước khi gọi AI bên ngoài, đồng thời mặc định xử lý hoàn toàn cục bộ
+          với bằng chứng bổ sung cho tới khi bạn tự đánh dấu đồng ý.
         </p>
 
         <DrawOnView>
@@ -210,20 +211,20 @@ export default function PrivacyPage() {
             </strong>{" "}
             Trợ lý chỉ hoạt động trong ngữ cảnh hồ sơ đang xem (được bảo vệ bằng khóa phiên riêng)
             hoặc các câu hỏi phòng chống lừa đảo. Mọi số điện thoại, số tài khoản, CCCD, mã OTP,
-            mật khẩu, email, đường dẫn web và chuỗi VietQR đều được lọc và ẩn danh trước khi gửi tới
-            mô hình AI bên ngoài; khi cần kiểm tra đường dẫn hoặc mã VietQR, máy chủ xử lý nội bộ
-            qua mã tham chiếu tạm thời.
+            mật khẩu, email, đường dẫn web và chuỗi VietQR đều được lọc và che giấu trước khi gửi
+            tới mô hình AI bên ngoài; khi cần kiểm tra đường dẫn hoặc mã VietQR, máy chủ xử lý nội
+            bộ qua mã tham chiếu tạm thời.
           </li>
           <li>
             <strong className="font-semibold text-ink">
               Bằng chứng bổ sung trong Trợ lý mặc định xử lý hoàn toàn cục bộ:
             </strong>{" "}
-            Khi bạn đính kèm ảnh hoặc ghi âm trong khung Trợ lý, mặc định máy chủ VeriShield phân
-            tích hoàn toàn nội bộ — không gửi tệp media tới AI bên ngoài, không phát yêu cầu mạng ra
-            bên ngoài từ mã QR hay bản ghi âm, không ghi vào cơ sở dữ liệu hay Radar cộng đồng, và
-            chỉ giữ kết quả đã ẩn danh tạm thời trong bộ nhớ tối đa 15 phút. Việc gửi tệp media tới
-            AI bên ngoài hoặc lưu thành hồ sơ bổ sung / đóng góp ẩn danh vào Radar cộng đồng chỉ xảy
-            ra khi bạn chủ động đánh dấu đồng ý hoặc bấm nút{" "}
+            Khi bạn đính kèm ảnh hoặc tệp ghi âm trong khung Trợ lý, mặc định máy chủ VeriShield
+            phân tích hoàn toàn nội bộ — không gửi ảnh hay ghi âm tới AI bên ngoài, không phát yêu
+            cầu mạng từ mã QR hay lời thoại, không ghi vào cơ sở dữ liệu hay Trung tâm giám sát gian
+            lận, và chỉ giữ kết quả đã che giấu tạm thời trong bộ nhớ tối đa 15 phút. Việc gửi ảnh,
+            âm thanh tới AI bên ngoài hoặc lưu hồ sơ bổ sung / đóng góp dấu hiệu đã che giấu vào
+            Trung tâm giám sát gian lận chỉ xảy ra khi bạn chủ động đánh dấu đồng ý hoặc bấm nút{" "}
             <em>&ldquo;Lưu hồ sơ bổ sung &amp; tải PDF&rdquo;</em>.
           </li>
           <li>
@@ -248,11 +249,11 @@ export default function PrivacyPage() {
             </strong>{" "}
             Mỗi hồ sơ phân tích trên trang web được cấp một khóa phiên truy cập riêng (tự động hết
             hạn sau 2 giờ), áp dụng thống nhất khi xem lại hồ sơ, tải báo cáo PDF hoặc trò chuyện
-            với Trợ lý VeriShield theo hồ sơ đó; mọi phản hồi chứa thông tin hồ sơ đều tắt lưu bộ
-            nhớ đệm. Trên Telegram, báo cáo PDF chỉ được gửi trực tiếp trong khung trò chuyện riêng
-            1-1 với đúng người gửi yêu cầu (không cung cấp đường link PDF công khai và không phát
-            hành PDF trong nhóm chat). Các hồ sơ cũ tạo trước khi có cơ chế khóa phiên được mặc định
-            khóa truy cập.
+            với Trợ lý VeriShield theo hồ sơ đó; mọi dữ liệu hồ sơ trả về đều không được lưu trong
+            bộ nhớ đệm trình duyệt. Trên Telegram, báo cáo PDF chỉ được gửi trực tiếp trong khung trò
+            chuyện riêng 1-1 với đúng người gửi yêu cầu (không cấp đường dẫn PDF công khai và không
+            phát hành PDF trong nhóm chat). Các hồ sơ cũ tạo trước khi có cơ chế khóa phiên được mặc
+            định khóa truy cập.
           </li>
           <li>
             <strong className="font-semibold text-ink">
@@ -264,7 +265,7 @@ export default function PrivacyPage() {
             tệp PDF. Tên tệp gốc, dữ liệu gốc của mã VietQR và hình ảnh gốc cũng bị loại bỏ khỏi bản
             lưu trữ. Riêng trong Trợ lý VeriShield, toàn bộ dữ liệu trước khi gửi tới mô hình AI bên
             ngoài (câu hỏi hiện tại, lịch sử trò chuyện, trích đoạn hồ sơ và kết quả tra cứu) đều
-            được lọc và ẩn danh thêm CCCD, số thẻ, mã OTP, mật khẩu, email, đường dẫn web và chuỗi
+            được lọc và che giấu thêm CCCD, số thẻ, mã OTP, mật khẩu, email, đường dẫn web và chuỗi
             VietQR.
           </li>
           <li>
@@ -304,16 +305,16 @@ export default function PrivacyPage() {
             <li>
               <strong>Giới hạn của khóa phiên truy cập không cần đăng nhập:</strong> Mỗi hồ sơ trên
               web được bảo vệ bằng khóa phiên truy cập riêng (tự động hết hạn sau 2 giờ và chỉ giữ
-              tạm trong tab trình duyệt hiện tại). Nếu đóng tab, tải lại trang hoặc quá 2 giờ, bạn
+              tạm trong thẻ trình duyệt hiện tại). Nếu đóng thẻ, tải lại trang hoặc quá 2 giờ, bạn
               cần phân tích lại để đối chiếu hồ sơ (hoặc dùng Trợ lý ở chế độ hỏi đáp chung). Hệ
               thống không có tài khoản đăng nhập dài hạn, vì vậy bất kỳ ai sử dụng chung thiết bị
-              trong khi tab đang mở vẫn có thể xem hồ sơ đó.
+              trong khi thẻ trình duyệt đang mở vẫn có thể xem hồ sơ đó.
             </li>
             <li>
               <strong>Minh bạch biên lai người bán:</strong> Ảnh chụp biên lai không bao giờ được
               xem là bằng chứng tiền đã về tài khoản; ngay cả khi không phát hiện dấu hiệu chỉnh
-              sửa, Trợ lý và hệ thống luôn yêu cầu kiểm tra số dư thực tế trên ứng dụng ngân hàng
-              hoặc loa thông báo biến động số dư (Soundbox) trước khi giao hàng.
+              sửa, Trợ lý và hệ thống luôn nhắc kiểm tra số dư thực tế trên ứng dụng ngân hàng hoặc
+              loa thông báo nhận tiền trước khi giao hàng.
             </li>
           </ul>
         </DocCallout>
@@ -341,27 +342,27 @@ export default function PrivacyPage() {
                 </li>
                 <li>
                   <strong className="font-semibold text-ink">Trợ lý VeriShield (hỏi đáp):</strong>{" "}
-                  chỉ gửi nội dung đã lọc và ẩn danh SĐT, STK, CCCD, số thẻ, OTP, mật khẩu, email,
+                  chỉ gửi nội dung đã lọc và che giấu SĐT, STK, CCCD, số thẻ, OTP, mật khẩu, email,
                   đường dẫn web và chuỗi VietQR.
                 </li>
                 <li>
                   <strong className="font-semibold text-ink">Bằng chứng bổ sung trong Trợ lý:</strong>{" "}
-                  mặc định <strong>không gửi</strong> ảnh hay ghi âm tới AI bên ngoài (xử lý 100%
-                  cục bộ).
+                  mặc định xử lý cục bộ trên máy chủ (chỉ gửi ảnh hoặc ghi âm ra AI ngoài nếu bạn
+                  chủ động đánh dấu đồng ý).
                 </li>
               </ul>,
-              "Tệp ảnh/ghi âm bổ sung trong Trợ lý chỉ được gửi tới AI bên ngoài khi bạn chủ động đánh dấu ô đồng ý trước khi gửi. Nếu máy chủ không kết nối AI bên ngoài, hệ thống vẫn hoạt động cục bộ. Dữ liệu gửi đi tuân theo chính sách quyền riêng tư của nhà cung cấp AI.",
+              "Nếu máy chủ không kết nối AI bên ngoài, hệ thống vẫn hoạt động cục bộ. Dữ liệu gửi đi tuân theo chính sách quyền riêng tư của nhà cung cấp AI.",
             ],
             [
               "Trang web đích của đường dẫn công khai",
               "Khi bạn trực tiếp nhập đường dẫn trang web, gửi ảnh mã QR ở lượt phân tích chính hoặc yêu cầu Trợ lý VeriShield kiểm tra một đường dẫn công khai.",
               "Yêu cầu truy cập từ máy chủ VeriShield để kiểm tra chuyển hướng (hoặc mở xem trước cách ly ở lượt phân tích chính; Trợ lý chỉ kiểm tra an toàn mà không mở trình duyệt).",
-              "Hệ thống chặn truy cập mọi địa chỉ mạng nội bộ, không tự mở đường dẫn chỉ có trong chữ ảnh chụp, và không phát yêu cầu mạng ra ngoài từ mã QR hay bản ghi âm khi phân tích bằng chứng bổ sung ở chế độ cục bộ mặc định.",
+              "Hệ thống chặn truy cập mọi địa chỉ mạng nội bộ, không tự mở đường dẫn chỉ có trong chữ ảnh chụp, và không phát yêu cầu mạng từ mã QR hay bản ghi âm khi phân tích bằng chứng bổ sung ở chế độ cục bộ.",
             ],
             [
               "Telegram",
               "Chỉ khi bạn chủ động nhắn tin hoặc chuyển tiếp nội dung cho Telegram Bot.",
-              "Nội dung tin nhắn, tệp đính kèm bạn gửi cho bot, kết quả phân tích và tệp báo cáo PDF (chỉ gửi trực tiếp trong khung chat riêng 1-1 với đúng người gửi, không cấp link công khai và không phát PDF trong nhóm chat).",
+              "Nội dung tin nhắn, tệp đính kèm bạn gửi cho bot, kết quả phân tích và tệp báo cáo PDF (chỉ gửi trực tiếp trong khung chat riêng 1-1 với đúng người gửi, không cấp đường dẫn công khai và không phát PDF trong nhóm chat).",
               "Dữ liệu trao đổi trên ứng dụng Telegram tuân theo chính sách quyền riêng tư của Telegram.",
             ],
           ]}
@@ -386,13 +387,13 @@ export default function PrivacyPage() {
             ],
             [
               "Lịch sử hội thoại Trợ lý VeriShield",
-              "Không lưu trong cơ sở dữ liệu máy chủ; chỉ giữ tạm trong phiên trình duyệt hiện tại và xóa ngay khi bấm \"Xóa hội thoại\", đổi hồ sơ hoặc đóng tab.",
-              "Lưu ý trung thực: nút \"Xóa hội thoại\" chỉ xóa hội thoại trong trình duyệt hiện tại, không xóa các hồ sơ phân tích bạn đã lưu trên máy chủ và không thu hồi được nội dung (đã lọc/ẩn danh) từng gửi tới nhà cung cấp AI bên ngoài ở các lượt trước.",
+              "Không lưu trong cơ sở dữ liệu máy chủ; chỉ giữ tạm trong phiên trình duyệt hiện tại và xóa ngay khi bấm \"Xóa hội thoại\", đổi hồ sơ hoặc đóng thẻ.",
+              "Lưu ý thực tế: nút \"Xóa hội thoại\" chỉ dọn lịch sử trên trình duyệt hiện tại, không xóa hồ sơ đã lưu trên máy chủ và không thu hồi được nội dung đã lọc/che giấu từng gửi tới AI bên ngoài ở các lượt trước.",
             ],
             [
               "Bằng chứng bổ sung tạm thời trong Trợ lý & khóa phiên truy cập hồ sơ",
-              "Kết quả bằng chứng bổ sung đã ẩn danh chỉ giữ tạm trong bộ nhớ máy chủ tối đa 15 phút; khóa phiên truy cập hồ sơ tự động hết hạn sau 2 giờ.",
-              "Chỉ ghi thành hồ sơ bổ sung vào cơ sở dữ liệu (và chỉ đóng góp dấu hiệu ẩn danh vào Radar cộng đồng) khi bạn chủ động bấm \"Lưu hồ sơ bổ sung & tải PDF\" và tự chọn đóng góp.",
+              "Kết quả bằng chứng bổ sung đã che giấu chỉ giữ tạm trong bộ nhớ máy chủ tối đa 15 phút; khóa phiên truy cập hồ sơ tự động hết hạn sau 2 giờ.",
+              "Chỉ lưu hồ sơ bổ sung vào cơ sở dữ liệu (và chỉ đóng góp dấu hiệu đã che giấu vào Trung tâm giám sát gian lận) khi bạn chủ động chọn lưu.",
             ],
             [
               "Bộ đếm giới hạn tần suất truy cập",
@@ -412,7 +413,7 @@ export default function PrivacyPage() {
             [
               "Hồ sơ báo cáo đã lưu, dấu hiệu tổng hợp trên mạng lưới, mã đặc trưng biên lai và lịch sử phản hồi Telegram",
               "Hiện chưa có cơ chế tự động xóa định kỳ theo thời hạn và chưa có chức năng để người dùng tự xóa.",
-              "Chủ dự án cần xác định thời hạn lưu trữ chính thức và bổ sung cơ chế xóa định kỳ trước khi vận hành rộng rãi.",
+              "Thời hạn lưu giữ cố định sẽ được ấn định trước khi mở rộng vận hành chính thức (xem Mục 10).",
             ],
           ]}
         />
@@ -431,9 +432,9 @@ export default function PrivacyPage() {
             Giao diện web VeriShield AI hiện không đặt cookie theo dõi hành vi, không cài công cụ
             phân tích quảng cáo của bên thứ ba và không lưu nội dung bạn nhập vào bộ nhớ lưu trữ lâu
             dài của trình duyệt. Khóa phiên truy cập hồ sơ (hết hạn sau 2 giờ) và lịch sử trò chuyện
-            với Trợ lý VeriShield chỉ tồn tại tạm thời trong bộ nhớ phiên đang mở của tab trình
+            với Trợ lý VeriShield chỉ tồn tại tạm thời trong bộ nhớ phiên đang mở của thẻ trình
             duyệt và tự xóa khi bạn bấm <em>&ldquo;Xóa hội thoại&rdquo;</em>, tải lại trang hoặc
-            đóng tab.
+            đóng thẻ.
           </li>
           <li>
             <strong className="font-semibold text-ink">Phông chữ đóng gói sẵn:</strong> Phông chữ
@@ -442,7 +443,7 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong className="font-semibold text-ink">Nhật ký kết nối tầng máy chủ:</strong> Khi
-            truy cập trang web, máy chủ web trung gian (reverse proxy) và máy chủ ứng dụng vẫn tiếp
+            truy cập trang web, máy chủ trung gian (reverse proxy) và máy chủ ứng dụng vẫn tiếp
             nhận thông tin kết nối chuẩn (địa chỉ IP, thời điểm truy cập, đường dẫn yêu cầu, trạng
             thái phản hồi) để duy trì kết nối HTTPS, chống quá tải và xử lý sự cố vận hành.
           </li>
@@ -463,10 +464,10 @@ export default function PrivacyPage() {
               Kiểm soát hội thoại và bằng chứng bổ sung trong Trợ lý VeriShield:
             </strong>{" "}
             Bạn có thể bấm nút <em>&ldquo;Xóa hội thoại&rdquo;</em> bất cứ lúc nào để dọn nội dung
-            trò chuyện trên trình duyệt, giữ nguyên mặc định xử lý cục bộ khi đính kèm ảnh hoặc ghi
-            âm bổ sung (không gửi tới AI bên ngoài và không ghi cơ sở dữ liệu), đồng thời tự quyết
-            định có bấm <em>&ldquo;Lưu hồ sơ bổ sung &amp; tải PDF&rdquo;</em> hay đóng góp ẩn danh
-            vào Radar cộng đồng hay không.
+            trò chuyện trên trình duyệt, giữ nguyên chế độ cục bộ khi đính kèm ảnh hoặc ghi âm bổ
+            sung, đồng thời tự quyết định có bấm{" "}
+            <em>&ldquo;Lưu hồ sơ bổ sung &amp; tải PDF&rdquo;</em> hay đóng góp dấu hiệu đã che giấu
+            vào Trung tâm giám sát gian lận hay không.
           </li>
           <li>
             <strong className="font-semibold text-ink">Dùng thử bằng dữ liệu mẫu:</strong> Sử dụng
@@ -477,9 +478,9 @@ export default function PrivacyPage() {
             <strong className="font-semibold text-ink">
               Giới hạn hiện tại đối với yêu cầu chỉnh sửa hoặc xóa hồ sơ:
             </strong>{" "}
-            Hệ thống hiện chưa có chức năng quản lý dữ liệu dành cho người dùng để tự tra cứu danh
-            sách hoặc tự xóa hồ sơ đã lưu. Quy trình tiếp nhận, xác minh và xử lý yêu cầu xóa dữ
-            liệu cần được chủ dự án hoàn thiện và công bố kèm kênh liên hệ chính thức.
+            Hệ thống hiện chưa có trang quản lý để người dùng tự tra cứu hoặc xóa hồ sơ đã lưu trên
+            máy chủ; yêu cầu xóa dữ liệu sẽ được tiếp nhận qua kênh liên hệ chính thức khi công bố
+            ở Mục 10.
           </li>
         </ul>
       </DocSection>

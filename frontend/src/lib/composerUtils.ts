@@ -241,7 +241,7 @@ export function validateAttachmentBatch(
     const kind = classifyAttachmentKind(file);
     if (!kind) {
       errors.push(
-        `Định dạng tệp "${file.name}" chưa được hỗ trợ. Chỉ nhận ảnh (JPG, PNG, WebP, GIF) hoặc âm thanh (WAV, MP3, M4A, OGG).`,
+        `Định dạng tệp "${file.name}" chưa được hỗ trợ. Chỉ nhận ảnh (JPG, PNG, WebP, GIF) hoặc âm thanh (WAV, MP3, M4A, OGG, WebM).`,
       );
       continue;
     }

@@ -10,7 +10,7 @@ export function DataLifecycleSvg() {
         <title id="data-lifecycle-title">Sơ đồ vòng đời dữ liệu trong VeriShield AI</title>
         <desc id="data-lifecycle-desc">
           Luồng xử lý dữ liệu từ khi người dùng gửi nội dung qua trang web, Trợ lý VeriShield hoặc
-          Telegram Bot, phân tích cục bộ trên bộ nhớ máy chủ, lọc và ẩn danh thông tin nhạy cảm
+          Telegram Bot, phân tích cục bộ trên bộ nhớ máy chủ, lọc và che giấu thông tin nhạy cảm
           trong Trợ lý, xử lý mặc định hoàn toàn cục bộ cho bằng chứng bổ sung, đến bước che giấu số
           điện thoại, số tài khoản và lưu báo cáo kết quả có khóa phiên truy cập.
         </desc>
@@ -166,10 +166,10 @@ export function DataLifecycleSvg() {
           TRƯỚC bước che giấu dùng cho lưu trữ (khi dịch vụ AI được bật).
         </text>
         <text x="32" y="351" fill="#cbd5e1" fontSize="10.3">
-          • Trợ lý VeriShield: chỉ nhận văn bản đã lọc &amp; ẩn danh dữ liệu nhạy cảm.
+          • Trợ lý VeriShield: chỉ nhận văn bản đã lọc &amp; che giấu dữ liệu.
         </text>
         <text x="32" y="372" fill="#cbd5e1" fontSize="10.3">
-          • Bằng chứng bổ sung trong Trợ lý: mặc định KHÔNG gửi media ra ngoài.
+          • Bằng chứng bổ sung trong Trợ lý: mặc định KHÔNG gửi ảnh/âm thanh.
         </text>
         <text x="32" y="396" fill="#94a3b8" fontSize="10.1">
           Nếu máy chủ không kết nối AI bên ngoài: hệ thống xử lý hoàn toàn cục bộ.
@@ -199,7 +199,7 @@ export function DataLifecycleSvg() {
           • Telegram Bot: báo cáo PDF chỉ gửi trực tiếp trong chat riêng 1-1 với
         </text>
         <text x="506" y="391" fill="#cbd5e1" fontSize="10.3">
-          đúng người gửi (không link PDF công khai, không phát hành trong nhóm).
+          đúng người gửi (không đường dẫn công khai, không gửi trong nhóm).
         </text>
         <text x="506" y="416" fill="#94a3b8" fontSize="10.1">
           Trao đổi trên Telegram tuân theo chính sách quyền riêng tư của Telegram.
@@ -217,7 +217,7 @@ export function DataLifecycleSvg() {
           markerEnd="url(#dl-arrow-emerald)"
         />
         <text x="222" y="465" fill="#10b981" fontSize="10.1" fontWeight="600">
-          Chỉ gửi văn bản đã lọc &amp; ẩn danh
+          Chỉ gửi văn bản đã lọc &amp; che giấu
         </text>
 
         <text x="506" y="465" fill="#10b981" fontSize="10.1" fontWeight="600">
@@ -236,13 +236,13 @@ export function DataLifecycleSvg() {
           • Hoạt động theo khóa phiên hồ sơ (hết hạn sau 2 giờ, tắt bộ nhớ đệm)
         </text>
         <text x="32" y="567" fill="#cbd5e1" fontSize="10.2">
-          • Lọc &amp; ẩn danh SĐT, STK, CCCD, OTP, mật khẩu, email, đường dẫn &amp; VietQR
+          • Lọc &amp; che SĐT, STK, CCCD, OTP, mật khẩu, email, đường dẫn &amp; VietQR
         </text>
         <text x="32" y="588" fill="#cbd5e1" fontSize="10.3">
           • Lịch sử chỉ giữ trong phiên trình duyệt hiện tại (nút &ldquo;Xóa hội thoại&rdquo;)
         </text>
         <text x="32" y="611" fill="#f59e0b" fontSize="10.2">
-          • Biên lai: luôn yêu cầu kiểm tra số dư thực tế / Soundbox trước khi giao
+          • Biên lai: luôn kiểm tra số dư thực tế / loa báo nhận tiền trước khi giao
         </text>
         <text x="32" y="635" fill="#94a3b8" fontSize="10">
           Xóa hội thoại chỉ dọn trình duyệt, không thu hồi lượt đã gửi AI ngoài.
@@ -263,22 +263,22 @@ export function DataLifecycleSvg() {
           • Đính kèm tối đa 1 ảnh hoặc 1 tệp ghi âm (≤ 10 MB) trong khung Trợ lý
         </text>
         <text x="506" y="567" fill="#cbd5e1" fontSize="10.3">
-          • Mặc định 100% cục bộ: không gửi media tới AI ngoài, không phát yêu cầu
+          • Mặc định 100% cục bộ: không gửi ảnh/âm thanh ra ngoài, không phát
         </text>
         <text x="506" y="583" fill="#cbd5e1" fontSize="10.3">
-          mạng từ mã QR / bản ghi âm và không ghi vào cơ sở dữ liệu hay Radar
+          yêu cầu mạng từ QR/ghi âm và không ghi DB hay Giám sát gian lận
         </text>
         <text x="506" y="606" fill="#cbd5e1" fontSize="10.3">
-          • Chỉ giữ tạm kết quả đã ẩn danh trong bộ nhớ máy chủ tối đa 15 phút
+          • Chỉ giữ tạm kết quả đã che giấu trong bộ nhớ máy chủ tối đa 15 phút
         </text>
         <text x="506" y="630" fill="#10b981" fontSize="10.2">
-          • Gửi AI ngoài hoặc lưu hồ sơ &amp; đóng góp Radar chỉ khi bạn chủ động chọn
+          • Gửi AI ngoài hoặc lưu hồ sơ &amp; đóng góp dấu hiệu chỉ khi bạn chọn
         </text>
       </svg>
       <figcaption className="mt-3 border-t border-border-subtle/60 pt-2.5 text-[11px] leading-relaxed text-ink-muted">
-        Hình ảnh minh họa minh bạch cho phiên kiểm tra hiện tại (như ảnh phân tích dấu hiệu chỉnh
+        Hình ảnh minh họa phân tích của phiên kiểm tra hiện tại (như ảnh phân tích dấu hiệu chỉnh
         sửa hoặc ảnh xem trước trang web đáng ngờ) chỉ hiển thị tạm thời trên màn hình kết quả và
-        không được lưu vào cơ sở dữ liệu ứng dụng. Hội thoại Trợ lý VeriShield chỉ giữ tạm trên tab
+        không được lưu vào cơ sở dữ liệu ứng dụng. Hội thoại Trợ lý VeriShield chỉ giữ tạm trên thẻ
         trình duyệt, còn bằng chứng bổ sung mặc định xử lý hoàn toàn cục bộ và tự xóa khỏi bộ nhớ
         tạm sau tối đa 15 phút nếu bạn không bấm lưu.
       </figcaption>

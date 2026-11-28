@@ -135,6 +135,14 @@ def _collect_trusted_signals(
 
 
 _CLASSIFIER_LABEL_VI: dict[str, str] = {
+    "SAFE_NORMAL": "giao dịch hoặc trao đổi thông thường",
+    "SAFE_ADVISORY": "thông báo khuyến cáo an toàn",
+    "SCAM_IMPERSONATION": "giả mạo cơ quan nhà nước, công an hoặc ngân hàng",
+    "SCAM_TASK_INVEST_LOAN": "lừa đảo nhiệm vụ, đầu tư hoặc vay vốn trực tuyến",
+    "SCAM_PHISHING_APK_OTP": "đường dẫn giả mạo, ứng dụng lạ hoặc chiếm đoạt mã OTP",
+    "SCAM_URGENT_BORROW": "giả mạo người thân, bạn bè vay tiền khẩn cấp",
+    "PROMPT_INJECTION": "nội dung chứa chỉ thị bất thường nhằm can thiệp hệ thống",
+    # Legacy aliases kept for backward compatibility
     "authority_impersonation": "giả mạo cơ quan nhà nước hoặc công an",
     "fake_bill": "biên lai chuyển khoản giả hoặc bị chỉnh sửa",
     "phishing_link": "đường dẫn hoặc trang web giả mạo",
@@ -214,7 +222,7 @@ def _synthesize_fallback_result(
 
     if active_block_rule_hit:
         reasons.append(
-            "số tài khoản hoặc tên miền đang nằm trong danh sách chặn rủi ro của hệ thống"
+            "số tài khoản hoặc tên miền nằm trong danh sách chặn rủi ro của hệ thống"
         )
     if guardrails.prompt_injection_detected:
         reasons.append("nội dung chứa chỉ thị bất thường nhằm can thiệp kết quả kiểm tra")
@@ -225,13 +233,13 @@ def _synthesize_fallback_result(
             reasons.append("đường dẫn có dấu hiệu giả mạo hoặc không an toàn")
     for v in vietqr_findings:
         if v.receive_scam_detected:
-            reasons.append("dụ quét mã chuyển tiền VietQR dưới vỏ bọc nhận tiền hoàn")
+            reasons.append("mã VietQR có dấu hiệu dụ chuyển tiền dưới vỏ bọc nhận tiền hoàn")
         elif v.beneficiary_mismatch or v.kind == "INVALID_CRC_VIETQR":
-            reasons.append("mã VietQR lỗi cấu trúc hoặc sai số tài khoản nhận")
+            reasons.append("mã VietQR bị lỗi cấu trúc hoặc sai số tài khoản nhận")
     if sandbox and (sandbox.blocked_ssrf or sandbox.has_apk_download or sandbox.risk_points >= 40):
-        reasons.append("trang web có dấu hiệu thu thập thông tin hoặc phát tán tệp cài đặt đáng ngờ")
+        reasons.append("trang web đích có dấu hiệu thu thập thông tin hoặc phát tán tệp cài đặt đáng ngờ")
     if image_forensics and image_forensics.tamper_score >= 35:
-        reasons.append("phân tích tính xác thực của hình ảnh phát hiện dấu hiệu chỉnh sửa biên lai")
+        reasons.append("hình ảnh biên lai có dấu hiệu bị chỉnh sửa")
     if receipt_logic and (
         receipt_logic.is_replayed
         or receipt_logic.beneficiary_mismatch
@@ -260,45 +268,45 @@ def _synthesize_fallback_result(
         replies.extend(pb.get("counter_replies", [])[:1])
 
     if classifier and classifier.available and classifier.scam_probability >= 0.65:
-        label_vi = _CLASSIFIER_LABEL_VI.get(classifier.predicted_label, "dấu hiệu lừa đảo")
+        label_vi = _CLASSIFIER_LABEL_VI.get(classifier.predicted_label, "lừa đảo trực tuyến")
         reasons.append(
-            f"phân tích ngữ cảnh ghi nhận nguy cơ {label_vi} "
+            f"ngữ cảnh có nguy cơ {label_vi} "
             f"({round(classifier.scam_probability * 100)}%)"
         )
 
     if reasons:
         summary = (
-            "Kết quả phân tích nhanh nội bộ: Cảnh báo rủi ro do "
-            + ", ".join(dict.fromkeys(reasons))
+            "Cảnh báo rủi ro (phân tích nhanh nội bộ): "
+            + "; ".join(dict.fromkeys(reasons))
             + "."
         )
     elif matched_playbooks:
         summary = (
-            f"Kết quả phân tích nhanh nội bộ: Nội dung có dấu hiệu tương tự kịch bản "
+            f"Phân tích nhanh nội bộ: nội dung có dấu hiệu tương tự kịch bản "
             f"'{matched_playbooks[0]['name_vi']}'."
         )
     elif ocr_incomplete and stt_incomplete:
         summary = (
-            "Kết quả phân tích nhanh nội bộ: Không thể đọc đầy đủ văn bản từ hình ảnh và "
-            "không nhận diện được đầy đủ lời thoại từ tệp ghi âm đính kèm nên chưa thể kết luận "
-            "an toàn. Bạn nên kiểm tra kỹ hoặc tự xác minh qua kênh chính thức trước khi giao dịch."
+            "Phân tích nhanh nội bộ: không đọc được đầy đủ chữ từ hình ảnh và không nhận diện "
+            "được đầy đủ lời thoại từ tệp ghi âm đính kèm nên chưa thể kết luận an toàn. Bạn nên "
+            "kiểm tra kỹ hoặc tự xác minh qua kênh chính thức trước khi giao dịch."
         )
     elif ocr_incomplete:
         summary = (
-            "Kết quả phân tích nhanh nội bộ: Không thể đọc được đầy đủ văn bản từ hình ảnh "
-            "đính kèm nên chưa thể kết luận an toàn. Bạn nên chụp ảnh rõ nét hơn hoặc tự xác minh "
-            "qua kênh chính thức trước khi giao dịch."
+            "Phân tích nhanh nội bộ: không đọc được đầy đủ chữ từ hình ảnh đính kèm nên chưa thể "
+            "kết luận an toàn. Bạn nên chụp ảnh rõ nét hơn hoặc tự xác minh qua kênh chính thức "
+            "trước khi giao dịch."
         )
     elif stt_incomplete:
         summary = (
-            "Kết quả phân tích nhanh nội bộ: Không thể chuyển đổi hoặc nhận diện đầy đủ lời thoại "
-            "từ tệp ghi âm đính kèm nên chưa thể kết luận an toàn. Bạn nên nghe lại kỹ hoặc tự "
-            "xác minh qua kênh chính thức trước khi giao dịch."
+            "Phân tích nhanh nội bộ: không nhận diện được đầy đủ lời thoại từ tệp ghi âm đính kèm "
+            "nên chưa thể kết luận an toàn. Bạn nên nghe lại kỹ hoặc tự xác minh qua kênh chính thức "
+            "trước khi giao dịch."
         )
     else:
         summary = (
-            "Kết quả phân tích nhanh nội bộ: Chưa phát hiện dấu hiệu bất thường rõ rệt từ dữ liệu "
-            "cung cấp. Bạn vẫn nên tự xác minh qua kênh chính thức trước khi chuyển tiền."
+            "Phân tích nhanh nội bộ: chưa phát hiện dấu hiệu bất thường rõ rệt từ dữ liệu "
+            "đã cung cấp. Bạn vẫn nên tự xác minh qua kênh chính thức trước khi chuyển tiền."
         )
 
     return LLMReasoningResult(

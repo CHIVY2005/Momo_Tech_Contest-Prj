@@ -81,7 +81,7 @@ def build_action_bundle(
             urgent_steps = [
                 "Dừng ngay thao tác chuyển tiền và không cung cấp mã OTP hoặc xác thực sinh trắc học.",
                 (
-                    "Tải báo cáo bằng chứng PDF bên dưới để lưu lại thông tin khi cần trình báo "
+                    "Tải báo cáo bằng chứng PDF để lưu lại thông tin khi cần trình báo "
                     "cơ quan công an."
                 ),
             ]

@@ -174,7 +174,7 @@ export function MultimodalComposer({
     <div className="space-y-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <label htmlFor={textareaId} className="text-xs font-semibold text-ink-secondary">
-          Nội dung cần kiểm tra
+          Tin nhắn, đường dẫn hoặc tệp đính kèm
         </label>
         <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
           <ClipboardPaste className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
@@ -301,7 +301,7 @@ export function MultimodalComposer({
           disabled={isAnalyzing}
           aria-describedby={attachError ? errorId : undefined}
           onChange={(e) => onTextChange(e.target.value)}
-          placeholder="Dán tin nhắn, đường dẫn hoặc bấm Ctrl+V để dán ảnh chụp màn hình, biên lai, mã QR..."
+          placeholder="Dán tin nhắn, đường dẫn hoặc ảnh chụp màn hình (Ctrl+V), hay kéo thả tệp vào đây..."
           className="block w-full resize-y rounded-t-2xl bg-transparent px-3.5 py-3 text-sm leading-relaxed text-ink placeholder:text-ink-muted focus:outline-none disabled:opacity-60"
         />
 
