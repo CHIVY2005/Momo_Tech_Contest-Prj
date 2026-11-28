@@ -1,0 +1,101 @@
+{
+  "meta": {
+    "timestamp_vn": "2026-11-28 12:34:59 (UTC+7)",
+    "git_branch": "v3",
+    "git_commit": "9d69be2",
+    "python_version": "Python 3.12.10",
+    "node_version": "v24.20.0",
+    "onnxruntime_version": "1.32.0",
+    "os_platform": "nt (16 CPU threads)"
+  },
+  "suites": [
+    {
+      "name": "Backend Ruff Linter",
+      "category": "TEST THẬT",
+      "command": "ruff check app tests ../scripts ../evaluation ../submission ../training",
+      "exit_code": 1,
+      "status": "FAIL",
+      "duration_sec": 0.03,
+      "summary": "Exit 1",
+      "log_excerpt": "    |\nS603 `subprocess` call: check for execution of untrusted input\n   --> D:\\HOCTAP\\repo\\Momo_Tech_Contest_Prj\\scripts\\test_web_mock_e2e.py:726:20\n    |\n724 |         else:\n725 |             npm_bin = \"npm.cmd\" if os.name == \"nt\" else \"npm\"\n726 |             proc = subprocess.Popen(\n    |                    ^^^^^^^^^^^^^^^^\n727 |                 [npm_bin, \"run\", \"start\", \"--\", \"--port\", str(args.port)],\n728 |                 cwd=str(FRONTEND_DIR),\n    |\nFound 67 errors."
+    },
+    {
+      "name": "Backend Mypy Strict Typecheck",
+      "category": "TEST THẬT",
+      "command": "mypy --config-file pyproject.toml app",
+      "exit_code": 0,
+      "status": "PASS",
+      "duration_sec": 0.46,
+      "summary": "Success: no issues found in 71 source files",
+      "log_excerpt": "Success: no issues found in 71 source files"
+    },
+    {
+      "name": "Backend Pytest Suite",
+      "category": "TEST THẬT",
+      "command": "pytest -c pyproject.toml -q --tb=short",
+      "exit_code": 1,
+      "status": "FAIL",
+      "duration_sec": 177.84,
+      "summary": "7 failed, 418 passed in 175.62s (0:02:55)",
+      "log_excerpt": "=========================== short test summary info ===========================\nFAILED tests/unit/test_audit_v2_remediations.py::test_audit01_real_rapidocr_on_fake_bill_triggers_all_receipt_forensics_and_iocs\nFAILED tests/unit/test_audit_v2_remediations.py::test_audit01_fake_bill_in_personal_mode_still_triggers_merchant_guardrail\nFAILED tests/unit/test_ocr_providers.py::test_rapidocr_session_options_enforce_arena_and_mem_pattern_disabled\nFAILED tests/unit/test_ocr_providers.py::test_rapidocr_offline_guard_blocks_runtime_download_when_cache_missing\nFAILED tests/unit/test_ocr_providers.py::test_rapidocr_ppocrv5_latin_extracts_vietnamese_receipt_and_geometry\nFAILED tests/unit/test_scam_classifier.py::test_real_exported_e5_int8_onnx_artifact_size_accuracy_and_cpu_latency\nFAILED tests/unit/test_security_wp9.py::test_nv39_outer_openai_timeout_and_overall_deadline_cap_slow_calls\n7 failed, 418 passed in 175.62s (0:02:55)"
+    },
+    {
+      "name": "Frontend TypeScript Strict",
+      "category": "TEST THẬT",
+      "command": "npx tsc --noEmit",
+      "exit_code": 0,
+      "status": "PASS",
+      "duration_sec": 2.34,
+      "summary": "0 type errors",
+      "log_excerpt": "0 type errors"
+    },
+    {
+      "name": "Frontend Unit & Contract Tests (node --test)",
+      "category": "TEST THẬT",
+      "command": "npm test",
+      "exit_code": 0,
+      "status": "PASS",
+      "duration_sec": 0.75,
+      "summary": "60/60 pass, 0 fail",
+      "log_excerpt": "✔ parseSseChunks reconstructs Vietnamese JSON events split across arbitrary chunk boundaries (3.2769ms)\n✔ parseSseChunks ignores SSE comment heartbeats and preserves newlines across multi-line data fields (0.5984ms)\n✔ consumeUtf8SseStream preserves multi-byte UTF-8 Vietnamese characters split mid-codepoint (9.3302ms)\n✔ mock input workbench validates attachments, infers wallet_transfer mode, and streams Vietnamese scam result (34.1339ms)\n✔ mock merchant receipt flow enforces SAFE Merchant Honesty Guardrail (0.5853ms)\n✔ mock chatbot multi-turn Q&A, local-only supplementary evidence, persist, and PDF download (3.7828ms)\nℹ tests 60\nℹ suites 0\nℹ pass 60\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 343.1385"
+    },
+    {
+      "name": "Live Full-Stack E2E (FastAPI + Next.js + Chromium)",
+      "category": "TEST THẬT",
+      "command": "uvicorn app.main:app + next start --port 3098 (0 API mocks)",
+      "exit_code": 1,
+      "status": "FAIL",
+      "duration_sec": 7.84,
+      "summary": "FAIL (AssertionError)",
+      "log_excerpt": "[LIVE FLOW 1] Cảnh báo rủi ro rất cao — có nhiều dấu hiệu lừa đảo (100/100) in 1802 ms -> Cảnh báo rủi ro (phân tích nhanh nội bộ): tên miền có dấu hiệu giả mạo thương hiệu VNeID; ngữ cảnh có nguy cơ giả mạo cơ quan nhà nước, công an hoặc ngân hàng (100%).\n[LIVE FLOW 2] Chatbot streamed in 391 ms -> Trợ lý VeriShield Chế độ dự phòng từ Kho Tri thức cục bộ  Tóm tắt hồ sơ (`CRITICAL_SCAM`, 100/100): Cảnh báo rủi ro (phân tích nhanh nội bộ): tên miền có dấu hi\n[LIVE E2E ERROR] AssertionError: \nINFO:     Started server process [28520]\nINFO:     Waiting for application startup.\nINFO:     Application startup complete.\nINFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)\nINFO:     127.0.0.1:51502 - \"GET /api/v1/health HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:51517 - \"GET /api/v1/demos HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:51518 - \"GET /api/v1/health HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:51519 - \"GET /api/v1/health HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:51521 - \"POST /api/v1/analyze/stream HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:51522 - \"POST /api/v1/assistant/chat/stream HTTP/1.1\" 200 OK\nINFO:     127.0.0.1:51523 - \"POST /api/v1/analyze/stream HTTP/1.1\" 200 OK"
+    },
+    {
+      "name": "Frontend Mock UI E2E (Isolated page.route)",
+      "category": "MOCK UI",
+      "command": "python scripts/test_web_mock_e2e.py",
+      "exit_code": 0,
+      "status": "PASS",
+      "duration_sec": 5.8,
+      "summary": "ALL WEB MOCK E2E SCENARIOS PASSED!",
+      "log_excerpt": "[PASS] Scenario 1: Input workbench -> wallet_transfer mock result\n[PASS] Scenario 2: Chatbot multi-turn, local evidence, persist & PDF download\n[PASS] Scenario 3: Merchant SAFE flow + Honesty Guardrail in dashboard & chatbot\n[PASS] Scenario 4: Invalid SVG attachment rejected with Vietnamese WebM error\nALL WEB MOCK E2E SCENARIOS PASSED!"
+    }
+  ],
+  "live_flows": [
+    {
+      "flow_name": "1. Kiểm tra lừa đảo thật (FastAPI + E5 ONNX + URL inspector)",
+      "status": "PASS",
+      "duration_ms": 1802,
+      "verdict_or_state": "Cảnh báo rủi ro rất cao — có nhiều dấu hiệu lừa đảo",
+      "risk_score": "100/100",
+      "detail_excerpt": "Cảnh báo rủi ro (phân tích nhanh nội bộ): tên miền có dấu hiệu giả mạo thương hiệu VNeID; ngữ cảnh có nguy cơ giả mạo cơ quan nhà nước, công an hoặc ngân hàng (100%)."
+    },
+    {
+      "flow_name": "2. Chatbot Trợ lý VeriShield thật (/assistant/chat/stream)",
+      "status": "PASS",
+      "duration_ms": 391,
+      "verdict_or_state": "Stream hoàn tất",
+      "risk_score": "RAG cục bộ",
+      "detail_excerpt": "Trợ lý VeriShield Chế độ dự phòng từ Kho Tri thức cục bộ  Tóm tắt hồ sơ (`CRITICAL_SCAM`, 100/100): Cảnh báo rủi ro (phân tích nhanh nội bộ): tên miền có dấu hiệu giả mạo thương hi"
+    }
+  ]
+}

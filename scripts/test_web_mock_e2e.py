@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
+import shutil
 import struct
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
 import zlib
 from email.parser import BytesParser
 from email.policy import default as email_default_policy
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from playwright.sync_api import (
     Browser,
@@ -264,19 +265,31 @@ def _build_merchant_report() -> dict[str, Any]:
 
 
 def _sse_bytes(events: list[tuple[str, dict[str, Any]]]) -> bytes:
-    frames = "".join(f"event: {ev}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n" for ev, data in events)
+    frames = "".join(
+        f"event: {ev}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n" for ev, data in events
+    )
     return frames.encode("utf-8")
 
 
 def _wait_for_http_ready(url: str, timeout_s: float = 30.0) -> None:
+    parsed = urlparse(url)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or 80
+    path = parsed.path or "/"
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
+        conn: http.client.HTTPConnection | None = None
         try:
-            with urllib.request.urlopen(url, timeout=2.0) as resp:
-                if resp.status == 200:
-                    return
-        except (urllib.error.URLError, TimeoutError, OSError):
+            conn = http.client.HTTPConnection(host, port, timeout=2.0)
+            conn.request("GET", path)
+            resp = conn.getresponse()
+            if resp.status == 200:
+                return
+        except (http.client.HTTPException, TimeoutError, OSError):
             time.sleep(0.4)
+        finally:
+            if conn is not None:
+                conn.close()
     raise RuntimeError(f"Timed out waiting for server at {url}")
 
 
@@ -284,12 +297,16 @@ def _terminate_process_tree(proc: subprocess.Popen[bytes] | subprocess.Popen[str
     if proc.poll() is not None:
         return
     if os.name == "nt":
-        subprocess.run(
-            ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
+        taskkill = shutil.which("taskkill")
+        if taskkill:
+            subprocess.run(  # noqa: S603
+                [taskkill, "/F", "/T", "/PID", str(proc.pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        else:
+            proc.terminate()
     else:
         proc.terminate()
     try:
@@ -301,7 +318,7 @@ def _terminate_process_tree(proc: subprocess.Popen[bytes] | subprocess.Popen[str
 def _install_api_mocks(page: Page, state: dict[str, Any]) -> None:
     def handle_route(route: Route) -> None:
         req = route.request
-        path = urllib.request.urlparse(req.url).path
+        path = urlparse(req.url).path
 
         if path == "/api/v1/health":
             route.fulfill(
@@ -333,10 +350,10 @@ def _install_api_mocks(page: Page, state: dict[str, Any]) -> None:
             req_mode = (fields.get("mode") or ["personal"])[0]
             if req_mode == "merchant":
                 report = _build_merchant_report()
-                token = "tok_e2e_merchant_safe_12"
+                token = "tok_e2e_merchant_safe_12"  # noqa: S105
             else:
                 report = _build_scam_report()
-                token = "tok_e2e_wallet_scam_88"
+                token = "tok_e2e_wallet_scam_88"  # noqa: S105
 
             sse = _sse_bytes(
                 [
@@ -642,7 +659,7 @@ def run_browser_e2e(base_url: str) -> None:
 
         expect(dialog.get_by_text("Phản hồi lượt 2")).to_be_visible()
         assert len(state["chat_requests"]) == 2
-        assert state["chat_requests"][0]["token"] == "tok_e2e_wallet_scam_88"
+        assert state["chat_requests"][0]["token"] == "tok_e2e_wallet_scam_88"  # noqa: S105
         assert len(state["chat_requests"][1]["payload"]["history"]) == 2
 
         ev_input = dialog.locator('input[aria-label="Chọn ảnh hoặc tệp ghi âm bổ sung"]')
@@ -723,7 +740,7 @@ def main() -> int:
             target_url = args.base_url.strip().rstrip("/") + "/"
         else:
             npm_bin = "npm.cmd" if os.name == "nt" else "npm"
-            proc = subprocess.Popen(
+            proc = subprocess.Popen(  # noqa: S603
                 [npm_bin, "run", "start", "--", "--port", str(args.port)],
                 cwd=str(FRONTEND_DIR),
                 stdout=subprocess.DEVNULL,

@@ -347,44 +347,88 @@ code {{
     <tr>
       <td><strong>Chủ đề 1: Chống lừa đảo</strong></td>
       <td><span class="badge b-ok">ĐẠT RÕ RỆT</span></td>
-      <td>Phát hiện tin nhắn giả danh, bẫy chuyển khoản VietQR hoàn tiền, biên lai giả/tái sử dụng, đường dẫn lừa đảo, và bật bước tạm dừng 30 giây khi người dùng đang nghe điện thoại.</td>
+      <td>
+        Phát hiện tin nhắn giả danh, bẫy chuyển khoản VietQR hoàn tiền, biên lai giả/tái sử
+        dụng, đường dẫn lừa đảo, và bật bước tạm dừng 30 giây khi người dùng đang nghe điện thoại.
+      </td>
     </tr>
     <tr>
       <td><strong>Chủ đề 2: An ninh mạng</strong></td>
       <td><span class="badge b-ok">ĐẠT RÕ RỆT</span></td>
-      <td>Chống SSRF gắn IP công cộng tới tận socket, trình duyệt cách ly kiểm tra DOM/.apk, chống Prompt Injection, bảo vệ nút quản trị /radar bằng HMAC &amp; chống đầu độc dữ liệu.</td>
+      <td>
+        Chống SSRF gắn IP công cộng tới tận socket, trình duyệt cách ly kiểm tra DOM/.apk,
+        chống Prompt Injection, bảo vệ nút quản trị /radar bằng HMAC &amp; chống đầu độc dữ liệu.
+      </td>
     </tr>
     <tr>
       <td><strong>Chủ đề 3: Trợ lý AI</strong></td>
       <td><span class="badge b-ok">ĐẠT RÕ RỆT</span></td>
-      <td><strong>Trợ lý VeriShield</strong> giải thích kết quả, gợi ý câu phản hồi an toàn cho cá nhân &amp; người thân, kiểm tra thêm bằng chứng cục bộ và hỏi đáp dựa trên RAG lai E5 + BM25.</td>
+      <td>
+        <strong>Trợ lý VeriShield</strong> giải thích kết quả, gợi ý câu phản hồi an toàn cho
+        cá nhân &amp; người thân, kiểm tra thêm bằng chứng cục bộ và hỏi đáp dựa trên RAG lai
+        E5 + BM25.
+      </td>
     </tr>
     <tr>
       <td><strong>AI là giá trị cốt lõi</strong></td>
       <td><span class="badge b-ok">ĐẠT</span></td>
-      <td>Tự huấn luyện &amp; lượng tử hóa <code>scam_e5_int8.onnx</code> (34,30 MB, CPU 10 ms), kết hợp OCR PP-OCRv5, Whisper STT và AI đa phương thức tầng 2 (có dự phòng nội bộ khi lỗi).</td>
+      <td>
+        Tự huấn luyện &amp; lượng tử hóa <code>scam_e5_int8.onnx</code> (34,30 MB, CPU 10 ms),
+        kết hợp OCR PP-OCRv5, Whisper STT và AI đa phương thức tầng 2 (có dự phòng nội bộ khi
+        lỗi).
+      </td>
     </tr>
     <tr>
       <td><strong>Dùng thử trực tuyến không phụ thuộc local</strong></td>
       <td><span class="badge b-p1">CẦN DEPLOY</span></td>
-      <td>Giao diện Zero-Login sẵn sàng với các kịch bản mẫu 1 bấm, nhưng cần hoàn tất deploy lên VPS công khai (<code>verishield.joiboi.app</code>) và kiểm tra qua 4G + trình duyệt ẩn danh.</td>
+      <td>
+        Giao diện Zero-Login sẵn sàng với các kịch bản mẫu 1 bấm, nhưng cần hoàn tất deploy lên
+        VPS công khai (<code>verishield.joiboi.app</code>) và kiểm tra qua 4G + trình duyệt ẩn
+        danh.
+      </td>
     </tr>
     <tr>
       <td><strong>4 thành phần bài nộp</strong><br/>(HDSD 1p, Zip, Slide 10p, Video 3p)</td>
       <td><span class="badge b-p0">CẦN ĐỒNG BỘ</span></td>
-      <td>Đã có khung <code>submission/</code>, nhưng Slide 10 trang, Hướng dẫn 1 trang và Kịch bản Video 3 phút hiện vẫn theo bản cũ trước khi gộp khung nhập đa phương thức &amp; thêm Trợ lý AI.</td>
+      <td>
+        Đã có khung <code>submission/</code>, nhưng Slide 10 trang, Hướng dẫn 1 trang và Kịch
+        bản Video 3 phút hiện vẫn theo bản cũ trước khi gộp khung nhập đa phương thức &amp; thêm
+        Trợ lý AI.
+      </td>
     </tr>
   </tbody>
 </table>
 
 <div class="callout callout-danger">
-  <div class="callout-title">5 việc TUYỆT ĐỐI KHÔNG LÀM trong 5 ngày cuối để tránh đi xa đề bài</div>
+  <div class="callout-title">
+    5 việc TUYỆT ĐỐI KHÔNG LÀM trong 5 ngày cuối để tránh đi xa đề bài
+  </div>
   <ul class="compact">
-    <li><strong>Không thêm màn hình đăng ký / đăng nhập bắt buộc:</strong> Giám khảo cần dùng thử ngay trên web; cơ chế khóa phiên HMAC 2 giờ hiện tại đã đủ bảo vệ hồ sơ mà vẫn giữ trải nghiệm Zero-Login.</li>
-    <li><strong>Không dồn sức mở rộng Telegram Bot hay tính năng ngoài Web MVP:</strong> Trọng tâm trình diễn và chấm điểm trực tiếp là Web App (<code>/</code> + Trợ lý + <code>/radar</code>); Telegram chỉ giữ vai trò kênh bổ trợ nhẹ nhàng.</li>
-    <li><strong>Không nạp thêm thư viện/model nặng hay dính giấy phép hạn chế:</strong> Tuyệt đối không đưa <code>torch</code>/<code>transformers</code> vào runtime, không dùng mô hình <code>AGPL-3.0</code> hoặc chỉ dành cho nghiên cứu.</li>
-    <li><strong>Không nới lỏng nguyên tắc trung thực biên lai:</strong> Không bao giờ biến sản phẩm thành công cụ "cam kết tiền đã vào tài khoản" từ ảnh chụp — đây là điểm đạo đức AI tạo uy tín lớn với giám khảo fintech.</li>
-    <li><strong>Không tự ý thay đổi cấu trúc UI lớn sau khi quay video &amp; xuất Slide PDF:</strong> Vì Slide 10 trang không được sửa sau 03/12, mọi thay đổi muộn làm lệch Slide/Video với bản chạy trực tuyến sẽ bị mất điểm nhất quán.</li>
+    <li>
+      <strong>Không thêm màn hình đăng ký / đăng nhập bắt buộc:</strong> Giám khảo cần dùng thử
+      ngay trên web; cơ chế khóa phiên HMAC 2 giờ hiện tại đã đủ bảo vệ hồ sơ mà vẫn giữ trải
+      nghiệm Zero-Login.
+    </li>
+    <li>
+      <strong>Không dồn sức mở rộng Telegram Bot hay tính năng ngoài Web MVP:</strong> Trọng tâm
+      trình diễn và chấm điểm trực tiếp là Web App (<code>/</code> + Trợ lý +
+      <code>/radar</code>); Telegram chỉ giữ vai trò kênh bổ trợ nhẹ nhàng.
+    </li>
+    <li>
+      <strong>Không nạp thêm thư viện/model nặng hay dính giấy phép hạn chế:</strong> Tuyệt đối
+      không đưa <code>torch</code>/<code>transformers</code> vào runtime, không dùng mô hình
+      <code>AGPL-3.0</code> hoặc chỉ dành cho nghiên cứu.
+    </li>
+    <li>
+      <strong>Không nới lỏng nguyên tắc trung thực biên lai:</strong> Không bao giờ biến sản
+      phẩm thành công cụ "cam kết tiền đã vào tài khoản" từ ảnh chụp — đây là điểm đạo đức AI tạo
+      uy tín lớn với giám khảo fintech.
+    </li>
+    <li>
+      <strong>Không tự ý thay đổi cấu trúc UI lớn sau khi quay video &amp; xuất Slide PDF:</strong>
+      Vì Slide 10 trang không được sửa sau 03/12, mọi thay đổi muộn làm lệch Slide/Video với bản
+      chạy trực tuyến sẽ bị mất điểm nhất quán.
+    </li>
   </ul>
 </div>
 
@@ -393,44 +437,69 @@ code {{
   <div class="strength-card">
     <div class="strength-title">1. Kiến trúc AI 3 tầng thực dụng, chạy mượt trên CPU phổ thông</div>
     <div class="strength-body">
-      Tự xây dựng mô hình <code>intfloat/multilingual-e5-small</code> (MIT) cắt tỉa 36.000 token và lượng tử hóa INT8 còn <strong>34,30 MB</strong> (<code>Macro-F1 = 0,9314</code>, trễ trung vị <strong>10 ms</strong>). Khi AI đám mây gặp sự cố hoặc quá tải, hệ thống tự chuyển về Tầng 1 mà vẫn trả kết quả ổn định.
+      Tự xây dựng mô hình <code>intfloat/multilingual-e5-small</code> (MIT) cắt tỉa 36.000 token và
+      lượng tử hóa INT8 còn <strong>34,30 MB</strong> (<code>Macro-F1 = 0,9314</code>, trễ trung
+      vị <strong>10 ms</strong>). Khi AI đám mây gặp sự cố hoặc quá tải, hệ thống tự chuyển về
+      Tầng 1 mà vẫn trả kết quả ổn định.
     </div>
   </div>
   <div class="strength-card">
-    <div class="strength-title">2. Khung nhập thống nhất &amp; Trợ lý VeriShield Hybrid RAG an toàn</div>
+    <div class="strength-title">
+      2. Khung nhập thống nhất &amp; Trợ lý VeriShield Hybrid RAG an toàn
+    </div>
     <div class="strength-body">
-      Người dùng chỉ cần 1 ô duy nhất để dán chữ, link, ảnh <code>Ctrl+V</code> hoặc tệp ghi âm. Trợ lý dùng chung 1 phiên E5 + BM25 (<code>R@3 = 98,4%</code>, chặn ngoài miền <strong>100%</strong>, từ chối nhầm <strong>1,56%</strong> trên 97 ca kiểm thử) kèm cổng kiểm duyệt 3 tầng chống bịa thông tin.
+      Người dùng chỉ cần 1 ô duy nhất để dán chữ, link, ảnh <code>Ctrl+V</code> hoặc tệp ghi âm.
+      Trợ lý dùng chung 1 phiên E5 + BM25 (<code>R@3 = 98,4%</code>, chặn ngoài miền
+      <strong>100%</strong>, từ chối nhầm <strong>1,56%</strong> trên 97 ca kiểm thử) kèm cổng
+      kiểm duyệt 3 tầng chống bịa thông tin.
     </div>
   </div>
   <div class="strength-card">
-    <div class="strength-title">3. Đạo đức AI Fintech: Nguyên tắc trung thực biên lai người bán</div>
+    <div class="strength-title">
+      3. Đạo đức AI Fintech: Nguyên tắc trung thực biên lai người bán
+    </div>
     <div class="strength-body">
-      Ngay cả khi ảnh chuyển khoản đạt điểm rủi ro thấp, hệ thống luôn đánh dấu <em>chưa thể xác nhận tiền đã vào tài khoản từ ảnh chụp</em> và nhắc kiểm tra trực tiếp biến động số dư hoặc loa thông báo nhận tiền.
+      Ngay cả khi ảnh chuyển khoản đạt điểm rủi ro thấp, hệ thống luôn đánh dấu <em>chưa thể xác
+      nhận tiền đã vào tài khoản từ ảnh chụp</em> và nhắc kiểm tra trực tiếp biến động số dư hoặc
+      loa thông báo nhận tiền.
     </div>
   </div>
   <div class="strength-card">
-    <div class="strength-title">4. Phòng thủ an ninh mạng từ ứng dụng đến tầng Socket &amp; Radar</div>
+    <div class="strength-title">
+      4. Phòng thủ an ninh mạng từ ứng dụng đến tầng Socket &amp; Radar
+    </div>
     <div class="strength-body">
-      Gắn IP công cộng khi truy vết URL/Playwright để chống SSRF/DNS rebinding; che giấu SĐT/STK trước khi lưu &amp; băm HMAC-SHA256 trên <code>/radar</code>. Đồ thị <code>/radar</code> tự viết tối ưu đạt <strong>98–120 FPS</strong> ở 500 nút không chồng lấn.
+      Gắn IP công cộng khi truy vết URL/Playwright để chống SSRF/DNS rebinding; che giấu SĐT/STK
+      trước khi lưu &amp; băm HMAC-SHA256 trên <code>/radar</code>. Đồ thị <code>/radar</code> tự
+      viết tối ưu đạt <strong>98–120 FPS</strong> ở 500 nút không chồng lấn.
     </div>
   </div>
   <div class="strength-card">
     <div class="strength-title">5. Lựa chọn OCR &amp; Pháp y VietQR dựa trên thực nghiệm đo lường</div>
     <div class="strength-body">
-      Thực nghiệm 25 ảnh chứng minh <strong>RapidOCR PP-OCRv5 Latin</strong> (12,14 MB, Apache-2.0) giảm <strong>51,1%</strong> lỗi ký tự gốc và <strong>72,1%</strong> lỗi không dấu, nhanh và nhẹ RAM gấp ~3 lần mô hình nặng. Giải mã VietQR chuẩn EMVCo/CRC-16 phát hiện bẫy hoàn tiền.
+      Thực nghiệm 25 ảnh chứng minh <strong>RapidOCR PP-OCRv5 Latin</strong> (12,14 MB, Apache-2.0)
+      giảm <strong>51,1%</strong> lỗi ký tự gốc và <strong>72,1%</strong> lỗi không dấu, nhanh và
+      nhẹ RAM gấp ~3 lần mô hình nặng. Giải mã VietQR chuẩn EMVCo/CRC-16 phát hiện bẫy hoàn tiền.
     </div>
   </div>
   <div class="strength-card">
-    <div class="strength-title">6. Kỷ luật kỹ thuật, giấy phép sạch &amp; bộ kiểm thử quy mô lớn</div>
+    <div class="strength-title">
+      6. Kỷ luật kỹ thuật, giấy phép sạch &amp; bộ kiểm thử quy mô lớn
+    </div>
     <div class="strength-body">
-      <code>100%</code> thư viện giấy phép mở tự do/LGPL-3.0, <code>100%</code> dữ liệu tổng hợp không PII thật; đạt <strong>60/60</strong> unit/mock test Frontend, <strong>4/4</strong> kịch bản E2E trình duyệt Chromium thật, <code>ruff</code> + <code>mypy --strict</code> 71 file và hơn 419 ca pytest đạt chuẩn.
+      <code>100%</code> thư viện giấy phép mở tự do/LGPL-3.0, <code>100%</code> dữ liệu tổng hợp
+      không PII thật; đạt <strong>60/60</strong> unit/mock test Frontend, <strong>4/4</strong>
+      kịch bản E2E trình duyệt Chromium thật, <code>ruff</code> + <code>mypy --strict</code> 71
+      file và hơn 419 ca pytest đạt chuẩn.
     </div>
   </div>
 </div>
 
 <div class="page-break"></div>
 
-<h2><span class="sec-num">03</span> Điểm Chưa Tốt Hiện Tại &amp; Cách Cải Thiện Cụ Thể (Theo Mức Độ Ưu Tiên)</h2>
+<h2>
+  <span class="sec-num">03</span> Điểm Chưa Tốt Hiện Tại &amp; Cách Cải Thiện Cụ Thể (Theo Ưu Tiên)
+</h2>
 <table>
   <thead>
     <tr>
@@ -443,39 +512,112 @@ code {{
   <tbody>
     <tr>
       <td><span class="badge b-p0">P0 · GẤP</span></td>
-      <td><strong>Bộ tài liệu nộp bài bị lệch phiên bản code mới</strong><br/><code>slides/index.html</code>, <code>guide/index.html</code>, <code>video-script-3min.md</code> và PDF trong <code>submission/dist/</code> render từ 26/11 vẫn mô tả 3 nút chế độ cũ, thiếu Trợ lý RAG &amp; PP-OCRv5.</td>
-      <td>Giám khảo xem slide/video khác với web đang chạy thật sẽ nghi ngờ tính trung thực hoặc đánh giá thiếu đồng bộ khi chấm vòng loại &amp; chung kết.</td>
-      <td>Cập nhật lại Slide 10 trang, Hướng dẫn 1 trang A4 và kịch bản Video 3 phút khớp giao diện thống nhất mới, số liệu PP-OCRv5 &amp; RAG B6, bỏ từ ngữ nội bộ (<code>in_active_call</code>, <code>HTTP 409</code>), sau đó chạy lại <code>render_pdfs.py</code>.</td>
+      <td>
+        <strong>Bộ tài liệu nộp bài bị lệch phiên bản code mới</strong><br/>
+        <code>slides/index.html</code>, <code>guide/index.html</code>,
+        <code>video-script-3min.md</code> và PDF trong <code>submission/dist/</code> render từ
+        26/11 vẫn mô tả 3 nút chế độ cũ, thiếu Trợ lý RAG &amp; PP-OCRv5.
+      </td>
+      <td>
+        Giám khảo xem slide/video khác với web đang chạy thật sẽ nghi ngờ tính trung thực hoặc đánh
+        giá thiếu đồng bộ khi chấm vòng loại &amp; chung kết.
+      </td>
+      <td>
+        Cập nhật lại Slide 10 trang, Hướng dẫn 1 trang A4 và kịch bản Video 3 phút khớp giao diện
+        thống nhất mới, số liệu PP-OCRv5 &amp; RAG B6, bỏ từ ngữ nội bộ (<code>in_active_call</code>,
+        <code>HTTP 409</code>), sau đó chạy lại <code>render_pdfs.py</code>.
+      </td>
     </tr>
     <tr>
       <td><span class="badge b-p0">P0 · GẤP</span></td>
-      <td><strong>Chưa chốt bản Deploy VPS &amp; Benchmark model thật</strong><br/><code>evaluation/results.json</code> vẫn ghi nhận lần chạy cũ ngày 26/11 (gọi alias <code>gemini-4-hydrogen</code>); chưa chạy smoke test mở rộng cho luồng Trợ lý AI trên VPS công khai.</td>
-      <td>Đề bài bắt buộc giám khảo dùng thử trực tuyến ổn định. Nếu benchmark không khớp model production thật hoặc API Trợ lý lỗi trên VPS sẽ mất điểm cốt lõi.</td>
-      <td>Chạy lại <code>evaluation/run_benchmark.py --require-live-llm</code> bằng model production chính thức (ví dụ <code>gemini-2.5-flash</code>); cấu hình <code>deploy/.env.prod</code>, deploy VPS qua <code>deploy_vps.sh</code>, bổ sung kiểm thử <code>/assistant/chat/stream</code> vào <code>smoke_test_live.py</code> và test trên 4G Mobile.</td>
+      <td>
+        <strong>Chưa chốt bản Deploy VPS &amp; Benchmark model thật</strong><br/>
+        <code>evaluation/results.json</code> vẫn ghi nhận lần chạy cũ ngày 26/11 (gọi alias
+        <code>gemini-4-hydrogen</code>); chưa chạy smoke test mở rộng cho luồng Trợ lý AI trên VPS
+        công khai.
+      </td>
+      <td>
+        Đề bài bắt buộc giám khảo dùng thử trực tuyến ổn định. Nếu benchmark không khớp model
+        production thật hoặc API Trợ lý lỗi trên VPS sẽ mất điểm cốt lõi.
+      </td>
+      <td>
+        Chạy lại <code>evaluation/run_benchmark.py --require-live-llm</code> bằng model production
+        chính thức (ví dụ <code>gemini-2.5-flash</code>); cấu hình <code>deploy/.env.prod</code>,
+        deploy VPS qua <code>deploy_vps.sh</code>, bổ sung kiểm thử
+        <code>/assistant/chat/stream</code> vào <code>smoke_test_live.py</code> và test 4G Mobile.
+      </td>
     </tr>
     <tr>
       <td><span class="badge b-p1">P1 · CAO</span></td>
-      <td><strong>Cổng <code>verify.ps1</code> trên Windows chưa đạt 100% do môi trường</strong><br/>Thiếu gói <code>rapidocr</code> trong <code>backend/.venv</code> (5 test OCR lỗi) và <code>onnxruntime 1.32.0</code> với <code>ORT_ENABLE_ALL</code> làm xác suất <code>SAFE_ADVISORY</code> ra <code>0,5666</code> (&lt; 0,60).</td>
-      <td>Khó tự tin khi build/đóng băng cuối kỳ nếu chạy kiểm tra trên máy Windows bị đỏ 6 test, dù code logic thực tế vẫn đúng trên Linux/Docker.</td>
-      <td>Cài đủ gói <code>backend/requirements.txt</code> vào <code>.venv</code> hoặc chạy <code>verify.sh</code> trong Docker Linux giống hệt VPS thật; đánh giá dùng <code>ORT_ENABLE_BASIC</code> trong <code>onnx_session.py</code> (đã kiểm chứng khôi phục xác suất <code>0,7156</code> và nhanh hơn).</td>
+      <td>
+        <strong>Cổng <code>verify.ps1</code> trên Windows chưa đạt 100% do môi trường</strong><br/>
+        Thiếu gói <code>rapidocr</code> trong <code>backend/.venv</code> (5 test OCR lỗi) và
+        <code>onnxruntime 1.32.0</code> với <code>ORT_ENABLE_ALL</code> làm xác suất
+        <code>SAFE_ADVISORY</code> ra <code>0,5666</code> (&lt; 0,60).
+      </td>
+      <td>
+        Khó tự tin khi build/đóng băng cuối kỳ nếu chạy kiểm tra trên máy Windows bị đỏ 6 test, dù
+        code logic thực tế vẫn đúng trên Linux/Docker.
+      </td>
+      <td>
+        Cài đủ gói <code>backend/requirements.txt</code> vào <code>.venv</code> hoặc chạy
+        <code>verify.sh</code> trong Docker Linux giống hệt VPS thật; đánh giá dùng
+        <code>ORT_ENABLE_BASIC</code> trong <code>onnx_session.py</code> (đã kiểm chứng khôi phục
+        xác suất <code>0,7156</code> và nhanh hơn).
+      </td>
     </tr>
     <tr>
       <td><span class="badge b-p1">P1 · CAO</span></td>
-      <td><strong>Đồng bộ Git &amp; kiểm tra tệp <code>.zip</code> sạch</strong><br/>Nhánh <code>v3</code> đã fast-forward local lên <code>7e30ea0</code> nhưng <code>git push -u origin v3</code> đang chờ xác thực GitHub; các file ghi chú <code>docs/Goals.md</code>... cần kiểm tra phạm vi đóng gói.</td>
-      <td>Nguy cơ thiếu đồng bộ giữa mã nguồn nộp bài (.zip), nhánh Git lưu trữ và bản chạy trên server nếu quên push hoặc đóng gói nhầm.</td>
-      <td>Hoàn tất <code>git push -u origin v3</code> trên terminal tương tác; chạy <code>scripts/package_submission.py</code> và giải nén kiểm thử sang một thư mục sạch để chắc chắn không lọt <code>.env</code>, <code>.db</code> hay file nháp.</td>
+      <td>
+        <strong>Đồng bộ Git &amp; kiểm tra tệp <code>.zip</code> sạch</strong><br/>
+        Nhánh <code>v3</code> đã đồng bộ lên <code>origin/v3</code>; cần kiểm tra lại phạm vi đóng
+        gói để không lọt file thừa hay cấu hình cục bộ.
+      </td>
+      <td>
+        Nguy cơ thiếu đồng bộ giữa mã nguồn nộp bài (.zip), nhánh Git lưu trữ và bản chạy trên
+        server nếu quên push hoặc đóng gói nhầm.
+      </td>
+      <td>
+        Hoàn tất push mọi cập nhật mới nhất lên <code>origin/v3</code>; chạy
+        <code>scripts/package_submission.py</code> và giải nén kiểm thử sang một thư mục sạch để
+        chắc chắn không lọt <code>.env</code>, <code>.db</code> hay file nháp.
+      </td>
     </tr>
     <tr>
       <td><span class="badge b-p2">P2 · NÊN LÀM</span></td>
-      <td><strong>Còn sót 1 vài chỗ thuật ngữ &amp; cạnh nhỏ trên UI/Pipeline</strong><br/><code>AssistantDrawer.tsx</code> &amp; <code>AssistantEvidenceCard.tsx</code> còn chữ <code>Soundbox</code> / <code>Radar cộng đồng</code>; <code>detectEvidenceAttachmentKind</code> chưa chặn <code>.svg</code>; <code>EvidenceTabs.tsx</code> chưa reset tab theo <code>case_id</code>; <code>pipeline.py</code> nhận <code>transfer_amount</code> nhưng chưa đưa vào tính điểm.</td>
-      <td>Không chặn luồng chính nhưng nếu giám khảo thử tải <code>.svg</code> vào khung chat, xem nhiều ảnh biên lai liên tiếp hoặc đọc kỹ câu chữ trong Drawer có thể thấy thiếu trau chuốt.</td>
-      <td>Đồng bộ chặn <code>image/svg+xml</code> và câu chữ <em>"loa thông báo nhận tiền / Trung tâm giám sát"</em> trong Drawer; thêm <code>key=&#123;report.case_id&#125;</code> cho <code>EvidenceTabs</code>; đưa ngưỡng cảnh báo mềm khi số tiền lớn + đang gọi điện (nếu không làm xáo trộn benchmark).</td>
+      <td>
+        <strong>Còn sót 1 vài chỗ thuật ngữ &amp; cạnh nhỏ trên UI/Pipeline</strong><br/>
+        <code>AssistantDrawer.tsx</code> &amp; <code>AssistantEvidenceCard.tsx</code> còn chữ
+        <code>Soundbox</code> / <code>Radar cộng đồng</code>; <code>detectEvidenceAttachmentKind</code>
+        chưa chặn <code>.svg</code>; <code>EvidenceTabs.tsx</code> chưa reset tab theo
+        <code>case_id</code>; <code>pipeline.py</code> chưa dùng <code>transfer_amount</code>.
+      </td>
+      <td>
+        Không chặn luồng chính nhưng nếu giám khảo thử tải <code>.svg</code> vào khung chat, xem
+        nhiều ảnh biên lai liên tiếp hoặc đọc kỹ câu chữ trong Drawer có thể thấy thiếu trau chuốt.
+      </td>
+      <td>
+        Đồng bộ chặn <code>image/svg+xml</code> và câu chữ <em>"loa thông báo nhận tiền / Trung
+        tâm giám sát"</em> trong Drawer; thêm <code>key=&#123;report.case_id&#125;</code> cho
+        <code>EvidenceTabs</code>; bổ sung ngưỡng cảnh báo mềm khi số tiền lớn + đang gọi điện.
+      </td>
     </tr>
     <tr>
       <td><span class="badge b-p2">P2 · NÊN LÀM</span></td>
-      <td><strong>Diễn giải trung thực giới hạn dữ liệu tổng hợp</strong><br/>Kết quả 40/40 trên tập mẫu tổng hợp dễ bị giám khảo chất vấn nếu trình bày như độ chính xác thực tế 100%.</td>
-      <td>Ban giám khảo kỹ thuật fintech đánh giá rất cao sự trung thực khoa học và dễ trừ điểm nếu đội thi "thổi phồng" số liệu demo.</td>
-      <td>Nhấn mạnh trong Slide &amp; Q&amp;A: 100% dữ liệu tổng hợp để bảo mật thông tin người dùng; nêu rõ tỷ lệ nhận diện thực tế trên tập khó tách nhóm (<code>Macro-F1 = 0,9314</code>, OCR <code>CER = 0,1096</code>) như một điểm mạnh về tính kỷ luật.</td>
+      <td>
+        <strong>Diễn giải trung thực giới hạn dữ liệu tổng hợp</strong><br/>
+        Kết quả 40/40 trên tập mẫu tổng hợp dễ bị giám khảo chất vấn nếu trình bày như độ chính xác
+        thực tế 100%.
+      </td>
+      <td>
+        Ban giám khảo kỹ thuật fintech đánh giá rất cao sự trung thực khoa học và dễ trừ điểm nếu
+        đội thi "thổi phồng" số liệu demo.
+      </td>
+      <td>
+        Nhấn mạnh trong Slide &amp; Q&amp;A: 100% dữ liệu tổng hợp để bảo mật thông tin người
+        dùng; nêu rõ tỷ lệ nhận diện thực tế trên tập khó tách nhóm (<code>Macro-F1 = 0,9314</code>,
+        OCR <code>CER = 0,1096</code>) như một điểm mạnh về tính kỷ luật.
+      </td>
     </tr>
   </tbody>
 </table>
@@ -492,38 +634,88 @@ code {{
   <tbody>
     <tr>
       <td><strong>Ngày 1 (28–29/11)</strong></td>
-      <td>Hoàn tất push nhánh <code>v3</code>; xử lý các mục P2 nhỏ nếu cần; kiểm tra <code>verify.sh</code> trong Docker và chạy lại <code>run_benchmark.py --require-live-llm</code> với model production.</td>
-      <td><code>verify</code> xanh hoàn toàn trong Docker; <code>evaluation/results.json</code> mới không còn alias thử nghiệm nội bộ.</td>
+      <td>
+        Hoàn tất push nhánh <code>v3</code>; xử lý các mục P2 nhỏ nếu cần; kiểm tra
+        <code>verify.sh</code> trong Docker và chạy lại
+        <code>run_benchmark.py --require-live-llm</code> với model production.
+      </td>
+      <td>
+        <code>verify</code> xanh hoàn toàn trong Docker; <code>evaluation/results.json</code> mới
+        không còn alias thử nghiệm nội bộ.
+      </td>
     </tr>
     <tr>
       <td><strong>Ngày 2 (30/11)</strong></td>
-      <td>Deploy bản chính thức lên VPS (<code>verishield.joiboi.app</code>); chạy smoke test đầy đủ (gồm cả chatbot Trợ lý &amp; <code>/radar</code>); thử nghiệm thật trên điện thoại 4G và trình duyệt ẩn danh.</td>
-      <td>Truy cập mượt từ 4G; thời gian phản hồi ổn định; không lỗi SSL, CORS hay mất token phiên.</td>
+      <td>
+        Deploy bản chính thức lên VPS (<code>verishield.joiboi.app</code>); chạy smoke test đầy đủ
+        (gồm cả chatbot Trợ lý &amp; <code>/radar</code>); thử nghiệm thật trên điện thoại 4G và
+        trình duyệt ẩn danh.
+      </td>
+      <td>
+        Truy cập mượt từ 4G; thời gian phản hồi ổn định; không lỗi SSL, CORS hay mất token phiên.
+      </td>
     </tr>
     <tr>
       <td><strong>Ngày 3 (01/12)</strong></td>
-      <td>Cập nhật <code>submission/slides/index.html</code> (10 trang), <code>guide/index.html</code> (1 trang A4) và kịch bản video 3 phút khớp 100% giao diện &amp; số liệu mới; render PDF và quét thử mã QR.</td>
-      <td><code>VeriShield_AI_Slides_10p.pdf</code> đúng 10 trang, <code>UserGuide_1p.pdf</code> đúng 1 trang A4, mã QR mở đúng link live.</td>
+      <td>
+        Cập nhật <code>submission/slides/index.html</code> (10 trang), <code>guide/index.html</code>
+        (1 trang A4) và kịch bản video 3 phút khớp 100% giao diện &amp; số liệu mới; render PDF và
+        quét thử mã QR.
+      </td>
+      <td>
+        <code>VeriShield_AI_Slides_10p.pdf</code> đúng 10 trang, <code>UserGuide_1p.pdf</code>
+        đúng 1 trang A4, mã QR mở đúng link live.
+      </td>
     </tr>
     <tr>
       <td><strong>Ngày 4 (02/12)</strong></td>
-      <td>Quay &amp; dựng video demo trực tiếp trên web thật (<strong>2 phút 45 giây – 2 phút 55 giây</strong>, MP4 1080p); đóng gói <code>verishield-ai-source.zip</code> và test dựng lại từ file giải nén.</td>
-      <td>Video ≤ 3:00 rõ âm thanh, thấy đủ 3 phần: Nhập kiểm tra → Trợ lý VeriShield → Giám sát <code>/radar</code>.</td>
+      <td>
+        Quay &amp; dựng video demo trực tiếp trên web thật (<strong>2 phút 45 giây – 2 phút 55
+        giây</strong>, MP4 1080p); đóng gói <code>verishield-ai-source.zip</code> và test dựng
+        lại từ file giải nén.
+      </td>
+      <td>
+        Video ≤ 3:00 rõ âm thanh, thấy đủ 3 phần: Nhập kiểm tra → Trợ lý VeriShield → Giám sát
+        <code>/radar</code>.
+      </td>
     </tr>
     <tr>
       <td><strong>Ngày 5 (03/12)</strong></td>
-      <td>Kiểm tra lại toàn bộ 4 tệp nộp, tải lên cổng nộp bài cuộc thi <strong>trước 18:00</strong>, chụp biên nhận và <strong>đóng băng</strong> hoàn toàn mã nguồn/deploy đến hết 11/12/2026.</td>
-      <td>Nộp đủ 4 hạng mục đúng hạn 03/12; hệ thống live chạy ổn định phục vụ chấm vòng loại (08/12) và chung kết (11/12).</td>
+      <td>
+        Kiểm tra lại toàn bộ 4 tệp nộp, tải lên cổng nộp bài cuộc thi <strong>trước 18:00</strong>,
+        chụp biên nhận và <strong>đóng băng</strong> hoàn toàn mã nguồn/deploy đến hết 11/12/2026.
+      </td>
+      <td>
+        Nộp đủ 4 hạng mục đúng hạn 03/12; hệ thống live chạy ổn định phục vụ chấm vòng loại
+        (08/12) và chung kết (11/12).
+      </td>
     </tr>
   </tbody>
 </table>
 
 <div class="callout callout-amber">
-  <div class="callout-title">Trọng tâm trả lời Ban Giám Khảo khi thuyết trình &amp; Q&amp;A (tránh lan man kỹ thuật)</div>
+  <div class="callout-title">
+    Trọng tâm trả lời Ban Giám Khảo khi thuyết trình &amp; Q&amp;A (tránh lan man kỹ thuật)
+  </div>
   <ul class="compact">
-    <li><strong>"Điểm khác biệt so với hỏi ChatGPT/Gemini bình thường?"</strong> → Gemini trả lời chung chung và dễ bị đánh lừa bởi ảnh giả hay prompt injection. VeriShield AI kết hợp kiểm chứng kỹ thuật xác định (EMVCo VietQR, ELA, kiểm tra URL chống SSRF), mô hình E5 chuyên biệt cho tiếng Việt, nút tạm dừng 30 giây theo ngữ cảnh cuộc gọi và nguyên tắc không khẳng định tiền đã về từ ảnh biên lai.</li>
-    <li><strong>"Tại sao dùng E5-Small INT8 + RapidOCR nhẹ thay vì model lớn?"</strong> → Để toàn hệ thống chạy gọn trên 1 máy chủ 4 GB RAM với độ trễ ~10 ms cho phân loại, tự duy trì hoạt động nội bộ khi API AI bên ngoài gián đoạn và bảo vệ dữ liệu người dùng tốt hơn.</li>
-    <li><strong>"Độ tin cậy thực tế ra sao khi dùng dữ liệu tổng hợp?"</strong> → Dữ liệu tổng hợp giúp tuân thủ 100% bảo mật PII trong giai đoạn thi; chúng tôi tách hoàn toàn tập đánh giá theo nhóm câu và công bố thẳng độ chính xác theo từng lớp (<code>Macro-F1 = 0,9314</code>, RAG <code>R@3 = 98,4%</code>, <code>OOD Reject = 100%</code>) thay vì phóng đại.</li>
+    <li>
+      <strong>"Điểm khác biệt so với hỏi ChatGPT/Gemini bình thường?"</strong> → Gemini trả lời
+      chung chung và dễ bị đánh lừa bởi ảnh giả hay prompt injection. VeriShield AI kết hợp kiểm
+      chứng kỹ thuật xác định (EMVCo VietQR, ELA, kiểm tra URL chống SSRF), mô hình E5 chuyên biệt
+      cho tiếng Việt, nút tạm dừng 30 giây theo ngữ cảnh cuộc gọi và nguyên tắc không khẳng định tiền
+      đã về từ ảnh biên lai.
+    </li>
+    <li>
+      <strong>"Tại sao dùng E5-Small INT8 + RapidOCR nhẹ thay vì model lớn?"</strong> → Để toàn hệ
+      thống chạy gọn trên 1 máy chủ 4 GB RAM với độ trễ ~10 ms cho phân loại, tự duy trì hoạt động
+      nội bộ khi API AI bên ngoài gián đoạn và bảo vệ dữ liệu người dùng tốt hơn.
+    </li>
+    <li>
+      <strong>"Độ tin cậy thực tế ra sao khi dùng dữ liệu tổng hợp?"</strong> → Dữ liệu tổng hợp
+      giúp tuân thủ 100% bảo mật PII trong giai đoạn thi; chúng tôi tách hoàn toàn tập đánh giá
+      theo nhóm câu và công bố thẳng độ chính xác theo từng lớp (<code>Macro-F1 = 0,9314</code>,
+      RAG <code>R@3 = 98,4%</code>, <code>OOD Reject = 100%</code>) thay vì phóng đại.
+    </li>
   </ul>
 </div>
 
